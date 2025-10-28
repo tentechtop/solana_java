@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: Solana
+    version: 1.0.0
+#http-json
+server:
+  port: 18333
+
+logging:
+  level:
+    root: INFO
+
+system:
+  #节点端口 tcp rpc
+  port: 8333
