@@ -5,5 +5,5 @@ import lombok.Data;
 @Data
 public class Block {
     private BlockHeader header;
-
+    private BlockBody body;
 }
