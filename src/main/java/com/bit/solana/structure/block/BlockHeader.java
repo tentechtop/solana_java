@@ -1,5 +1,6 @@
 package com.bit.solana.structure.block;
 
+import com.bit.solana.common.*;
 import lombok.Data;
 
 /**
@@ -13,13 +14,13 @@ public class BlockHeader {
      * 前序区块哈希（32字节）
      * 作用：上一区块的唯一标识，通过哈希链绑定当前区块与历史区块，确保区块链不可篡改性
      */
-    private byte[] previousBlockhash;
+    private BlockHash previousBlockhash;
 
     /**
      * 状态根哈希（32字节）
      * 作用：区块执行后所有账户状态的Merkle根哈希，用于快速验证全局状态一致性
      */
-    private byte[] stateRoot;
+    private StateRootHash stateRoot;
 
     /**
      * 区块提议时间戳（毫秒级Unix时间戳，8字节）
@@ -32,7 +33,7 @@ public class BlockHeader {
      * PoH哈希（32字节）
      * 作用：当前区块在PoH全局哈希链中的哈希值，标识区块的时序位置
      */
-    private byte[] poHHash;
+    private PoHHash poHHash;
 
     /**
      * PoH高度（8字节）
@@ -66,7 +67,7 @@ public class BlockHeader {
      * 最近投票哈希（32字节）
      * 作用：验证节点最近投票集合的哈希摘要，用于快速验证区块是否满足Tower BFT共识条件（超2/3投票）
      */
-    private byte[] recentVotesHash;
+    private RecentVotesHash recentVotesHash;
 
     /**
      * 领导者调度周期（8字节）
@@ -93,5 +94,5 @@ public class BlockHeader {
      * 费用计算器哈希（32字节）
      * 作用：交易费用计算规则的哈希，确保全网按统一规则计算交易费用
      */
-    private byte[] feeCalculatorHash;
+    private FeeCalculatorHash feeCalculatorHash;
 }

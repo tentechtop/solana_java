@@ -1,5 +1,6 @@
 package com.bit.solana.structure.account;
 
+import com.bit.solana.common.Pubkey;
 import lombok.Data;
 
 /**
@@ -13,7 +14,7 @@ public class Account {
      * 账户公钥（32字节）
      * 唯一标识账户的地址，由密钥对的公钥生成，全网唯一
      */
-    private byte[] pubkey;  // 固定32字节
+    private Pubkey pubkey;  // 固定32字节
 
 
     /**
@@ -31,7 +32,7 @@ public class Account {
      * - 系统程序公钥：表示账户由系统控制（如普通用户账户）
      * - 程序自身的公钥：表示该账户是程序账户（存储可执行代码）
      */
-    private byte[] owner;  // 固定32字节
+    private Pubkey owner;  // 固定32字节
 
 
     /**

@@ -1,5 +1,6 @@
 package com.bit.solana.structure.block;
 
+import com.bit.solana.common.BlockHash;
 import lombok.Data;
 
 import java.util.List;
@@ -18,14 +19,14 @@ public class Block {
      * 计算逻辑：对BlockHeader和BlockBody序列化后的字节流，进行SHA-256哈希得到
      * 作用：区块的全局唯一标识，用于区块链的链式关联（父区块哈希指向此值）、防篡改验证
      */
-    private byte[] blockHash;
+    private BlockHash blockHash;
 
     /**
      * 父区块哈希（32字节）
      * 直接引用：从BlockHeader的previousBlockhash字段同步而来
      * 作用：内存中快速追溯父区块，避免每次从header中解析，提升链结构遍历效率（如分叉处理）
      */
-    private byte[] parentBlockHash;
+    private BlockHash parentBlockHash;
 
     // ========================== 2. 区块核心数据（头+体）==========================
     /**

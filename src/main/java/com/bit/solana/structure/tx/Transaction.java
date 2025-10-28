@@ -1,5 +1,6 @@
 package com.bit.solana.structure.tx;
 
+import com.bit.solana.common.BlockHash;
 import com.bit.solana.structure.account.AccountMeta;
 import lombok.Data;
 import java.util.List;
@@ -33,7 +34,7 @@ public class Transaction {
      * 最近区块哈希（32字节）
      * 用于防重放攻击和控制交易有效期（通常需在300个slot内，约2分钟）
      */
-    private byte[] recentBlockhash;
+    private BlockHash recentBlockhash;
 
     /**
      * 隐含字段：费用支付者（无需显式定义）

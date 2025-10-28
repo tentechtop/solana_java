@@ -1,5 +1,6 @@
 package com.bit.solana.structure.account;
 
+import com.bit.solana.common.PubkeyHash;
 import lombok.Data;
 
 /**
@@ -12,7 +13,7 @@ public class AccountMeta {
      * 账户公钥（32字节）
      * 唯一标识区块链上的账户（如用户账户、程序账户）
      */
-    private byte[] pubkey;  // 固定32字节
+    private PubkeyHash pubkey;  // 固定32字节
 
     /**
      * 是否为签名账户

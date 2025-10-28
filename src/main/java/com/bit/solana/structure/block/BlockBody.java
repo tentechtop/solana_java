@@ -1,5 +1,7 @@
 package com.bit.solana.structure.block;
 
+import com.bit.solana.common.TransactionHash;
+import com.bit.solana.structure.bloom.AccountConflictBloom;
 import com.bit.solana.structure.tx.Transaction;
 import lombok.Data;
 
@@ -26,7 +28,7 @@ public class BlockBody {
      * 1. 快速验证交易是否被篡改（对比交易序列化后哈希与列表中值）
      * 2. 支持轻节点快速同步（无需下载完整交易，仅通过哈希验证存在性）
      */
-    private List<byte[]> transactionHashes;
+    private List<TransactionHash> transactionHashes;
 
     /**
      * 交易数量（8字节，uint64）
@@ -50,5 +52,5 @@ public class BlockBody {
      * 存储所有交易涉及的"可写账户公钥哈希"的布隆过滤器（Bloom Filter）
      * 作用：快速判断两笔交易是否存在账户冲突（无需遍历所有账户），加速并行执行调度
      */
-    private byte[] accountConflictBloom;
+    private AccountConflictBloom accountConflictBloom;
 }
