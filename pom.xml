@@ -13,6 +13,9 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>solana_java</name>
     <description>solana_java</description>
+
+    <packaging>jar</packaging>
+
     <url/>
     <licenses>
         <license/>
@@ -28,52 +31,390 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <spring-boot.version>3.5.7</spring-boot.version>
     </properties>
     <dependencies>
+        <!--提供切面编程-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+        <!--提供接口服务和容器服务-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- 新增：Spring Boot日志 starter（包含SLF4J+Logback，解决类缺失问题） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-logging</artifactId>
+            <!-- 继承Spring Boot Parent，无需指定version，避免版本冲突 -->
+        </dependency>
+
+        <!-- 加密算法 Bouncy Castle 加密库，提供各种加密算法（如 RSA、AES、哈希算法等）和安全协议实现。 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.59</version>
+        </dependency>
+
+
+        <!--在 Java 里读取 application.yml 文件-->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.9.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>1.9.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>24.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- rocksdb -->
+        <dependency>
+            <groupId>org.rocksdb</groupId>
+            <artifactId>rocksdbjni</artifactId>
+            <version>7.10.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.7</version>
+        </dependency>
+        <!--提供编解码功能，支持 Base64、URL 编码、MD5/SHA 哈希等。-->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.15</version>
+        </dependency>
+        <!--netty-->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.66.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+            <version>4.1.66.Final</version>
+        </dependency>
+        <!--JSON 与 Java 对象的相互转换 对象序列化框架  API 接口、配置文件、数据存储 数据序列化与反序列化-->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.8.8</version> <!-- 使用最新版本 -->
+        </dependency>
+        <!--二进制序列化框架  对象序列化/反序列化框架 -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>5.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.objenesis</groupId>
+            <artifactId>objenesis</artifactId>
+            <version>3.3</version> <!-- 最新稳定版 -->
+        </dependency>
+        <!--集合增强、并发工具、缓存、限流等 高性能编程、复杂数据结构处理	-->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>32.0.0-jre</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- 添加网络发现库 -->
+        <dependency>
+            <groupId>org.jmdns</groupId>
+            <artifactId>jmdns</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+        </dependency>
+        <!--并行事件处理-->
+        <dependency>
+            <groupId>com.lmax</groupId>
+            <artifactId>disruptor</artifactId>
+            <version>3.4.4</version> <!-- 使用最新稳定版本 -->
+        </dependency>
+        <!--GPU参与运算-->
+        <!--OpenCL 的 Java 绑定-->
+        <dependency>
+            <groupId>org.jocl</groupId>
+            <artifactId>jocl</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jcuda</groupId>
+            <artifactId>jcuda</artifactId>
+            <version>12.6.0</version> <!-- 与 CUDA 匹配 -->
+        </dependency>
+        <dependency>
+            <groupId>org.jcuda</groupId>
+            <artifactId>jcuda-natives</artifactId>
+            <version>12.6.0</version> <!-- 保持版本一致 -->
+        </dependency>
+        <!--Caffeine  内存 缓存 UTXO -->
+
+        <!-- JUnit 4 单元测试依赖 -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>9.5</version>
+        </dependency>
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-commons</artifactId>
+            <version>9.5</version>
+        </dependency>
     </dependencies>
 
     <build>
+        <!-- 1. 统一配置插件版本（避免版本冲突，继承Spring Boot Parent后可简化，但显式指定更稳定） -->
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.3.2</version> <!-- 清理旧构建产物，支持Java 21 -->
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.1.0</version> <!-- 保持你原版本，适配资源过滤 -->
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version> <!-- 支持Java 21的编译插件版本 -->
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.2.5</version> <!-- 测试插件，适配JUnit 5 -->
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.3.0</version> <!-- 生成可执行JAR的核心插件 -->
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <!-- 2. 核心插件配置 -->
         <plugins>
+            <!-- 清理插件：构建前删除target目录，避免旧文件干扰 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <configuration>
+                    <filesets>
+                        <!-- 额外清理IDE生成的临时文件（可选，根据需求添加） -->
+                        <fileset>
+                            <directory>.idea</directory>
+                            <includes>
+                                <include>*.iml</include>
+                                <include>target/</include>
+                            </includes>
+                            <followSymlinks>false</followSymlinks>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
+
+            <!-- 资源插件：处理资源文件，避免二进制文件被过滤破坏 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                    <!-- 不被过滤的文件类型（字体、二进制资源等，防止过滤导致文件损坏） -->
+                    <nonFilteredFileExtensions>
+                        <nonFilteredFileExtension>woff</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>eot</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>svg</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>png</nonFilteredFileExtension> <!-- 若有图片资源可添加 -->
+                        <nonFilteredFileExtension>jpg</nonFilteredFileExtension>
+                    </nonFilteredFileExtensions>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>copy-resources</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/classes</outputDirectory>
+                            <resources>
+                                <!-- 处理src/main/resources：开启过滤（替换${}占位符），但排除二进制文件 -->
+                                <resource>
+                                    <directory>src/main/resources</directory>
+                                    <filtering>true</filtering>
+                                    <excludes>
+                                        <exclude>**/*.woff</exclude>
+                                        <exclude>**/*.woff2</exclude>
+                                        <exclude>**/*.eot</exclude>
+                                        <exclude>**/*.ttf</exclude>
+                                        <exclude>**/*.svg</exclude>
+                                    </excludes>
+                                </resource>
+                                <!-- 处理src/main/resources中的二进制文件：关闭过滤 -->
+                                <resource>
+                                    <directory>src/main/resources</directory>
+                                    <filtering>false</filtering>
+                                    <includes>
+                                        <include>**/*.woff</include>
+                                        <include>**/*.woff2</include>
+                                        <include>**/*.eot</include>
+                                        <include>**/*.ttf</include>
+                                        <include>**/*.svg</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 编译插件：适配Java 21，确保编译兼容性 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <encoding>UTF-8</encoding>
+                    <!-- 用release参数替代source/target，更严格控制Java版本兼容性（Java 9+推荐） -->
+                    <release>${java.version}</release>
+                    <!-- 编译参数：提升编译效率，避免警告 -->
+                    <compilerArgs>
+                        <arg>-Xlint:all,-unchecked,-deprecation</arg> <!-- 开启关键警告，忽略无关警告 -->
+                        <arg>-parameters</arg> <!-- 保留方法参数名，方便反射（如Spring依赖注入） -->
+                    </compilerArgs>
+                    <!-- 关键：明确指定注解处理器（Lombok + Spring Boot自动配置处理器） -->
                     <annotationProcessorPaths>
+                        <!-- Lombok注解处理器：处理@Data、@Slf4j等 -->
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version> <!-- 自动继承Spring Boot Parent的版本，无需手动写 -->
+                        </path>
+                        <!-- Spring Boot自动配置注解处理器：处理@SpringBootApplication、@Configuration等 -->
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+                            <version>${spring-boot.version}</version> <!-- 继承Parent的3.5.7版本 -->
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+
+            <!-- 测试插件：跳过测试，避免测试失败阻塞打包 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skipTests>true</skipTests> <!-- 全局跳过测试 -->
+                    <testFailureIgnore>false</testFailureIgnore> <!-- 若开启测试，失败则终止构建（可选） -->
+
+                </configuration>
+            </plugin>
+
+
+            <!-- Spring Boot打包插件：生成可执行JAR（repackage目标） -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version> <!-- 继承Parent的3.5.7版本，与项目版本一致 -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal> <!-- 核心目标：重新打包为可执行JAR -->
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
+                    <!-- 明确指定主类（与你项目的主类路径一致，避免找不到主类错误） -->
+                    <mainClass>com.bit.solana.SolanaApplication</mainClass>
                 </configuration>
             </plugin>
+
         </plugins>
+
+        <!-- 3. 资源目录配置：明确Java目录下的资源处理规则 -->
+        <resources>
+            <!-- 处理src/main/java中的资源（如MyBatis Mapper.xml、JSON配置等） -->
+            <resource>
+                <directory>src/main/java</directory>
+                <includes>
+                    <include>**/*.xml</include>
+                    <include>**/*.json</include>
+                    <include>**/*.ftl</include>
+                </includes>
+                <filtering>false</filtering> <!-- 关闭过滤：Java目录下的资源通常不需要替换${}占位符 -->
+            </resource>
+            <!-- 处理src/main/resources（已在maven-resources-plugin中细分，此处保持兼容） -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+
+        <!-- 4. 测试资源目录配置（可选，若有测试资源需处理） -->
+        <testResources>
+            <testResource>
+                <directory>src/test/java</directory>
+                <includes>
+                    <include>**/*.xml</include>
+                    <include>**/*.json</include>
+                </includes>
+                <filtering>false</filtering>
+            </testResource>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <filtering>true</filtering>
+            </testResource>
+        </testResources>
     </build>
 
 </project>
