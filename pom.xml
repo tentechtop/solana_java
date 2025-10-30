@@ -61,8 +61,15 @@
         <!-- 加密算法 Bouncy Castle 加密库，提供各种加密算法（如 RSA、AES、哈希算法等）和安全协议实现。 -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk15on</artifactId>
-            <version>1.59</version>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78</version>
+            <!-- 可选：排除冲突依赖 -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
 
@@ -73,19 +80,10 @@
             <version>2.2</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.9.2</version>
-            <scope>test</scope>
-        </dependency>
 
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <version>1.9.2</version>
-            <scope>test</scope>
-        </dependency>
+
+
+
 
         <dependency>
             <groupId>org.jetbrains</groupId>
@@ -186,15 +184,6 @@
             <version>12.6.0</version> <!-- 保持版本一致 -->
         </dependency>
         <!--Caffeine  内存 缓存 UTXO -->
-
-        <!-- JUnit 4 单元测试依赖 -->
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
-            <scope>test</scope>
-        </dependency>
-
 
         <dependency>
             <groupId>org.ow2.asm</groupId>

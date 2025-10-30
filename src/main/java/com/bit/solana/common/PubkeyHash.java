@@ -4,7 +4,7 @@ public class PubkeyHash extends ByteHash32 {
     // PoH哈希的零值常量（如初始时序状态的哈希）
     public static final PubkeyHash ZERO = new PubkeyHash(new byte[HASH_LENGTH]);
 
-    private PubkeyHash(byte[] value) {
+    public PubkeyHash(byte[] value) {
         super(value); // 复用基类的长度校验和不可变性保证
     }
 

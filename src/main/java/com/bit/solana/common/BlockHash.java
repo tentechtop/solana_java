@@ -9,7 +9,7 @@ public class BlockHash extends ByteHash32 {
     public static final BlockHash ZERO = new BlockHash(new byte[HASH_LENGTH]);
 
 
-    private BlockHash(byte[] value) {
+    public BlockHash(byte[] value) {
         super(value);
     }
 

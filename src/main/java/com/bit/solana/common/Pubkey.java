@@ -13,7 +13,7 @@ public class Pubkey {
     public static final int LENGTH = 32;
     private final byte[] value;
 
-    private Pubkey(byte[] value) {
+    public Pubkey(byte[] value) {
         if (value.length != LENGTH) {
             throw new IllegalArgumentException("公钥必须为32字节");
         }
