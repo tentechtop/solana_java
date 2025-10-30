@@ -17,6 +17,23 @@ public class Ed25519Signer {
         Security.addProvider(new BouncyCastleProvider());
     }
 
+    // Ed25519核心密钥长度（公钥/私钥均为32字节）
+    public static final int CORE_KEY_LENGTH = 32;
+    // X.509公钥编码头部长度（固定12字节）
+    private static final int X509_HEADER_LENGTH = 12;
+    // PKCS#8私钥编码头部长度（固定16字节）
+    private static final int PKCS8_HEADER_LENGTH = 16;
+    // X.509公钥固定头部（用于补全32字节核心公钥）
+    private static final byte[] X509_PUBLIC_HEADER = new byte[]{
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
+    };
+    // PKCS#8私钥固定头部（用于补全32字节核心私钥）
+    private static final byte[] PKCS8_PRIVATE_HEADER = new byte[]{
+            0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
+    };
+
+
+
     /**
      * 生成 Ed25519 密钥对
      * @return 包含公钥（32字节）和私钥（32字节）的 KeyPair
@@ -134,5 +151,142 @@ public class Ed25519Signer {
             throw new RuntimeException("Ed25519 私钥转换失败", e);
         }
     }
+
+
+    // ------------------------------ 公钥核心字节处理 ------------------------------
+
+    /**
+     * 从公钥对象中提取32字节核心字节（剔除X.509头部）
+     * @param publicKey Ed25519公钥对象
+     * @return 32字节核心公钥
+     */
+    public static byte[] extractPublicKeyCore(PublicKey publicKey) {
+        byte[] encoded = publicKey.getEncoded();
+        // 验证编码长度（X.509编码公钥应为44字节：12字节头 + 32字节核心）
+        if (encoded.length != X509_HEADER_LENGTH + CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("无效的Ed25519公钥编码，长度应为44字节");
+        }
+        // 截取后32字节作为核心公钥
+        byte[] core = new byte[CORE_KEY_LENGTH];
+        System.arraycopy(encoded, X509_HEADER_LENGTH, core, 0, CORE_KEY_LENGTH);
+        return core;
+    }
+
+    /**
+     * 从32字节核心公钥恢复公钥对象（自动补全X.509头部）
+     * @param corePublicKey 32字节核心公钥
+     * @return Ed25519公钥对象
+     */
+    public static PublicKey recoverPublicKeyFromCore(byte[] corePublicKey) {
+        // 验证核心字节长度
+        if (corePublicKey.length != CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("核心公钥必须为32字节");
+        }
+        try {
+            // 拼接X.509头部和核心字节，生成完整编码
+            byte[] x509Encoded = new byte[X509_HEADER_LENGTH + CORE_KEY_LENGTH];
+            System.arraycopy(X509_PUBLIC_HEADER, 0, x509Encoded, 0, X509_HEADER_LENGTH);
+            System.arraycopy(corePublicKey, 0, x509Encoded, X509_HEADER_LENGTH, CORE_KEY_LENGTH);
+
+            // 生成公钥对象
+            KeyFactory keyFactory = getKeyFactory();
+            X509EncodedKeySpec keySpec = new X509EncodedKeySpec(x509Encoded);
+            return keyFactory.generatePublic(keySpec);
+        } catch (Exception e) {
+            throw new RuntimeException("从核心公钥恢复公钥失败", e);
+        }
+    }
+
+
+    // ------------------------------ 私钥核心字节处理 ------------------------------
+
+    /**
+     * 从私钥对象中提取32字节核心字节（剔除PKCS#8头部）
+     * @param privateKey Ed25519私钥对象
+     * @return 32字节核心私钥
+     */
+    public static byte[] extractPrivateKeyCore(PrivateKey privateKey) {
+        byte[] encoded = privateKey.getEncoded();
+        // 验证编码长度（PKCS#8编码私钥应为48字节：16字节头 + 32字节核心）
+        if (encoded.length != PKCS8_HEADER_LENGTH + CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("无效的Ed25519私钥编码，长度应为48字节");
+        }
+        // 截取后32字节作为核心私钥
+        byte[] core = new byte[CORE_KEY_LENGTH];
+        System.arraycopy(encoded, PKCS8_HEADER_LENGTH, core, 0, CORE_KEY_LENGTH);
+        return core;
+    }
+
+    /**
+     * 从32字节核心私钥恢复私钥对象（自动补全PKCS#8头部）
+     * @param corePrivateKey 32字节核心私钥
+     * @return Ed25519私钥对象
+     */
+    public static PrivateKey recoverPrivateKeyFromCore(byte[] corePrivateKey) {
+        // 验证核心字节长度
+        if (corePrivateKey.length != CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("核心私钥必须为32字节");
+        }
+        try {
+            // 拼接PKCS#8头部和核心字节，生成完整编码
+            byte[] pkcs8Encoded = new byte[PKCS8_HEADER_LENGTH + CORE_KEY_LENGTH];
+            System.arraycopy(PKCS8_PRIVATE_HEADER, 0, pkcs8Encoded, 0, PKCS8_HEADER_LENGTH);
+            System.arraycopy(corePrivateKey, 0, pkcs8Encoded, PKCS8_HEADER_LENGTH, CORE_KEY_LENGTH);
+
+            // 生成私钥对象
+            KeyFactory keyFactory = getKeyFactory();
+            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(pkcs8Encoded);
+            return keyFactory.generatePrivate(keySpec);
+        } catch (Exception e) {
+            throw new RuntimeException("从核心私钥恢复私钥失败", e);
+        }
+    }
+
+
+    // ------------------------------ 工具方法 ------------------------------
+
+    /**
+     * 获取Ed25519密钥工厂（优先JDK原生，降级BouncyCastle）
+     */
+    private static KeyFactory getKeyFactory() throws NoSuchAlgorithmException, NoSuchProviderException {
+        try {
+            return KeyFactory.getInstance("Ed25519");
+        } catch (NoSuchAlgorithmException e) {
+            return KeyFactory.getInstance("Ed25519", "BC");
+        }
+    }
+
+
+    // ------------------------------ 测试方法 ------------------------------
+
+    public static void main(String[] args) {
+        // 1. 生成原始密钥对
+        KeyPair keyPair = generateKeyPair();
+        PublicKey originalPub = keyPair.getPublic();
+        PrivateKey originalPriv = keyPair.getPrivate();
+        log.info("原始公钥编码长度: {}", originalPub.getEncoded().length); // 44字节（X.509）
+        log.info("原始私钥编码长度: {}", originalPriv.getEncoded().length); // 48字节（PKCS#8）
+
+        // 2. 提取核心字节
+        byte[] corePub = extractPublicKeyCore(originalPub);
+        byte[] corePriv = extractPrivateKeyCore(originalPriv);
+
+        String encode = Base58.encode(corePub);
+        log.info("公钥编码: {}", encode.length());
+        log.info("公钥地址: {}", encode);
+        log.info("提取的核心公钥长度: {}", corePub.length); // 32字节
+        log.info("提取的核心私钥长度: {}", corePriv.length); // 32字节
+
+        // 3. 从核心字节恢复密钥
+        PublicKey recoveredPub = recoverPublicKeyFromCore(corePub);
+        PrivateKey recoveredPriv = recoverPrivateKeyFromCore(corePriv);
+
+        // 4. 验证恢复的密钥是否可用（签名+验签）
+        byte[] data = "测试数据".getBytes(StandardCharsets.UTF_8);
+        byte[] signature = applySignature(recoveredPriv, data);
+        boolean verifyResult = verifySignature(recoveredPub, data, signature);
+        log.info("恢复的密钥验签结果: {}", verifyResult); // 应输出true
+    }
+
 
 }
