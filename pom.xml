@@ -84,10 +84,8 @@
         <dependency>
             <groupId>org.bitcoinj</groupId>
             <artifactId>bitcoinj-core</artifactId>
-            <version>0.16.3</version> <!-- 稳定版本，可根据需求更新 -->
+            <version>0.16.3</version>
         </dependency>
-
-
 
         <dependency>
             <groupId>org.jetbrains</groupId>

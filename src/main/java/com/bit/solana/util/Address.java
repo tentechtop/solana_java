@@ -1,6 +1,7 @@
 package com.bit.solana.util;
 
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 
 import java.security.KeyPair;
 import java.security.PrivateKey;

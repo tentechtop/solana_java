@@ -5,6 +5,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 /**
@@ -13,7 +14,7 @@ import java.util.Arrays;
  */
 @EqualsAndHashCode(of = "value")
 @ToString(of = "hexValue")
-public abstract class ByteHash32 {
+public abstract class ByteHash32 implements Serializable {
     public static final int HASH_LENGTH = 32;
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
 

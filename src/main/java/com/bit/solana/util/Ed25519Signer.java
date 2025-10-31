@@ -1,6 +1,7 @@
 package com.bit.solana.util;
 
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.nio.charset.StandardCharsets;
@@ -32,6 +33,8 @@ public class Ed25519Signer {
             0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
     };
 
+
+    //根据助记词生成私钥  从私钥恢复公钥 HD 分层确定性
 
 
     /**
