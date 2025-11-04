@@ -1,3 +1,5 @@
 protobuf二进制 实现跨平台
+用protobuf做序列化
+与客户端交互都是JSON
 
 

@@ -5,6 +5,8 @@ import com.bit.solana.structure.account.AccountMeta;
 import lombok.Data;
 import java.util.List;
 
+import static com.bit.solana.util.Sha.applySHA256;
+
 /**
  * Solana交易实体类，包含完整的交易信息
  * 参考：https://docs.solana.com/developing/programming-model/transactions
@@ -40,4 +42,42 @@ public class Transaction {
      * 隐含字段：费用支付者（无需显式定义）
      * 规则：accounts中第一个"isSigner=true且isWritable=true"的账户即为费用支付者
      */
+
+
+
+    /**
+     * 生成交易ID（txId）：取第一个签名的字节数组，转换为十六进制字符串
+     * Solana中交易ID本质是第一个签名的哈希标识
+     */
+    public byte[] getTxId() {
+        // 校验：有效的交易必须至少有一个签名（费用支付者的签名）
+        if (signatures == null || signatures.isEmpty()) {
+            throw new IllegalStateException("交易没有签名，无法生成txId");
+        }
+        Signature signature = signatures.getFirst();
+        byte[] value = signature.getValue();
+        return applySHA256(value);
+    }
+
+    /**
+     * 获取交易发送者（费用支付者）
+     * @return
+     */
+    public byte[] getSender() {
+        // 1. 校验账户列表不为空
+        if (accounts == null || accounts.isEmpty()) {
+            throw new IllegalStateException("交易未包含任何账户，无法确定发送者（费用支付者）");
+        }
+
+        // 2. 遍历账户列表，寻找第一个"isSigner=true且isWritable=true"的账户（费用支付者）
+        for (AccountMeta account : accounts) {
+            if (account.isSigner() && account.isWritable()) {
+                // 3. 返回该账户的公钥（即发送者地址）
+                return account.getPublicKey();
+            }
+        }
+
+        // 3. 若未找到符合条件的账户，说明交易无效（Solana要求交易必须有费用支付者）
+        throw new IllegalStateException("交易中未找到有效的费用支付者（需满足isSigner=true且isWritable=true）");
+    }
 }

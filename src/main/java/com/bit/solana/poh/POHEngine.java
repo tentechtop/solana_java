@@ -12,7 +12,6 @@ public class POHEngine {
      */
     public POHRecord appendEvent(byte[] eventData) {
 
-
         return null;
     }
 

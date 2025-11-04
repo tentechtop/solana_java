@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 
 
 @Slf4j
@@ -276,7 +277,14 @@ public class Ed25519Signer {
 
         String encode = Base58.encode(corePub);
         log.info("公钥编码: {}", encode.length());
-        log.info("公钥地址: {}", encode);
+        log.info("地址: {}", encode);
+
+        //从地址到公钥
+
+        byte[] decode = Base58.decode(encode);
+        log.info("是否一致，{}", Arrays.equals(decode, corePub));
+
+
         log.info("提取的核心公钥长度: {}", corePub.length); // 32字节
         log.info("提取的核心私钥长度: {}", corePriv.length); // 32字节
 

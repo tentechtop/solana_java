@@ -10,7 +10,7 @@ import lombok.Data;
 public class AccountMeta {
 
     /**
-     * 账户公钥（32字节）
+     * 账户公钥（32字节） 核心字节
      * 唯一标识区块链上的账户（如用户账户、程序账户）
      */
     private PubkeyHash pubkey;  // 固定32字节
@@ -29,4 +29,8 @@ public class AccountMeta {
      * 注：两笔交易修改同一可写账户会产生冲突，需串行执行
      */
     private boolean isWritable;
+
+    public byte[] getPublicKey() {
+        return pubkey.getValue();
+    }
 }

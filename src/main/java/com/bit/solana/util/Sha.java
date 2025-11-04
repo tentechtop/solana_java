@@ -23,10 +23,7 @@ public class Sha {
     public static byte[] applySHA256(byte[] data) {
         try {
             // 直接使用BouncyCastle的SHA-256实现，不降级
-            MessageDigest digest = MessageDigest.getInstance(
-                    "SHA-256",
-                    BouncyCastleProvider.PROVIDER_NAME
-            );
+            MessageDigest digest = MessageDigest.getInstance("SHA-256", BouncyCastleProvider.PROVIDER_NAME);
             return digest.digest(data);
         } catch (Exception e) {
             // 此时异常为致命错误（非降级场景），直接抛出
