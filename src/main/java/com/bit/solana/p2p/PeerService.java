@@ -1,0 +1,19 @@
+package com.bit.solana.p2p;
+
+public interface PeerService {
+
+    //注册协议  注册的协议可以有返回值
+
+    //获取自己的信息
+
+    //获取节点列表
+
+    //获取在线节点列表
+
+    //发送消息给指定节点
+
+    //启动
+
+    //停止
+
+}
