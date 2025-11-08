@@ -1,10 +1,7 @@
 package com.bit.solana.database;
 
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
-
 //KV数据库操作 自带内存缓存 自定义缓存大小
-interface DbInterface {
+public interface DataBase {
     //Table 是表约束数据类型
     // 数据库操作 增删改查 批量增删改查
     // 迭代器
@@ -25,5 +22,4 @@ interface DbInterface {
     void close();
     void compact(byte[] start, byte[] limit);
 
-    void execute(WriteBatch batch);
 }

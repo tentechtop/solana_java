@@ -5,6 +5,8 @@ import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.structure.tx.TransactionGroup;
 import com.bit.solana.structure.tx.TransactionStatus;
 import com.bit.solana.txpool.TxPool;
+import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.dsl.Disruptor;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class TxPoolImpl implements TxPool {
+    // 100万容量（支撑10万TPS缓冲）
+    private static final int RING_BUFFER_SIZE = 1024 * 1024;
+    // 处理线程数（按1万TPS估算）
+    private static final int PROCESS_THREAD_COUNT = 200;
     // 分片数量（建议为2的幂，哈希分布更均匀）
     private static final int SHARD_COUNT = 32;
     // 等待队列容量
@@ -26,8 +32,22 @@ public class TxPoolImpl implements TxPool {
     private static final int MAX_RETRY = 3;
     // 处理超时时间  500毫秒
     private static final long TIMEOUT_MILLIS = 500;
+    // 超时检查间隔（100ms）
+    private static final long CHECK_TIMEOUT_INTERVAL = 100;
+
+    // 高并发接收队列（Disruptor无锁环形缓冲区）
+    private Disruptor<Transaction> disruptor;
+    private RingBuffer<Transaction> ringBuffer;
+    // 处理线程池（核心线程数固定，避免频繁创建销毁）
+    private ExecutorService processExecutor;
+
     // 交易状态追踪（原子操作保证线程安全）
     private final ConcurrentMap<byte[], TransactionStatus> txStatusMap = new ConcurrentHashMap<>();
+    // 处理中交易追踪（原子操作，线程安全）
+    private final ConcurrentHashMap<String, Transaction> processingTxs = new ConcurrentHashMap<>();
+    // 超时检查定时任务
+    private final ScheduledExecutorService timeoutChecker = Executors.newSingleThreadScheduledExecutor();
+
     // 阻塞队列用于削峰填谷（防止突发流量击垮系统）
     private final BlockingQueue<Transaction> submitQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
     // 并行处理线程池（工作窃取算法，适合大量小任务）
@@ -67,6 +87,9 @@ public class TxPoolImpl implements TxPool {
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
 
+
+
+
     @PostConstruct
     public void init(){
         // 初始化分片
@@ -84,6 +107,11 @@ public class TxPoolImpl implements TxPool {
 
     @Override
     public Result getTxPool() {
+        return null;
+    }
+
+    @Override
+    public TransactionStatus getStatus(String txId) {
         return null;
     }
 

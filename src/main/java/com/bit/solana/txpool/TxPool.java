@@ -2,10 +2,14 @@ package com.bit.solana.txpool;
 
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;
+import com.bit.solana.structure.tx.TransactionStatus;
 
 public interface TxPool {
 
     Result getTxPool();
+
+    // 获取交易状态
+    TransactionStatus getStatus(String txId);
 
     Result<String> getTxPoolStatus();
 
