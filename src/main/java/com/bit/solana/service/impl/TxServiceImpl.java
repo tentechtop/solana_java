@@ -7,10 +7,12 @@ import com.bit.solana.structure.tx.TransactionStatus;
 import com.bit.solana.txpool.TxPool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
+@Component
 public class TxServiceImpl implements TxService {
 
     @Autowired
