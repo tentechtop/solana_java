@@ -2,14 +2,25 @@ spring:
   application:
     name: Solana
     version: 1.0.0
+
+
+
 #http-json
 server:
   port: 18333
+
+system:
+  #数据存储路径 按照网络前缀分类
+  db-path: "/home/solana/db"
+  #数据库缓存大小 单位MB 基于LRU策略实现的一级缓存
+  db-cache-size: 500
+  #节点与节点之间的通信 TCP通信 支持P2P网络
+  tcp-port: 8333
+  #用户在启动时可以配置公钥 对于隐私接口必须签名才能访问 也就是节点所有者
+  server-pubkey:
+    - ''
 
 logging:
   level:
     root: INFO
 
-system:
-  #节点端口 tcp rpc
-  port: 8333

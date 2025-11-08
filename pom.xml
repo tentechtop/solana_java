@@ -8,31 +8,20 @@
         <version>3.5.7</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
+
     <groupId>com.bit</groupId>
     <artifactId>solana</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>solana_java</name>
     <description>solana_java</description>
 
-    <packaging>jar</packaging>
 
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
     <properties>
         <java.version>21</java.version>
         <spring-boot.version>3.5.7</spring-boot.version>
     </properties>
+
+
     <dependencies>
         <!--提供切面编程-->
         <dependency>
@@ -71,7 +60,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-
 
 
         <!--在 Java 里读取 application.yml 文件-->
@@ -200,143 +188,34 @@
     </dependencies>
 
     <build>
-        <!-- 1. 统一配置插件版本（避免版本冲突，继承Spring Boot Parent后可简化，但显式指定更稳定） -->
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-clean-plugin</artifactId>
-                    <version>3.3.2</version> <!-- 清理旧构建产物，支持Java 21 -->
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.1.0</version> <!-- 保持你原版本，适配资源过滤 -->
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.11.0</version> <!-- 支持Java 21的编译插件版本 -->
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.2.5</version> <!-- 测试插件，适配JUnit 5 -->
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.3.0</version> <!-- 生成可执行JAR的核心插件 -->
-                </plugin>
-            </plugins>
-        </pluginManagement>
-
-        <!-- 2. 核心插件配置 -->
         <plugins>
-            <!-- 清理插件：构建前删除target目录，避免旧文件干扰 -->
+            <!-- Spring Boot打包插件：生成可执行JAR（repackage目标） -->
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <filesets>
-                        <!-- 额外清理IDE生成的临时文件（可选，根据需求添加） -->
-                        <fileset>
-                            <directory>.idea</directory>
-                            <includes>
-                                <include>*.iml</include>
-                                <include>target/</include>
-                            </includes>
-                            <followSymlinks>false</followSymlinks>
-                        </fileset>
-                    </filesets>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                    <!-- 明确指定主类（与你项目的主类路径一致，避免找不到主类错误） -->
+                    <mainClass>com.bit.solana.SolanaApplication</mainClass>
                 </configuration>
-            </plugin>
-
-            <!-- 资源插件：处理资源文件，避免二进制文件被过滤破坏 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <configuration>
-                    <encoding>UTF-8</encoding>
-                    <!-- 不被过滤的文件类型（字体、二进制资源等，防止过滤导致文件损坏） -->
-                    <nonFilteredFileExtensions>
-                        <nonFilteredFileExtension>woff</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>eot</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>svg</nonFilteredFileExtension>
-                        <nonFilteredFileExtension>png</nonFilteredFileExtension> <!-- 若有图片资源可添加 -->
-                        <nonFilteredFileExtension>jpg</nonFilteredFileExtension>
-                    </nonFilteredFileExtensions>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>copy-resources</id>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/classes</outputDirectory>
-                            <resources>
-                                <!-- 处理src/main/resources：开启过滤（替换${}占位符），但排除二进制文件 -->
-                                <resource>
-                                    <directory>src/main/resources</directory>
-                                    <filtering>true</filtering>
-                                    <excludes>
-                                        <exclude>**/*.woff</exclude>
-                                        <exclude>**/*.woff2</exclude>
-                                        <exclude>**/*.eot</exclude>
-                                        <exclude>**/*.ttf</exclude>
-                                        <exclude>**/*.svg</exclude>
-                                    </excludes>
-                                </resource>
-                                <!-- 处理src/main/resources中的二进制文件：关闭过滤 -->
-                                <resource>
-                                    <directory>src/main/resources</directory>
-                                    <filtering>false</filtering>
-                                    <includes>
-                                        <include>**/*.woff</include>
-                                        <include>**/*.woff2</include>
-                                        <include>**/*.eot</include>
-                                        <include>**/*.ttf</include>
-                                        <include>**/*.svg</include>
-                                    </includes>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
 
             <!-- 编译插件：适配Java 21，确保编译兼容性 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
                 <configuration>
+                    <!-- 核心：指定 JDK 21 编译 -->
+                    <release>21</release>
+                    <source>21</source>
+                    <target>21</target>
                     <encoding>UTF-8</encoding>
-                    <!-- 用release参数替代source/target，更严格控制Java版本兼容性（Java 9+推荐） -->
-                    <release>${java.version}</release>
-                    <!-- 编译参数：提升编译效率，避免警告 -->
-                    <compilerArgs>
-                        <arg>-Xlint:all,-unchecked,-deprecation</arg> <!-- 开启关键警告，忽略无关警告 -->
-                        <arg>-parameters</arg> <!-- 保留方法参数名，方便反射（如Spring依赖注入） -->
-                    </compilerArgs>
-                    <!-- 关键：明确指定注解处理器（Lombok + Spring Boot自动配置处理器） -->
-                    <annotationProcessorPaths>
-                        <!-- Lombok注解处理器：处理@Data、@Slf4j等 -->
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version> <!-- 自动继承Spring Boot Parent的版本，无需手动写 -->
-                        </path>
-                        <!-- Spring Boot自动配置注解处理器：处理@SpringBootApplication、@Configuration等 -->
-                        <path>
-                            <groupId>org.springframework.boot</groupId>
-                            <artifactId>spring-boot-autoconfigure-processor</artifactId>
-                            <version>${spring-boot.version}</version> <!-- 继承Parent的3.5.7版本 -->
-                        </path>
-                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
 
@@ -347,65 +226,8 @@
                 <configuration>
                     <skipTests>true</skipTests> <!-- 全局跳过测试 -->
                     <testFailureIgnore>false</testFailureIgnore> <!-- 若开启测试，失败则终止构建（可选） -->
-
                 </configuration>
             </plugin>
-
-
-            <!-- Spring Boot打包插件：生成可执行JAR（repackage目标） -->
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot.version}</version> <!-- 继承Parent的3.5.7版本，与项目版本一致 -->
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal> <!-- 核心目标：重新打包为可执行JAR -->
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <!-- 明确指定主类（与你项目的主类路径一致，避免找不到主类错误） -->
-                    <mainClass>com.bit.solana.SolanaApplication</mainClass>
-                </configuration>
-            </plugin>
-
         </plugins>
-
-        <!-- 3. 资源目录配置：明确Java目录下的资源处理规则 -->
-        <resources>
-            <!-- 处理src/main/java中的资源（如MyBatis Mapper.xml、JSON配置等） -->
-            <resource>
-                <directory>src/main/java</directory>
-                <includes>
-                    <include>**/*.xml</include>
-                    <include>**/*.json</include>
-                    <include>**/*.ftl</include>
-                </includes>
-                <filtering>false</filtering> <!-- 关闭过滤：Java目录下的资源通常不需要替换${}占位符 -->
-            </resource>
-            <!-- 处理src/main/resources（已在maven-resources-plugin中细分，此处保持兼容） -->
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
-
-        <!-- 4. 测试资源目录配置（可选，若有测试资源需处理） -->
-        <testResources>
-            <testResource>
-                <directory>src/test/java</directory>
-                <includes>
-                    <include>**/*.xml</include>
-                    <include>**/*.json</include>
-                </includes>
-                <filtering>false</filtering>
-            </testResource>
-            <testResource>
-                <directory>src/test/resources</directory>
-                <filtering>true</filtering>
-            </testResource>
-        </testResources>
     </build>
-
 </project>
