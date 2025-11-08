@@ -1,7 +1,6 @@
 package com.bit.solana.poh.impl;
 
 import com.bit.solana.poh.POHCache;
-import com.bit.solana.poh.POHRecord;
 import com.bit.solana.poh.POHService;
 import com.bit.solana.structure.poh.PohEntry;
 import com.bit.solana.structure.tx.Transaction;
@@ -42,10 +41,6 @@ public class POHServiceImpl implements POHService {
     private final AtomicLong counter = new AtomicLong(0);
 
 
-    @Override
-    public POHRecord appendEvent(byte[] eventData) {
-        return null;
-    }
 
     @Override
     public Transaction generateTimestamp(Transaction transaction) {

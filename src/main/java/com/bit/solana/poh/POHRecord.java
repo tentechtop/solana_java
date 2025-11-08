@@ -1,58 +1,106 @@
 package com.bit.solana.poh;
 
-import lombok.Data;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 /**
- * POH 事件记录：存储单个 POH 事件的完整状态，用于哈希链锚定与时序验证
+ * POH事件记录：符合Solana POH设计的哈希链节点，用于时序锚定与验证
  */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class POHRecord implements Serializable {
-    private static final long serialVersionUID = 1L; // 序列化版本号，避免反序列化异常
+    private static final long serialVersionUID = 1L;
 
     /**
-     * 当前事件的哈希值（32字节，SHA-256 结果）
-     * - 非空事件：基于 lastHash + 事件数据 + 空事件计数器计算
-     * - 空事件：复用 lastHash（仅通过 emptyEventCounter 标识连续空事件）
+     * 前一个POH事件的哈希（32字节）
+     * 哈希链连续性的核心：currentHash = SHA-256(previousHash + eventHash + emptyEventCounter)
+     */
+    private byte[] previousHash;
+
+    /**
+     * 当前事件的哈希（32字节）
+     * - 非空事件：基于事件原始数据计算（如交易哈希）
+     * - 空事件：固定为全0字节（无实际数据）
+     */
+    private byte[] eventHash;
+
+    /**
+     * 当前事件的哈希链值（32字节）
+     * 由前序哈希、事件哈希、空事件计数器共同计算得出
      */
     private byte[] currentHash;
 
     /**
      * 空事件计数器
-     * - 非空事件：固定为 0（表示无连续空事件）
-     * - 空事件：累计当前连续空事件数量（如 5 表示当前是第 5 个连续空事件）
+     * - 非空事件：0（表示无连续空事件）
+     * - 空事件：累计当前连续空事件数量（如5表示第5个连续空事件）
      */
     private long emptyEventCounter;
 
     /**
      * 事件类型标识
-     * - true：非空事件（含业务数据，如交易、合约调用、节点心跳）
+     * - true：非空事件（交易、区块元数据等有业务意义的事件）
      * - false：空事件（仅维持哈希链时序，无业务数据）
      */
     private boolean isNonEmptyEvent;
 
     /**
-     * 全局时序戳（毫秒级）
-     * 基于系统时间 + POH 哈希链长度生成，用于快速定位事件在全局时序中的位置
-     */
-    private long timestamp;
-
-    /**
-     * 关联的事件原始数据（仅非空事件有效）
-     * 用于后续验证时回溯计算哈希（如交易数据、合约指令）
-     */
-    private byte[] eventData;
-
-    /**
-     * 哈希链高度（当前事件在哈希链中的序号）
-     * 从 0 开始递增，每追加一个事件（空/非空）高度 +1，用于快速判断事件先后顺序
+     * 哈希链高度（全局唯一序号）
+     * 每追加一个事件（空/非空）则+1，用于标记事件在链中的绝对位置
      */
     private long chainHeight;
+
+    /**
+     * 物理时间戳（节点本地时间）
+     * 辅助字段，用于将逻辑时间（chainHeight）与实际时间关联
+     */
+    private Instant physicalTimestamp;
+
+    /**
+     * POH链中的位置（逻辑时间戳）
+     */
+    private long sequenceNumber;
+
+    /**
+     * 关联的交易ID（仅非空事件且为交易时有效）
+     * 与交易池中的交易形成关联
+     */
+    private byte[] transactionId;
+
+    /**
+     * 生成该事件的节点ID
+     * 分布式场景下用于追踪事件来源
+     */
+    private byte[] nodeId;
+
+    /**
+     * 所属的区块槽位（Slot）
+     * 关联POH链与区块链的区块结构
+     */
+    private long slot;
+
+    /**
+     * 节点对当前记录的签名（32字节）
+     * 用于验证记录的真实性，防止伪造
+     */
+    private byte[] nodeSignature;
+
+    /**
+     * 检查当前记录是否是交易事件
+     */
+    public boolean isTransactionRecord() {
+        return isNonEmptyEvent && transactionId != null && transactionId.length > 0;
+    }
+
+    /**
+     * 检查当前记录是否是空事件
+     */
+    public boolean isEmptyEvent() {
+        return !isNonEmptyEvent;
+    }
 }

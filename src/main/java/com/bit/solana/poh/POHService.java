@@ -8,15 +8,14 @@ import java.util.List;
 /**
  * POH(Proof of History)核心接口
  * 提供时间戳生成和验证功能
+ * 是基于POHEngine封装的上层业务服务，专注于将 POH 的底层能力转化为业务可用的接口，解决 “POH 如何服务于交易处理等业务场景” 的问题。核心职责包括：
+ * 为交易（Transaction）生成 POH 时间戳，并关联到交易对象；
+ * 批量处理交易的 POH 时间戳生成；
+ * 验证交易相关的 POH 链（如区块中的 POH 条目）；
+ * 对外提供 POH 的最新状态（如最新哈希）。
  */
 public interface POHService {
 
-    /**
-     * 追加 POH 事件（空事件/非空事件）
-     * @param eventData 事件数据：null = 空事件，非 null = 非空事件（如交易数据、合约事件）
-     * @return POHRecord 事件记录（包含当前哈希链状态）
-     */
-    POHRecord appendEvent(byte[] eventData);
 
     /**
      * 为交易生成POH时间戳
