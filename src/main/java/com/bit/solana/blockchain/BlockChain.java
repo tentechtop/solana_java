@@ -1,6 +1,6 @@
 package com.bit.solana.blockchain;
 
-public interface BlockChainInterface {
+public interface BlockChain {
 
     //区块链本身的验证功能
     //区块链作为分布式账本系统，提供了全局的、最终的交易验证：
