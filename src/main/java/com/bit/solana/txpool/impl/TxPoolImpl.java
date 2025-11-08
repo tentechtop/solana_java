@@ -498,6 +498,35 @@ public class TxPoolImpl implements TxPool {
     }
 
 
+    @Override
+    public CompletableFuture<Boolean> submitTransaction(Transaction transaction) {
+        return null;
+    }
+
+    @Override
+    public List<CompletableFuture<Boolean>> batchSubmitTransactions(List<Transaction> transactions) {
+        return List.of();
+    }
+
+    @Override
+    public List<Transaction> getPendingTransactions(int maxCount) {
+        return List.of();
+    }
+
+    @Override
+    public void removeProcessedTransactions(List<String> transactionIds) {
+
+    }
+
+    @Override
+    public int getPoolSize() {
+        return 0;
+    }
+
+    @Override
+    public boolean validateTransaction(Transaction transaction) {
+        return false;
+    }
 
     @Override
     public Result getTxPool() {

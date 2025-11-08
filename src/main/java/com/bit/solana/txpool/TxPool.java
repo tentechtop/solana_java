@@ -4,7 +4,51 @@ import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.structure.tx.TransactionStatus;
 
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 public interface TxPool {
+
+    /**
+     * 提交交易到交易池（异步）
+     * @param transaction 待提交交易
+     * @return 处理结果Future
+     */
+    CompletableFuture<Boolean> submitTransaction(Transaction transaction);
+
+    /**
+     * 批量提交交易（异步）
+     * @param transactions 交易列表
+     * @return 处理结果Future列表
+     */
+    List<CompletableFuture<Boolean>> batchSubmitTransactions(List<Transaction> transactions);
+
+    /**
+     * 获取待处理交易（按优先级）
+     * @param maxCount 最大获取数量
+     * @return 交易列表
+     */
+    List<Transaction> getPendingTransactions(int maxCount);
+
+    /**
+     * 移除已处理的交易
+     * @param transactionIds 已处理交易ID列表
+     */
+    void removeProcessedTransactions(List<String> transactionIds);
+
+    /**
+     * 获取当前交易池大小
+     * @return 交易数量
+     */
+    int getPoolSize();
+
+    /**
+     * 验证交易有效性
+     * @param transaction 待验证交易
+     * @return 验证结果
+     */
+    boolean validateTransaction(Transaction transaction);
+
 
     Result getTxPool();
 
