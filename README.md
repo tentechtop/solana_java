@@ -40,28 +40,7 @@ POH是Solana的核心创新，通过加密哈希链生成全局时序，无需�
     - 哈希链状态通过Redis缓存最新100万个哈希值，加速节点同步与验证。
 
 ```java
-// POH核心实现伪代码
-public class POHEngine {
-    private byte[] lastHash;
-    private long counter; // 空事件计数器
-    private final RedisCache cache;
 
-    public POHRecord appendEvent(byte[] data) {
-        if (data == null) { // 空事件，累加计数器
-            counter++;
-            return new POHRecord(lastHash, counter, false);
-        }
-        // 非空事件，计算新哈希（lastHash + data + counter）
-        byte[] input = combine(lastHash, data, longToBytes(counter));
-        byte[] newHash = MessageDigest.getInstance("SHA-256").digest(input);
-        // 更新状态并缓存
-        lastHash = newHash;
-        cache.set("poh:lastHash", newHash);
-        cache.set("poh:counter", counter);
-        counter = 0; // 重置空事件计数器
-        return new POHRecord(newHash, 0, true);
-    }
-}
 ```
 
 #### 2.1.2 时序验证接口
