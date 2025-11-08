@@ -2,11 +2,13 @@ package com.bit.solana.txpool.impl;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.poh.POHRecord;
+import com.bit.solana.poh.POHService;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.account.AccountMeta;
 import com.bit.solana.structure.bloom.AccountConflictBloom;
 import com.bit.solana.structure.tx.*;
 import com.bit.solana.txpool.TxPool;
+import com.bit.solana.util.ByteUtils;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.CacheStats;
@@ -17,6 +19,7 @@ import com.lmax.disruptor.dsl.ProducerType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.css.Counter;
 
@@ -64,6 +67,8 @@ public class TxPoolImpl implements TxPool {
 
 
     // ==================== 核心组件 ====================
+    @Autowired
+    private POHService pohService;
     // 高并发接收队列（Disruptor无锁环形缓冲区）
     private Disruptor<TransactionEvent> disruptor;
     private RingBuffer<TransactionEvent> ringBuffer;
@@ -372,6 +377,69 @@ public class TxPoolImpl implements TxPool {
             log.error("交易重试失败", e);
             context.future.complete(Result.error("交易重试失败: " + e.getMessage()));
         }
+    }
+
+    /**
+     * 检查超时交易
+     */
+    private void checkTimeouts() {
+        List<String> timeoutTxIds = new ArrayList<>();
+
+        // 遍历处理中的交易，检查超时
+        processingTxs.forEach((txId, context) -> {
+            if (context.isTimeout()) {
+                timeoutTxIds.add(txId);
+                if (context.canRetry()) {
+                    // 重试处理
+                    log.warn("交易{}处理超时，进行第{}次重试", txId, context.retryCount.get());
+                    processSingleTransaction(context.transaction);
+                } else {
+                    // 超过最大重试次数，标记为失败
+                    log.error("交易{}处理超时，已达最大重试次数", txId);
+                    timeoutCount.increment();
+                    txStatusMap.put(context.transaction.getTxId(), TransactionStatus.INVALID);
+                    context.future.complete(Result.error("交易处理超时"));
+                }
+            }
+        });
+
+        // 移除超时且不再重试的交易
+        timeoutTxIds.forEach(processingTxs::remove);
+    }
+
+    /**
+     * 处理单笔交易
+     */
+    private void processSingleTransaction(Transaction tx) {
+        processingPool.execute(() -> {
+            String txIdHex = ByteUtils.bytesToHex(tx.getTxId());
+            try {
+                // 标记为处理中
+                txStatusMap.put(tx.getTxId(), TransactionStatus.PROCESSING);
+
+                // 生成POH时间戳
+                Transaction txWithTimestamp = pohService.generateTimestamp(tx);
+
+                // 模拟交易处理（实际中应执行交易逻辑）
+                Thread.sleep(1); // 模拟处理耗时
+
+                // 处理成功
+                processedCount.increment();
+                txStatusMap.put(tx.getTxId(), TransactionStatus.CONFIRMED);
+                processedTxIds.add(tx.getTxId());
+
+                // 从交易池中移除
+                removeProcessedTransactions(Collections.singletonList(txIdHex));
+
+                log.debug("交易{}处理成功", txIdHex);
+            } catch (Exception e) {
+                log.error("交易{}处理失败", txIdHex, e);
+                failedCount.increment();
+                txStatusMap.put(tx.getTxId(), TransactionStatus.INVALID);
+            } finally {
+                processingTxs.remove(txIdHex);
+            }
+        });
     }
 
     /**

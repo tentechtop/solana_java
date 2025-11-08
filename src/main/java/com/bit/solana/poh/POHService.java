@@ -17,6 +17,8 @@ import java.util.List;
 public interface POHService {
 
 
+    POHRecord appendEvent(byte[] eventData);
+
     /**
      * 为交易生成POH时间戳
      * @param transaction 待处理交易
