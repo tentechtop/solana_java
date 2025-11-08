@@ -9,7 +9,7 @@ public interface TxPool {
     Result getTxPool();
 
     // 获取交易状态
-    TransactionStatus getStatus(String txId);
+    TransactionStatus getStatus(byte[] txId);
 
     Result<String> getTxPoolStatus();
 

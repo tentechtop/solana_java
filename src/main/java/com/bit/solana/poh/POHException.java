@@ -5,24 +5,6 @@ package com.bit.solana.poh;
  */
 public class POHException extends RuntimeException {
     // 异常类型枚举：覆盖 POH 层所有可能错误场景
-    public enum ErrorType {
-        HASH_COMPUTE_FAILED("哈希计算失败（SHA-256 算法异常）"),
-        CACHE_OP_FAILED("缓存操作失败（读取/写入缓存异常）"),
-        PERSIST_FAILED("数据持久化失败（本地文件读写异常）"),
-        EVENT_VERIFY_FAILED("POH 事件验证失败（哈希不匹配/计数器非法）"),
-        EMPTY_COUNTER_OVERFLOW("空事件计数器溢出（超过最大阈值）"),
-        CONFIG_INVALID("POH 配置无效（如缓存实例为空/参数非法）");
-
-        private final String desc;
-
-        ErrorType(String desc) {
-            this.desc = desc;
-        }
-
-        public String getDesc() {
-            return desc;
-        }
-    }
 
     // 异常类型（用于分类处理）
     private final ErrorType errorType;
