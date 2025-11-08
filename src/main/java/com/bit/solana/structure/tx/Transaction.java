@@ -15,6 +15,11 @@ import static com.bit.solana.util.Sha.applySHA256;
 public class Transaction {
 
     /**
+     * 交易ID缓存
+     */
+    private byte[] txId;
+
+    /**
      * 签名列表（每个签名64字节）
      * 与accounts中"isSigner=true"的账户一一对应，证明账户所有者授权交易
      */
@@ -50,13 +55,17 @@ public class Transaction {
      * Solana中交易ID本质是第一个签名的哈希标识
      */
     public byte[] getTxId() {
-        // 校验：有效的交易必须至少有一个签名（费用支付者的签名）
-        if (signatures == null || signatures.isEmpty()) {
-            throw new IllegalStateException("交易没有签名，无法生成txId");
+        if (txId == null) {
+            // 校验：有效的交易必须至少有一个签名（费用支付者的签名）
+            if (signatures == null || signatures.isEmpty()) {
+                throw new IllegalStateException("交易没有签名，无法生成txId");
+            }
+            Signature signature = signatures.getFirst();
+            byte[] value = signature.getValue();
+            byte[] bytes = applySHA256(value);
+            txId = bytes;
         }
-        Signature signature = signatures.getFirst();
-        byte[] value = signature.getValue();
-        return applySHA256(value);
+        return txId;
     }
 
     /**
