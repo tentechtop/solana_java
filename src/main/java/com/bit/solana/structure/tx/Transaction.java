@@ -10,6 +10,7 @@ import static com.bit.solana.util.Sha.applySHA256;
 /**
  * Solana交易实体类，包含完整的交易信息
  * 参考：https://docs.solana.com/developing/programming-model/transactions
+ * 目标：10万TPS提交，1万TPS处理成功，500ms超时，400ms出块
  */
 @Data
 public class Transaction {

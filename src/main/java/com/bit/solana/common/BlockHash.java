@@ -28,4 +28,6 @@ public class BlockHash extends ByteHash32 {
         byte[] bytes = hexToBytes(hex);
         return new BlockHash(bytes);
     }
+
+
 }
