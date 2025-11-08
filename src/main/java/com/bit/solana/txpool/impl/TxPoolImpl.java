@@ -3,23 +3,57 @@ package com.bit.solana.txpool.impl;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.structure.tx.TransactionGroup;
+import com.bit.solana.structure.tx.TransactionStatus;
+import com.bit.solana.txpool.TxPool;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.css.Counter;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
-public class TxPoolImpl implements com.bit.solana.txpool.TxPool {
+public class TxPoolImpl implements TxPool {
     // 分片数量（建议为2的幂，哈希分布更均匀）
-    private static final int SHARD_COUNT = 16;
+    private static final int SHARD_COUNT = 32;
+    // 等待队列容量
+    private static final int QUEUE_CAPACITY = 100_000;
+    // 失败重试次数
+    private static final int MAX_RETRY = 3;
+    // 处理超时时间  500毫秒
+    private static final long TIMEOUT_MILLIS = 500;
+    // 交易状态追踪（原子操作保证线程安全）
+    private final ConcurrentMap<byte[], TransactionStatus> txStatusMap = new ConcurrentHashMap<>();
+    // 阻塞队列用于削峰填谷（防止突发流量击垮系统）
+    private final BlockingQueue<Transaction> submitQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
+    // 并行处理线程池（工作窃取算法，适合大量小任务）
+    private final ExecutorService processingPool = new ForkJoinPool(
+            Runtime.getRuntime().availableProcessors() * 2,
+            ForkJoinPool.defaultForkJoinWorkerThreadFactory,
+            (t, e) -> log.error("交易处理线程异常", e),
+            true
+    );
+    // 提交线程池（独立线程池隔离提交与处理）
+    private final ExecutorService submitPool = new ThreadPoolExecutor(
+            20, 100,
+            60L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(),
+            new ThreadFactory() {
+                private final AtomicInteger counter = new AtomicInteger();
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "tx-submit-" + counter.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // 提交者重试机制，防止队列溢出
+    );
+
     // 交易池分片（每个分片独立锁）
     private final List<Map<byte[], Transaction>> txShards = new ArrayList<>();
     // 交易组分片（按groupId哈希分片）
@@ -94,9 +128,11 @@ public class TxPoolImpl implements com.bit.solana.txpool.TxPool {
         return Result.OK("交易已接受，正在验证");
     }
 
-
-
-
+    /**
+     * 带超时控制
+     * @param tx
+     * @return
+     */
     @Override
     public Result addTransaction(Transaction tx) {
         // 1. 生成POH时间戳

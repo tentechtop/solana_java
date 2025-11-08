@@ -15,3 +15,14 @@ protobuf二进制 实现跨平台
 具体实现方案
 交易分组与冲突检测（基于账户锁 ID）
 目标：快速识别无冲突交易，为并行执行奠定基础。
+
+
+JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8
+
+至少 8 核 CPU，16GB 内存，SSD 存储
+
+部署建议
+JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8
+服务器配置：至少 8 核 CPU，16GB 内存，SSD 存储
+水平扩展：通过多个交易池实例 + 负载均衡实现更高并发
+监控告警：对队列长度、处理延迟、失败率设置阈值告警
