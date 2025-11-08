@@ -29,7 +29,6 @@ public class POHEngineImpl  implements POHEngine {
     private final AtomicLong emptyEventCounter = new AtomicLong(0);
     // 哈希链高度
     private final AtomicLong chainHeight = new AtomicLong(0);
-
     // 上次同步到缓存的高度
     private final AtomicLong lastSyncedHeight = new AtomicLong(0);
     // 同步阈值，每达到此高度同步一次缓存
