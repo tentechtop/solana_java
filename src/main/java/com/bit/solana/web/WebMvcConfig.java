@@ -12,8 +12,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // 配置路径映射：访问 /monitor/SystemMonitor 时，直接返回 static/monitor/dashboard.html
         registry.addViewController("/monitor/system")
                 .setViewName("forward:/monitor/SystemMonitor.html");
-
         registry.addViewController("/solana")
                 .setViewName("forward:/home/index.html");
+        registry.addViewController("/solana/block")
+                .setViewName("forward:/block/index.html");
+
+
     }
 }

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>区块详情 - Solana Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0055D1',
+                        secondary: '#00FFA3',
+                        dark: '#171717',
+                        light: '#F9FAFB',
+                        'neutral-100': '#F3F4F6',
+                        'neutral-200': '#E5E7EB',
+                        'neutral-300': '#D1D5DB',
+                        'neutral-700': '#374151',
+                        'neutral-800': '#1F2937',
+                        'neutral-900': '#111827',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 20px rgba(0, 0, 0, 0.08)',
+                        'card-hover': '0 10px 30px rgba(0, 0, 0, 0.12)',
+                        'block': '0 8px 32px rgba(0, 85, 209, 0.2)',
+                        'block-hover': '0 15px 40px rgba(0, 85, 209, 0.3)',
+                    }
+                },
+            }
+        }
+    </script>
+
+    <style>
+        @layer utilities {
+            .content-auto { content-visibility: auto; }
+            .text-gradient {
+                background-clip: text;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .animate-float { animation: float 3s ease-in-out infinite; }
+            .scrollbar-hide::-webkit-scrollbar { display: none; }
+            .card-transition { transition: all 0.3s ease; }
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* 3D区块视觉样式 */
+        .block-chain-container {
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        .block-card {
+            transform: rotateX(15deg) translateZ(0);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+
+        .block-card:hover {
+            transform: rotateX(5deg) translateZ(20px) scale(1.02);
+            box-shadow: 0 20px 50px rgba(0, 85, 209, 0.25);
+        }
+
+        .block-card.current {
+            transform: rotateX(5deg) translateZ(40px) scale(1.05);
+            box-shadow: 0 25px 60px rgba(0, 255, 163, 0.3);
+        }
+
+        .block-card.parent {
+            transform: rotateX(20deg) translateZ(-20px) scale(0.95);
+            filter: brightness(0.9);
+        }
+
+        .block-card.fork {
+            transform: rotateX(15deg) rotateY(-15deg) translateZ(-10px) scale(0.9);
+            filter: brightness(0.85);
+            opacity: 0.9;
+        }
+
+        .block-card.fork:hover {
+            transform: rotateX(10deg) rotateY(-10deg) translateZ(10px) scale(0.95);
+            filter: brightness(0.95);
+            opacity: 1;
+        }
+
+        /* 连接线样式 */
+        .chain-connector {
+            position: absolute;
+            width: 4px;
+
+            border-radius: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        .fork-connector {
+            position: absolute;
+            height: 4px;
+            background: linear-gradient(90deg, #D1D5DB, #9CA3AF);
+            border-radius: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .block-glow {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .block-glow::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #0055D1, #00FFA3, #0055D1);
+            border-radius: inherit;
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s ease;
+        }
+
+        .block-glow:hover::before {
+            opacity: 0.3;
+        }
+
+        .block-glow.current::before {
+            opacity: 0.5;
+            animation: glow-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.7; }
+        }
+
+        /* 层级指示器 */
+        .z-index-10 { z-index: 10; }
+        .z-index-20 { z-index: 20; }
+        .z-index-30 { z-index: 30; }
+        .z-index-40 { z-index: 40; }
+        .z-index-50 { z-index: 50; }
+    </style>
+</head>
+
+<body class="font-inter bg-gray-50 text-neutral-800 min-h-screen flex flex-col">
+<!-- 导航栏 - 与首页一致 -->
+<header class="bg-white shadow-sm sticky top-0 z-50" id="navbar">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                    <i class="fa fa-link text-white text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold text-neutral-900">Solana Explorer</h1>
+            </div>
+
+            <div class="hidden md:flex relative flex-1 max-w-xl mx-8">
+                <input type="text" id="search-input" class="w-full py-2 px-4 pr-10 rounded-full border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all" placeholder="搜索区块号、交易ID、地址...">
+                <button id="search-btn" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-500 hover:text-primary transition-colors">
+                    <i class="fa fa-search"></i>
+                </button>
+            </div>
+
+            <nav class="hidden md:flex items-center space-x-6">
+                <a href="/solana" class="text-neutral-600 hover:text-primary transition-colors">首页</a>
+                <a href="#" class="text-primary font-medium">区块</a>
+                <a href="#" class="text-neutral-600 hover:text-primary transition-colors">交易</a>
+                <a href="#" class="text-neutral-600 hover:text-primary transition-colors">地址</a>
+                <a href="#" class="text-neutral-600 hover:text-primary transition-colors">统计</a>
+            </nav>
+
+            <button id="mobile-menu-btn" class="md:hidden text-neutral-700">
+                <i class="fa fa-bars text-xl"></i>
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="flex-grow py-8">
+    <!-- 页面标题 -->
+    <section class="container mx-auto px-4 sm:px-6 lg:px-8 mb-8">
+        <div class="flex items-center space-x-3 text-sm text-neutral-500 mb-3">
+            <a href="index.html" class="hover:text-primary transition-colors">首页</a>
+            <i class="fa fa-chevron-right text-xs"></i>
+            <a href="#" class="hover:text-primary transition-colors">区块</a>
+            <i class="fa fa-chevron-right text-xs"></i>
+            <span class="text-neutral-900">区块 #24,891,356</span>
+        </div>
+        <h1 class="text-3xl font-bold text-neutral-900">区块详情</h1>
+    </section>
+
+    <!-- 3D区块关系可视化 -->
+    <section class="container mx-auto px-4 sm:px-6 lg:px-8 mb-12">
+        <div class="bg-white rounded-xl shadow-card p-8">
+            <h2 class="text-xl font-semibold text-neutral-900 mb-6 flex items-center">
+                <i class="fa fa-sitemap text-primary mr-3"></i>
+                区块链结构视图
+            </h2>
+            <div class="block-chain-container relative min-h-[600px] flex items-center justify-center">
+
+            </div>
+
+            <!-- 图例 -->
+            <div class="mt-8 pt-6 border-t border-neutral-200 flex justify-center">
+                <div class="flex flex-wrap gap-6 text-sm">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 rounded bg-primary"></div>
+                        <span>当前区块</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 rounded bg-neutral-400"></div>
+                        <span>父/子区块</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 rounded bg-neutral-500"></div>
+                        <span>分叉/叔区块</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 区块详细信息和交易列表 -->
+    <section class="container mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- 左侧：区块详情 -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-xl shadow-card p-6">
+                <h3 class="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
+                    <i class="fa fa-info-circle text-primary mr-3"></i>
+                    区块信息
+                </h3>
+
+                <div class="space-y-4">
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="text-xs text-neutral-500 mb-1">区块哈希</div>
+                        <div class="font-mono text-sm text-neutral-900 break-all bg-neutral-50 p-3 rounded-lg">A6f7G8h9j0k1l2m3n4p5r6s7t8u9v0w1x2y3z4B5</div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="text-xs text-neutral-500 mb-1">父区块哈希</div>
+                        <div class="font-mono text-sm text-neutral-900 break-all bg-neutral-50 p-3 rounded-lg">C7d8E9f0g1h2j3k4l5m6n7p8r9s0t1u2v3w4x5</div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">区块高度</span>
+                            <span class="font-semibold">24,891,356</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">Slot</span>
+                            <span class="font-semibold">24,891,356</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">Epoch</span>
+                            <span class="font-semibold">345</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">状态</span>
+                            <span class="text-green-600 font-semibold">已确认</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">交易数</span>
+                            <span class="font-semibold">1,243</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">区块大小</span>
+                            <span class="font-semibold">1.24 MB</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="text-xs text-neutral-500 mb-1">区块生产者</div>
+                        <div class="flex items-center justify-between bg-neutral-50 p-3 rounded-lg">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <i class="fa fa-server text-xs text-blue-600"></i>
+                                </div>
+                                <span class="font-mono text-sm">validator-node-782</span>
+                            </div>
+                            <button class="text-primary hover:text-primary/80 text-xs">
+                                <i class="fa fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">PoH高度</span>
+                            <span class="font-mono text-sm">1,289,456,789</span>
+                        </div>
+                    </div>
+
+                    <div class="pb-4 border-b border-neutral-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">协议版本</span>
+                            <span class="font-semibold">1.14.19</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-neutral-600">奖励</span>
+                            <span class="font-semibold text-secondary">0.532 SOL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-neutral-200">
+                    <button class="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2">
+                        <i class="fa fa-download"></i>
+                        <span>下载区块数据</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：交易列表 -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow-card p-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                    <h3 class="text-lg font-semibold text-neutral-900 flex items-center">
+                        <i class="fa fa-exchange text-primary mr-3"></i>
+                        区块内交易
+                    </h3>
+                    <div class="mt-4 md:mt-0 flex items-center space-x-4">
+                        <div class="relative">
+                            <input type="text" placeholder="搜索交易ID..." class="py-2 px-4 pr-10 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm w-64">
+                            <i class="fa fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-400"></i>
+                        </div>
+                        <button class="text-primary hover:text-primary/80 font-medium flex items-center transition-colors">
+                            导出CSV <i class="fa fa-download ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                        <tr class="bg-neutral-50 border-b border-neutral-200">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">交易ID</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">状态</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">类型</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">金额 (SOL)</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">费用 (SOL)</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">时间</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody class="divide-y divide-neutral-100">
+                        <tr class="hover:bg-neutral-50 transition-colors cursor-pointer tx-row">
+                            <td class="px-4 py-3 text-sm text-neutral-700 font-mono truncate max-w-[180px]">5xY8GQZ7P2j9fLk3sR7m8n2p4q6r8t0v2x4y6z8</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">成功</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">SOL转账</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">2.456</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.000245</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">1分钟前</td>
+                            <td class="px-4 py-3">
+                                <button class="text-neutral-600 hover:text-primary transition-colors">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-50 transition-colors cursor-pointer tx-row">
+                            <td class="px-4 py-3 text-sm text-neutral-700 font-mono truncate max-w-[180px]">9pR7TfK2sD4j6m8n0p2r4t6v8x0y2z4B6D8F0H</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">成功</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">SPL转账</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.872</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.000198</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">1分钟前</td>
+                            <td class="px-4 py-3">
+                                <button class="text-neutral-600 hover:text-primary transition-colors">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-50 transition-colors cursor-pointer tx-row">
+                            <td class="px-4 py-3 text-sm text-neutral-700 font-mono truncate max-w-[180px]">3sD5FgH7j9k1l3m5n7p9r1t3v5x7y9z1B3D5F</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">失败</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">智能合约</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">5.234</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.000312</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">2分钟前</td>
+                            <td class="px-4 py-3">
+                                <button class="text-neutral-600 hover:text-primary transition-colors">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-50 transition-colors cursor-pointer tx-row">
+                            <td class="px-4 py-3 text-sm text-neutral-700 font-mono truncate max-w-[180px]">7vB9NcD1fG3h5j7k9l1n3p5r7t9v1x3y5z7B9</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">成功</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">SOL转账</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">12.567</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.000456</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">2分钟前</td>
+                            <td class="px-4 py-3">
+                                <button class="text-neutral-600 hover:text-primary transition-colors">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-50 transition-colors cursor-pointer tx-row">
+                            <td class="px-4 py-3 text-sm text-neutral-700 font-mono truncate max-w-[180px]">2mK4PdR6fT8h0j2l4n6p8r0t2v4x6y8z0B2D4</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">成功</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">NFT铸造</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.345</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">0.000156</td>
+                            <td class="px-4 py-3 text-sm text-neutral-700">3分钟前</td>
+                            <td class="px-4 py-3">
+                                <button class="text-neutral-600 hover:text-primary transition-colors">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <div class="mt-6 pt-6 border-t border-neutral-100 flex flex-col md:flex-row justify-between items-center">
+                    <p class="text-sm text-neutral-500 mb-4 md:mb-0">显示 1 至 5 条，共 1,243 条</p>
+                    <div class="flex space-x-2">
+                        <button class="w-8 h-8 flex items-center justify-center rounded border border-neutral-200 text-neutral-400 cursor-not-allowed">
+                            <i class="fa fa-chevron-left text-xs"></i>
+                        </button>
+                        <button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white">1</button>
+                        <button class="w-8 h-8 flex items-center justify-center rounded border border-neutral-200 hover:border-primary hover:text-primary transition-colors">2</button>
+                        <button class="w-8 h-8 flex items-center justify-center rounded border border-neutral-200 hover:border-primary hover:text-primary transition-colors">3</button>
+                        <button class="w-8 h-8 flex items-center justify-center rounded border border-neutral-200 hover:border-primary hover:text-primary transition-colors">
+                            <i class="fa fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 网络统计 -->
+    <section class="container mx-auto px-4 sm:px-6 lg:px-8 mt-12">
+        <div class="bg-white rounded-xl shadow-card p-6">
+            <h3 class="text-lg font-semibold text-neutral-900 mb-6 flex items-center">
+                <i class="fa fa-line-chart text-primary mr-3"></i>
+                区块统计
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-neutral-50 p-5 rounded-lg">
+                    <h4 class="text-sm text-neutral-600 mb-3">区块时间线</h4>
+                    <div class="h-48">
+                        <canvas id="blockTimeChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-neutral-50 p-5 rounded-lg">
+                    <h4 class="text-sm text-neutral-600 mb-3">交易类型分布</h4>
+                    <div class="h-48">
+                        <canvas id="txTypeChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-neutral-50 p-5 rounded-lg">
+                    <h4 class="text-sm text-neutral-600 mb-3">区块大小趋势</h4>
+                    <div class="h-48">
+                        <canvas id="blockSizeTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- 页脚 - 与首页一致 -->
+<footer class="bg-neutral-900 text-white py-12 mt-16">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+                <div class="flex items-center space-x-2 mb-6">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                        <i class="fa fa-link text-primary text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold">Solana Explorer</h3>
+                </div>
+                <p class="text-neutral-400 mb-6">
+                    探索Solana区块链的每一个细节，实时查看区块、交易和账户数据。
+                </p>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-neutral-400 hover:text-white transition-colors">
+                        <i class="fa fa-twitter text-xl"></i>
+                    </a>
+                    <a href="#" class="text-neutral-400 hover:text-white transition-colors">
+                        <i class="fa fa-github text-xl"></i>
+                    </a>
+                    <a href="#" class="text-neutral-400 hover:text-white transition-colors">
+                        <i class="fa fa-discord text-xl"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-semibold mb-4">快速链接</h4>
+                <ul class="space-y-2">
+                    <li><a href="index.html" class="text-neutral-400 hover:text-white transition-colors">首页</a></li>
+                    <li><a href="#" class="text-white font-medium">区块</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">交易</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">地址</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">统计</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-semibold mb-4">资源</h4>
+                <ul class="space-y-2">
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">Solana文档</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">开发者工具</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">API文档</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">网络状态</a></li>
+                    <li><a href="#" class="text-neutral-400 hover:text-white transition-colors">常见问题</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-semibold mb-4">订阅更新</h4>
+                <p class="text-neutral-400 mb-4">获取Solana网络的最新动态和更新</p>
+                <div class="flex">
+                    <input type="email" placeholder="您的邮箱地址" class="px-4 py-2 rounded-l-lg w-full bg-neutral-800 border border-neutral-700 focus:outline-none focus:border-primary text-white">
+                    <button class="bg-primary hover:bg-primary/90 transition-colors px-4 py-2 rounded-r-lg">
+                        <i class="fa fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="border-t border-neutral-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p class="text-neutral-500 text-sm">© 2023 Solana Explorer. 保留所有权利。</p>
+            <div class="flex space-x-6 mt-4 md:mt-0">
+                <a href="#" class="text-neutral-500 hover:text-white text-sm transition-colors">隐私政策</a>
+                <a href="#" class="text-neutral-500 hover:text-white text-sm transition-colors">服务条款</a>
+                <a href="#" class="text-neutral-500 hover:text-white text-sm transition-colors">联系我们</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // 移动端菜单
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+    }
+
+    // 3D区块点击事件
+    document.querySelectorAll('.block-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const blockId = this.getAttribute('data-block');
+            if (blockId && blockId.includes('fork')) {
+                alert(`查看分叉区块详情: ${blockId}\n\n这是一个竞争分支，已被主链取代。`);
+            } else {
+                alert(`跳转到区块: ${blockId}\n\n在实际应用中，这里会导航到对应的区块页面`);
+            }
+        });
+    });
+
+    // 交易行点击
+    document.querySelectorAll('.tx-row').forEach(row => {
+        row.addEventListener('click', function() {
+            alert('打开交易详情模态框\n\n在实际应用中，这里会显示交易详情');
+        });
+    });
+
+    // 搜索功能
+    const searchBtn = document.getElementById('search-btn');
+    const searchInput = document.getElementById('search-input');
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', performSearch);
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    function performSearch() {
+        const query = searchInput.value.trim();
+        if (query) {
+            alert(`搜索: ${query}\n\n在实际应用中，这里会根据查询内容跳转到相应的区块、交易或地址页面`);
+        }
+    }
+
+    // 图表初始化
+    window.addEventListener('load', () => {
+        // 区块时间线图
+        const blockTimeCtx = document.getElementById('blockTimeChart')?.getContext('2d');
+        if (blockTimeCtx) {
+            new Chart(blockTimeCtx, {
+                type: 'line',
+                data: {
+                    labels: ['-5', '-4', '-3', '-2', '-1', '当前'],
+                    datasets: [{
+                        label: '出块时间 (ms)',
+                        data: [420, 405, 415, 398, 402, 400],
+                        borderColor: '#0055D1',
+                        backgroundColor: 'rgba(0, 85, 209, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // 交易类型分布
+        const txTypeCtx = document.getElementById('txTypeChart')?.getContext('2d');
+        if (txTypeCtx) {
+            new Chart(txTypeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['SOL转账', 'SPL转账', '智能合约', 'NFT交易'],
+                    datasets: [{
+                        data: [45, 32, 18, 5],
+                        backgroundColor: ['#0055D1', '#00FFA3', '#8B5CF6', '#F59E0B'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        // 区块大小趋势
+        const blockSizeCtx = document.getElementById('blockSizeTrendChart')?.getContext('2d');
+        if (blockSizeCtx) {
+            new Chart(blockSizeCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['-5', '-4', '-3', '-2', '-1', '当前'],
+                    datasets: [{
+                        label: '区块大小 (KB)',
+                        data: [1100, 980, 1350, 1180, 1060, 1240],
+                        backgroundColor: 'rgba(0, 255, 163, 0.7)',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>
