@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana 账户管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- 引入 qrcode.js 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0055D1',
+                        secondary: '#36BFFA',
+                        success: '#10B981',
+                        danger: '#EF4444',
+                        neutral: {
+                            50: '#F9FAFB',
+                            100: '#F3F4F6',
+                            200: '#E5E7EB',
+                            300: '#D1D5DB',
+                            400: '#9CA3AF',
+                            500: '#6B7280',
+                            600: '#4B5563',
+                            700: '#374151',
+                            800: '#1F2937',
+                            900: '#111827',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                    },
+                    boxShadow: {
+                        'card': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-balance {
+                text-wrap: balance;
+            }
+            .mnemonic-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 0.75rem;
+            }
+            .fade-in {
+                animation: fadeIn 0.5s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-neutral-50 text-neutral-800 min-h-screen">
+<!-- 顶部导航 -->
+<header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+            <i class="fa fa-link text-primary text-2xl"></i>
+            <h1 class="text-xl font-bold text-neutral-900">Java-Solana 钱包</h1>
+        </div>
+        <nav class="hidden md:flex space-x-8">
+            <a href="#" class="text-primary font-medium">账户</a>
+            <a href="#" class="text-neutral-600 hover:text-primary transition-colors">转账</a>
+            <a href="#" class="text-neutral-600 hover:text-primary transition-colors">交易记录</a>
+            <a href="#" class="text-neutral-600 hover:text-primary transition-colors">帮助</a>
+        </nav>
+        <button class="md:hidden text-neutral-700">
+            <i class="fa fa-bars text-xl"></i>
+        </button>
+    </div>
+</header>
+
+<main class="container mx-auto px-4 py-8">
+    <!-- 状态指示器 -->
+    <div id="status-indicator" class="hidden mb-6 p-4 rounded-lg bg-success/10 border border-success/20 text-success flex items-center">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="status-message">操作成功</span>
+    </div>
+
+    <!-- 步骤指示器 -->
+    <div class="mb-10">
+        <div class="flex items-center justify-between max-w-3xl mx-auto">
+            <div class="flex flex-col items-center">
+                <div id="step-1-indicator" class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center mb-2">1</div>
+                <span class="text-sm font-medium text-primary">生成助记词</span>
+            </div>
+            <div class="flex-1 h-1 mx-2 bg-neutral-200">
+                <div id="progress-1-2" class="h-full bg-primary w-0 transition-all duration-500"></div>
+            </div>
+            <div class="flex flex-col items-center">
+                <div id="step-2-indicator" class="w-10 h-10 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center mb-2">2</div>
+                <span class="text-sm font-medium text-neutral-500">创建账户</span>
+            </div>
+            <div class="flex-1 h-1 mx-2 bg-neutral-200">
+                <div id="progress-2-3" class="h-full bg-primary w-0 transition-all duration-500"></div>
+            </div>
+            <div class="flex flex-col items-center">
+                <div id="step-3-indicator" class="w-10 h-10 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center mb-2">3</div>
+                <span class="text-sm font-medium text-neutral-500">账户管理</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 步骤1: 生成助记词 -->
+    <section id="step-1" class="max-w-3xl mx-auto bg-white rounded-xl shadow-card p-6 mb-8 fade-in">
+        <h2 class="text-2xl font-bold mb-4 text-neutral-900">生成助记词</h2>
+        <p class="text-neutral-600 mb-6">助记词是恢复账户的唯一方式，请妥善保管，不要分享给任何人。</p>
+
+        <div id="mnemonic-container" class="hidden mb-6 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+            <div id="mnemonic-words" class="mnemonic-grid mb-4"></div>
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="flex items-center">
+                    <input type="checkbox" id="backup-confirmed" class="mr-2 h-4 w-4 text-primary rounded">
+                    <label for="backup-confirmed" class="text-sm text-neutral-600">我已安全备份助记词</label>
+                </div>
+                <button id="copy-mnemonic" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors flex items-center">
+                    <i class="fa fa-copy mr-2"></i> 复制助记词
+                </button>
+            </div>
+        </div>
+
+        <div class="flex justify-end">
+            <button id="generate-mnemonic" class="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center">
+                <i class="fa fa-key mr-2"></i> 生成助记词
+            </button>
+        </div>
+    </section>
+
+    <!-- 步骤2: 创建账户 -->
+    <section id="step-2" class="max-w-3xl mx-auto bg-white rounded-xl shadow-card p-6 mb-8 hidden">
+        <h2 class="text-2xl font-bold mb-4 text-neutral-900">创建账户</h2>
+        <p class="text-neutral-600 mb-6">使用生成的助记词创建你的Solana账户</p>
+
+        <div class="mb-6">
+            <label for="import-mnemonic" class="block text-sm font-medium text-neutral-700 mb-1">确认助记词</label>
+            <textarea id="import-mnemonic" rows="3" class="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="请输入你的助记词，用空格分隔"></textarea>
+            <p class="text-xs text-neutral-500 mt-1">请输入刚才生成的12个助记词以确认</p>
+        </div>
+
+        <div class="mb-6">
+            <label for="account-name" class="block text-sm font-medium text-neutral-700 mb-1">账户名称 (可选)</label>
+            <input type="text" id="account-name" class="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="给你的账户起个名字">
+        </div>
+
+        <div class="flex justify-between">
+            <button id="back-to-step-1" class="px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors">
+                返回
+            </button>
+            <button id="create-account" class="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center">
+                <i class="fa fa-user-plus mr-2"></i> 创建账户
+            </button>
+        </div>
+    </section>
+
+    <!-- 步骤3: 账户管理 -->
+    <section id="step-3" class="max-w-4xl mx-auto mb-8 hidden">
+        <!-- 账户信息卡片 -->
+        <div class="bg-white rounded-xl shadow-card p-6 mb-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-neutral-900 mb-1" id="display-account-name">我的账户</h2>
+                    <p class="text-neutral-500 text-sm">Solana 账户</p>
+                </div>
+                <div class="mt-4 md:mt-0 flex gap-3">
+                    <button id="copy-address" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors flex items-center">
+                        <i class="fa fa-copy mr-2"></i> 复制地址
+                    </button>
+                    <button id="refresh-balance" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors flex items-center">
+                        <i class="fa fa-refresh mr-2"></i> 刷新
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-baseline">
+                    <span class="text-4xl font-bold text-neutral-900 mr-2" id="account-balance">0.00</span>
+                    <span class="text-neutral-600">SOL</span>
+                </div>
+                <div class="text-neutral-500 text-sm mt-1" id="balance-in-usd">≈ $0.00 USD</div>
+            </div>
+
+            <div class="p-4 bg-neutral-50 rounded-lg border border-neutral-200 break-all font-mono text-sm" id="account-address">
+                -- 账户地址将显示在这里 --
+            </div>
+        </div>
+
+        <!-- 功能区选项卡 -->
+        <div class="border-b border-neutral-200 mb-6">
+            <nav class="-mb-px flex space-x-8">
+                <button id="tab-send" class="py-4 px-1 border-b-2 border-primary text-primary font-medium text-sm">
+                    <i class="fa fa-paper-plane mr-1"></i> 发送
+                </button>
+                <button id="tab-history" class="py-4 px-1 border-b-2 border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 font-medium text-sm">
+                    <i class="fa fa-history mr-1"></i> 交易历史
+                </button>
+                <button id="tab-receive" class="py-4 px-1 border-b-2 border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 font-medium text-sm">
+                    <i class="fa fa-qrcode mr-1"></i> 接收
+                </button>
+            </nav>
+        </div>
+
+        <!-- 发送交易表单 -->
+        <div id="panel-send" class="bg-white rounded-xl shadow-card p-6 mb-8">
+            <h3 class="text-xl font-bold mb-6 text-neutral-900">发送 SOL</h3>
+
+            <div class="mb-6">
+                <label for="recipient-address" class="block text-sm font-medium text-neutral-700 mb-1">接收者地址</label>
+                <input type="text" id="recipient-address" class="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="输入接收者的Solana地址">
+            </div>
+
+            <div class="mb-6">
+                <label for="transfer-amount" class="block text-sm font-medium text-neutral-700 mb-1">发送金额 (SOL)</label>
+                <input type="number" id="transfer-amount" step="0.000001" min="0.000001" class="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="输入发送金额">
+                <div class="mt-2 text-sm text-neutral-500">
+                    可用余额: <span id="available-balance" class="font-medium">0.00 SOL</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="transfer-memo" class="block text-sm font-medium text-neutral-700 mb-1">备注 (可选)</label>
+                <input type="text" id="transfer-memo" class="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="添加备注信息（最多50个字符）">
+            </div>
+
+            <div class="p-4 bg-neutral-50 rounded-lg border border-neutral-200 mb-6">
+                <div class="flex justify-between mb-2">
+                    <span class="text-neutral-600">交易费用</span>
+                    <span class="font-medium">~0.00022 SOL</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-neutral-600">总计 (含费用)</span>
+                    <span class="font-medium" id="total-amount">0.00022 SOL</span>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button id="send-transaction" class="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center">
+                    <i class="fa fa-paper-plane mr-2"></i> 确认发送
+                </button>
+            </div>
+        </div>
+
+        <!-- 交易历史面板 -->
+        <div id="panel-history" class="bg-white rounded-xl shadow-card p-6 mb-8 hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-neutral-900">交易历史</h3>
+                <div class="relative">
+                    <select class="appearance-none bg-neutral-50 border border-neutral-200 text-neutral-700 py-2 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                        <option>全部交易</option>
+                        <option>仅发送</option>
+                        <option>仅接收</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-neutral-700">
+                        <i class="fa fa-chevron-down text-xs"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div id="transactions-empty" class="py-12 text-center">
+                <i class="fa fa-file-text-o text-4xl text-neutral-300 mb-4"></i>
+                <p class="text-neutral-500">暂无交易记录</p>
+            </div>
+
+            <div id="transactions-list" class="hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                        <tr class="bg-neutral-50 border-b border-neutral-200">
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">交易ID</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">类型</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">金额</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">状态</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">时间</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-neutral-700">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody class="divide-y divide-neutral-100" id="transactions-table-body">
+                        <!-- 交易记录将通过JS动态添加 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6 flex justify-center">
+                    <button class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors">
+                        加载更多
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 接收面板 -->
+        <div id="panel-receive" class="bg-white rounded-xl shadow-card p-6 mb-8 hidden">
+            <h3 class="text-xl font-bold mb-6 text-neutral-900">接收 SOL</h3>
+
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 mb-8">
+                <div class="p-4 bg-white border-2 border-neutral-200 rounded-lg">
+                    <div id="qrcode" class="w-48 h-48 bg-neutral-100 flex items-center justify-center">
+                        <i class="fa fa-qrcode text-5xl text-neutral-400"></i>
+                    </div>
+                </div>
+                <div class="text-center md:text-left">
+                    <p class="text-sm text-neutral-500 mb-1">你的Solana地址</p>
+                    <p class="font-mono text-sm break-all max-w-md mb-4" id="receive-address">-- 账户地址将显示在这里 --</p>
+                    <button id="copy-receive-address" class="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors flex items-center">
+                        <i class="fa fa-copy mr-2"></i> 复制地址
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                <h4 class="font-medium mb-2">接收提示</h4>
+                <ul class="text-sm text-neutral-600 space-y-2">
+                    <li class="flex items-start">
+                        <i class="fa fa-info-circle text-primary mt-1 mr-2"></i>
+                        <span>仅接收Solana (SOL) 代币到该地址</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-info-circle text-primary mt-1 mr-2"></i>
+                        <span>请确认发送方使用正确的网络（主网）</span>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-info-circle text-primary mt-1 mr-2"></i>
+                        <span>转账通常需要几秒钟到几分钟确认</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+</main>
+
+
+<!-- 交易成功模态框 -->
+<div id="transaction-success-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa fa-check text-2xl text-success"></i>
+            </div>
+            <h3 class="text-xl font-bold text-neutral-900">交易成功</h3>
+            <p class="text-neutral-600 mt-2">你的交易已被网络确认</p>
+        </div>
+
+        <div class="bg-neutral-50 rounded-lg p-4 mb-6">
+            <div class="mb-3">
+                <p class="text-xs text-neutral-500 mb-1">交易ID</p>
+                <p class="font-mono text-sm break-all" id="modal-tx-id">5xY8GQZ7P2j9fLk3sR7m8n2p4q6r8t0v2x4y6z8</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <p class="text-xs text-neutral-500 mb-1">金额</p>
+                    <p class="font-medium" id="modal-amount">0.5 SOL</p>
+                </div>
+                <div>
+                    <p class="text-xs text-neutral-500 mb-1">时间</p>
+                    <p class="font-medium" id="modal-time">刚刚</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-3">
+            <button id="view-tx-details" class="flex-1 px-4 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors">
+                查看详情
+            </button>
+            <button id="close-success-modal" class="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">
+                完成
+            </button>
+        </div>
+    </div>
+</div>
+
+<footer class="bg-white border-t border-neutral-200 py-8">
+    <div class="container mx-auto px-4 text-center text-neutral-500 text-sm">
+        <p>Java-Solana 钱包 &copy; 2023</p>
+        <p class="mt-2">安全地管理你的Solana资产</p>
+    </div>
+</footer>
+
+<script>
+    // 全局变量
+    let mnemonicWords = [];
+    let currentAccount = null;
+    let transactions = [];
+    let qrcodeInstance = null; // 二维码实例变量
+
+    // DOM元素
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    const step3 = document.getElementById('step-3');
+    const mnemonicContainer = document.getElementById('mnemonic-container');
+    const mnemonicWordsEl = document.getElementById('mnemonic-words');
+    const generateMnemonicBtn = document.getElementById('generate-mnemonic');
+    const copyMnemonicBtn = document.getElementById('copy-mnemonic');
+    const importMnemonicInput = document.getElementById('import-mnemonic');
+    const createAccountBtn = document.getElementById('create-account');
+    const backToStep1Btn = document.getElementById('back-to-step-1');
+    const backupConfirmedCheckbox = document.getElementById('backup-confirmed');
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusMessage = document.getElementById('status-message');
+    const accountNameInput = document.getElementById('account-name');
+    const displayAccountName = document.getElementById('display-account-name');
+    const accountAddressEl = document.getElementById('account-address');
+    const accountBalanceEl = document.getElementById('account-balance');
+    const balanceInUsdEl = document.getElementById('balance-in-usd');
+    const availableBalanceEl = document.getElementById('available-balance');
+    const copyAddressBtn = document.getElementById('copy-address');
+    const refreshBalanceBtn = document.getElementById('refresh-balance');
+    const recipientAddressInput = document.getElementById('recipient-address');
+    const transferAmountInput = document.getElementById('transfer-amount');
+    const transferMemoInput = document.getElementById('transfer-memo');
+    const totalAmountEl = document.getElementById('total-amount');
+    const sendTransactionBtn = document.getElementById('send-transaction');
+    const tabSendBtn = document.getElementById('tab-send');
+    const tabHistoryBtn = document.getElementById('tab-history');
+    const tabReceiveBtn = document.getElementById('tab-receive');
+    const panelSend = document.getElementById('panel-send');
+    const panelHistory = document.getElementById('panel-history');
+    const panelReceive = document.getElementById('panel-receive');
+    const transactionsList = document.getElementById('transactions-list');
+    const transactionsEmpty = document.getElementById('transactions-empty');
+    const transactionsTableBody = document.getElementById('transactions-table-body');
+    const receiveAddressEl = document.getElementById('receive-address');
+    const copyReceiveAddressBtn = document.getElementById('copy-receive-address');
+    const transactionSuccessModal = document.getElementById('transaction-success-modal');
+    const closeSuccessModalBtn = document.getElementById('close-success-modal');
+    const viewTxDetailsBtn = document.getElementById('view-tx-details');
+    const modalTxIdEl = document.getElementById('modal-tx-id');
+    const modalAmountEl = document.getElementById('modal-amount');
+    const modalTimeEl = document.getElementById('modal-time');
+
+    // 步骤指示器元素
+    const step1Indicator = document.getElementById('step-1-indicator');
+    const step2Indicator = document.getElementById('step-2-indicator');
+    const step3Indicator = document.getElementById('step-3-indicator');
+    const progress12 = document.getElementById('progress-1-2');
+    const progress23 = document.getElementById('progress-2-3');
+
+    // 助记词列表 - 从资源文件获取的部分单词
+    const mnemonicWordList = [
+        "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd", "abuse",
+        "access", "accident", "wallet", "accuse", "achieve", "acid", "acoustic", "acquire", "across", "act",
+        "action", "actor", "actress", "actual", "adapt", "add", "addict", "address", "adjust", "admit",
+        "adult", "advance", "advice", "aerobic", "affair", "afford", "afraid", "again", "age", "agent",
+        "agree", "ahead", "aim", "air", "airport", "aisle", "alarm", "album", "alcohol", "alert",
+        "alien", "all", "alley", "allow", "almost", "alone", "alpha", "already", "also", "alter",
+        "always", "amateur", "amazing", "among", "amount", "amused", "analyst", "anchor", "ancient", "anger"
+    ];
+
+    // 生成12个随机助记词
+    function generateRandomMnemonic() {
+        const mnemonic = [];
+        for (let i = 0; i < 12; i++) {
+            const randomIndex = Math.floor(Math.random() * mnemonicWordList.length);
+            mnemonic.push(mnemonicWordList[randomIndex]);
+        }
+        return mnemonic;
+    }
+
+    // 显示状态消息
+    function showStatus(message, isError = false) {
+        statusMessage.textContent = message;
+        statusIndicator.classList.remove('hidden', 'bg-success/10', 'border-success/20', 'text-success',
+            'bg-danger/10', 'border-danger/20', 'text-danger');
+
+        if (isError) {
+            statusIndicator.classList.add('bg-danger/10', 'border-danger/20', 'text-danger');
+        } else {
+            statusIndicator.classList.add('bg-success/10', 'border-success/20', 'text-success');
+        }
+
+        statusIndicator.classList.add('fade-in');
+
+        // 3秒后自动隐藏
+        setTimeout(() => {
+            statusIndicator.classList.add('hidden');
+        }, 3000);
+    }
+
+    // 生成随机账户地址
+    function generateAccountAddress() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let address = '';
+        for (let i = 0; i < 44; i++) {
+            address += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return address;
+    }
+
+    // 生成随机交易ID
+    function generateTransactionId() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let txId = '';
+        for (let i = 0; i < 44; i++) {
+            txId += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return txId;
+    }
+
+    // 计算总金额（含手续费）
+    function calculateTotalAmount() {
+        const amount = parseFloat(transferAmountInput.value) || 0;
+        const fee = 0.00022;
+        const total = amount + fee;
+        totalAmountEl.textContent = total.toFixed(6) + ' SOL';
+    }
+
+    // 更新交易历史显示
+    function updateTransactionHistory() {
+        if (transactions.length === 0) {
+            transactionsList.classList.add('hidden');
+            transactionsEmpty.classList.remove('hidden');
+            return;
+        }
+
+        transactionsEmpty.classList.add('hidden');
+        transactionsList.classList.remove('hidden');
+        transactionsTableBody.innerHTML = '';
+
+        // 按时间排序，最新的在前
+        const sortedTransactions = [...transactions].sort((a, b) => b.timestamp - a.timestamp);
+
+        sortedTransactions.forEach(tx => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-neutral-50 transition-colors cursor-pointer';
+
+            const date = new Date(tx.timestamp);
+            const formattedDate = date.toLocaleString();
+
+            const typeClass = tx.type === 'send' ? 'text-danger' : 'text-success';
+            const typeIcon = tx.type === 'send' ? 'fa-paper-plane' : 'fa-arrow-down';
+            const typeText = tx.type === 'send' ? '发送' : '接收';
+
+            row.innerHTML = `
+                    <td class="px-6 py-4 text-sm text-neutral-700 font-mono truncate max-w-[180px]">${tx.id}</td>
+                    <td class="px-6 py-4 text-sm ${typeClass}">
+                        <i class="fa ${typeIcon} mr-1"></i> ${typeText}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-neutral-700">${tx.amount} SOL</td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">成功</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-neutral-700">${formattedDate}</td>
+                    <td class="px-6 py-4">
+                        <button class="text-neutral-600 hover:text-primary transition-colors view-tx-details" data-tx-id="${tx.id}">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                    </td>
+                `;
+
+            transactionsTableBody.appendChild(row);
+        });
+
+        // 添加查看详情事件
+        document.querySelectorAll('.view-tx-details').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const txId = this.getAttribute('data-tx-id');
+                const tx = transactions.find(t => t.id === txId);
+                if (tx) {
+                    showTransactionDetails(tx);
+                }
+            });
+        });
+    }
+
+    // 显示交易详情
+    function showTransactionDetails(tx) {
+        modalTxIdEl.textContent = tx.id;
+        modalAmountEl.textContent = `${tx.amount} SOL`;
+
+        const date = new Date(tx.timestamp);
+        modalTimeEl.textContent = date.toLocaleString();
+
+        transactionSuccessModal.classList.remove('hidden');
+    }
+
+    // 切换到步骤2
+    function goToStep2() {
+        step1.classList.add('hidden');
+        step2.classList.remove('hidden');
+        step2Indicator.classList.remove('bg-neutral-200', 'text-neutral-600');
+        step2Indicator.classList.add('bg-primary', 'text-white');
+        progress12.style.width = '100%';
+    }
+
+    // 切换到步骤3
+    function goToStep3() {
+        step2.classList.add('hidden');
+        step3.classList.remove('hidden');
+        step3Indicator.classList.remove('bg-neutral-200', 'text-neutral-600');
+        step3Indicator.classList.add('bg-primary', 'text-white');
+        progress23.style.width = '100%';
+
+        // 显示账户信息
+        displayAccountName.textContent = currentAccount.name || '我的账户';
+        accountAddressEl.textContent = currentAccount.address;
+        receiveAddressEl.textContent = currentAccount.address;
+
+        // 生成账户地址的二维码
+        generateAddressQRCode(currentAccount.address);
+
+        // 初始余额
+        updateBalance(2.5);
+    }
+
+    // 生成账户地址的二维码
+    function generateAddressQRCode(address) {
+        const qrcodeContainer = document.getElementById('qrcode');
+
+        // 如果已有二维码实例，先清除
+        if (qrcodeInstance) {
+            qrcodeContainer.innerHTML = '';
+        }
+
+        // 创建新的二维码实例
+        qrcodeInstance = new QRCode(qrcodeContainer, {
+            text: address,  // 使用账户地址作为二维码内容
+            width: 192,     // 增大二维码尺寸以适配UI
+            height: 192,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    }
+
+    // 更新余额显示
+    function updateBalance(balance) {
+        currentAccount.balance = balance;
+        accountBalanceEl.textContent = balance.toFixed(6);
+
+        // 假设SOL价格为$20（实际应用中应从API获取）
+        const solPrice = 20;
+        const usdValue = balance * solPrice;
+        balanceInUsdEl.textContent = `≈ $${usdValue.toFixed(2)} USD`;
+        availableBalanceEl.textContent = `${balance.toFixed(6)} SOL`;
+    }
+
+    // 生成助记词按钮点击事件
+    generateMnemonicBtn.addEventListener('click', () => {
+        mnemonicWords = generateRandomMnemonic();
+        mnemonicWordsEl.innerHTML = '';
+
+        mnemonicWords.forEach((word, index) => {
+            const wordEl = document.createElement('div');
+            wordEl.className = 'bg-white p-2 border border-neutral-200 rounded text-center';
+            wordEl.innerHTML = `<span class="inline-block w-5 h-5 rounded-full bg-neutral-100 text-neutral-600 text-xs mr-1">${index + 1}</span>${word}`;
+            mnemonicWordsEl.appendChild(wordEl);
+        });
+
+        mnemonicContainer.classList.remove('hidden');
+        importMnemonicInput.value = mnemonicWords.join(' ');
+        backupConfirmedCheckbox.checked = false;
+
+        // 滚动到助记词区域
+        mnemonicContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // 复制助记词按钮点击事件
+    copyMnemonicBtn.addEventListener('click', () => {
+        const textToCopy = mnemonicWords.join(' ');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showStatus('助记词已复制到剪贴板');
+        }).catch(err => {
+            showStatus('复制失败，请手动复制', true);
+            console.error('复制失败:', err);
+        });
+    });
+
+    // 创建账户按钮点击事件
+    createAccountBtn.addEventListener('click', () => {
+        const enteredMnemonic = importMnemonicInput.value.trim().split(/\s+/).filter(word => word);
+
+        if (enteredMnemonic.length !== 12) {
+            showStatus('请输入12个助记词', true);
+            return;
+        }
+
+        if (!backupConfirmedCheckbox.checked) {
+            showStatus('请确认已备份助记词', true);
+            return;
+        }
+
+        // 验证助记词是否匹配（实际应用中应更严格）
+        const isMnemonicValid = JSON.stringify(enteredMnemonic.sort()) === JSON.stringify(mnemonicWords.sort());
+        if (!isMnemonicValid) {
+            showStatus('助记词不正确', true);
+            return;
+        }
+
+        // 创建账户
+        currentAccount = {
+            name: accountNameInput.value.trim() || null,
+            address: generateAccountAddress(),
+            balance: 0,
+            mnemonic: mnemonicWords
+        };
+
+        showStatus('账户创建成功');
+        setTimeout(goToStep3, 1000);
+    });
+
+    // 返回步骤1按钮点击事件
+    backToStep1Btn.addEventListener('click', () => {
+        step2.classList.add('hidden');
+        step1.classList.remove('hidden');
+        step2Indicator.classList.add('bg-neutral-200', 'text-neutral-600');
+        step2Indicator.classList.remove('bg-primary', 'text-white');
+        progress12.style.width = '0';
+    });
+
+    // 复制地址按钮点击事件
+    copyAddressBtn.addEventListener('click', () => {
+        if (currentAccount) {
+            navigator.clipboard.writeText(currentAccount.address).then(() => {
+                showStatus('账户地址已复制到剪贴板');
+            }).catch(err => {
+                showStatus('复制失败，请手动复制', true);
+                console.error('复制失败:', err);
+            });
+        }
+    });
+
+    // 复制接收地址按钮点击事件
+    copyReceiveAddressBtn.addEventListener('click', () => {
+        if (currentAccount) {
+            navigator.clipboard.writeText(currentAccount.address).then(() => {
+                showStatus('接收地址已复制到剪贴板');
+            }).catch(err => {
+                showStatus('复制失败，请手动复制', true);
+                console.error('复制失败:', err);
+            });
+        }
+    });
+
+    // 刷新余额按钮点击事件
+    refreshBalanceBtn.addEventListener('click', () => {
+        if (currentAccount) {
+            // 模拟余额波动
+            const fluctuation = (Math.random() - 0.5) * 0.1; // -0.05 到 0.05 之间的波动
+            const newBalance = Math.max(0, currentAccount.balance + fluctuation);
+            updateBalance(newBalance);
+            showStatus('余额已更新');
+        }
+    });
+
+    // 发送交易按钮点击事件
+    sendTransactionBtn.addEventListener('click', () => {
+        const recipient = recipientAddressInput.value.trim();
+        const amount = parseFloat(transferAmountInput.value);
+
+        if (!recipient) {
+            showStatus('请输入接收者地址', true);
+            return;
+        }
+
+        if (!amount || amount <= 0) {
+            showStatus('请输入有效的发送金额', true);
+            return;
+        }
+
+        if (amount > currentAccount.balance) {
+            showStatus('余额不足', true);
+            return;
+        }
+
+        // 手续费
+        const fee = 0.00022;
+        if (amount + fee > currentAccount.balance) {
+            showStatus('余额不足以支付金额和手续费', true);
+            return;
+        }
+
+        // 创建交易记录
+        const newTx = {
+            id: generateTransactionId(),
+            type: 'send',
+            amount: amount,
+            recipient: recipient,
+            memo: transferMemoInput.value.trim() || null,
+            fee: fee,
+            timestamp: Date.now()
+        };
+
+        transactions.push(newTx);
+
+        // 更新余额
+        updateBalance(currentAccount.balance - amount - fee);
+
+        // 更新交易历史
+        updateTransactionHistory();
+
+        // 显示成功模态框
+        showTransactionDetails(newTx);
+
+        // 重置表单
+        recipientAddressInput.value = '';
+        transferAmountInput.value = '';
+        transferMemoInput.value = '';
+        totalAmountEl.textContent = '0.00022 SOL';
+    });
+
+    // 转账金额输入事件
+    transferAmountInput.addEventListener('input', calculateTotalAmount);
+
+    // 选项卡切换事件
+    tabSendBtn.addEventListener('click', () => {
+        panelSend.classList.remove('hidden');
+        panelHistory.classList.add('hidden');
+        panelReceive.classList.add('hidden');
+
+        tabSendBtn.classList.remove('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabSendBtn.classList.add('border-primary', 'text-primary');
+
+        tabHistoryBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabHistoryBtn.classList.remove('border-primary', 'text-primary');
+
+        tabReceiveBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabReceiveBtn.classList.remove('border-primary', 'text-primary');
+    });
+
+    tabHistoryBtn.addEventListener('click', () => {
+        panelSend.classList.add('hidden');
+        panelHistory.classList.remove('hidden');
+        panelReceive.classList.add('hidden');
+
+        tabSendBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabSendBtn.classList.remove('border-primary', 'text-primary');
+
+        tabHistoryBtn.classList.remove('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabHistoryBtn.classList.add('border-primary', 'text-primary');
+
+        tabReceiveBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabReceiveBtn.classList.remove('border-primary', 'text-primary');
+
+        // 更新交易历史
+        updateTransactionHistory();
+    });
+
+    tabReceiveBtn.addEventListener('click', () => {
+        panelSend.classList.add('hidden');
+        panelHistory.classList.add('hidden');
+        panelReceive.classList.remove('hidden');
+
+        tabSendBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabSendBtn.classList.remove('border-primary', 'text-primary');
+
+        tabHistoryBtn.classList.add('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabHistoryBtn.classList.remove('border-primary', 'text-primary');
+
+        tabReceiveBtn.classList.remove('border-transparent', 'text-neutral-500', 'hover:text-neutral-700', 'hover:border-neutral-300');
+        tabReceiveBtn.classList.add('border-primary', 'text-primary');
+    });
+
+    // 模态框关闭按钮事件
+    closeSuccessModalBtn.addEventListener('click', () => {
+        transactionSuccessModal.classList.add('hidden');
+    });
+
+    viewTxDetailsBtn.addEventListener('click', () => {
+        transactionSuccessModal.classList.add('hidden');
+        tabHistoryBtn.click();
+    });
+
+    // 备份确认后才能继续
+    backupConfirmedCheckbox.addEventListener('change', () => {
+        if (backupConfirmedCheckbox.checked) {
+            goToStep2();
+        }
+    });
+
+    // 初始化 - 添加一个模拟的接收交易
+    function initializeSampleData() {
+        // 模拟一个接收交易
+        transactions.push({
+            id: generateTransactionId(),
+            type: 'receive',
+            amount: 1.2,
+            sender: '7Xf4g5h6j7k8l9m0n1p2r3s4t5u6v7w8x9y0z1B2',
+            timestamp: Date.now() - 86400000 // 24小时前
+        });
+    }
+
+    // 页面加载完成后初始化
+    window.addEventListener('load', initializeSampleData);
+</script>
+</body>
+</html>
