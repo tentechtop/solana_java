@@ -1,6 +1,7 @@
 package com.bit.solana.structure.tx;
 
 import com.bit.solana.common.BlockHash;
+import com.bit.solana.common.TransactionHash;
 import com.bit.solana.structure.account.AccountMeta;
 import lombok.Data;
 import java.util.List;
@@ -92,5 +93,10 @@ public class Transaction {
 
         // 3. 若未找到符合条件的账户，说明交易无效（Solana要求交易必须有费用支付者）
         throw new IllegalStateException("交易中未找到有效的费用支付者（需满足isSigner=true且isWritable=true）");
+    }
+
+    public TransactionHash getTransactionHash() {
+
+        return null;
     }
 }

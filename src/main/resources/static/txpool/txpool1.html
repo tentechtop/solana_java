@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana 交易池 | 账户管理</title>
+    <!-- 外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0055FF',
+                        secondary: '#0FC6C2',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                        dark: '#1D2129',
+                        'dark-2': '#4E5969',
+                        'light-1': '#F2F3F5',
+                        'light-2': '#E5E6EB',
+                        'light-3': '#C9CDD4'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+
+    <!-- 自定义样式 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .card-shadow {
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+            .animate-pulse-slow {
+                animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+        }
+    </style>
+</head>
+
+<body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
+<!-- 顶部导航栏 -->
+<header class="bg-white shadow-sm sticky top-0 z-50 transition-all duration-300">
+    <div class="container mx-auto px-4">
+        <div class="flex items-center justify-between h-16">
+            <!-- 左侧Logo和标题 -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                    <i class="fa fa-link text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-dark">Solana Java</h1>
+                    <p class="text-xs text-dark-2">区块链开发工具包</p>
+                </div>
+            </div>
+
+            <!-- 中间导航链接 -->
+            <nav class="hidden md:flex items-center space-x-8">
+                <a href="#" class="text-dark-2 hover:text-primary transition-colors text-sm font-medium">首页</a>
+                <a href="#" class="text-primary border-b-2 border-primary pb-1 font-medium text-sm">账户管理</a>
+                <a href="#" class="text-dark-2 hover:text-primary transition-colors text-sm font-medium">交易管理</a>
+                <a href="#" class="text-dark-2 hover:text-primary transition-colors text-sm font-medium">智能合约</a>
+                <a href="#" class="text-dark-2 hover:text-primary transition-colors text-sm font-medium">文档</a>
+            </nav>
+
+            <!-- 右侧用户区域 -->
+            <div class="flex items-center space-x-4">
+                <button class="hidden md:flex items-center justify-center w-9 h-9 rounded-full bg-light-1 text-dark-2 hover:bg-light-2 transition-colors">
+                    <i class="fa fa-bell-o"></i>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span class="font-medium">JD</span>
+                    </div>
+                    <span class="hidden md:inline text-sm font-medium">开发者账户</span>
+                </div>
+                <button class="md:hidden text-dark-2">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- 主内容区 -->
+<main class="flex-grow container mx-auto px-4 py-6">
+    <!-- 页面标题和路径 -->
+    <div class="mb-6">
+        <div class="flex items-center text-sm text-dark-2 mb-2">
+            <a href="#" class="hover:text-primary">首页</a>
+            <i class="fa fa-angle-right mx-2 text-xs"></i>
+            <a href="#" class="hover:text-primary">账户管理</a>
+            <i class="fa fa-angle-right mx-2 text-xs"></i>
+            <span class="text-dark">交易池</span>
+        </div>
+        <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold">交易池</h2>
+        <p class="text-dark-2 mt-1">查看和管理Solana网络中的待处理交易</p>
+    </div>
+
+    <!-- 网络状态卡片 -->
+    <div class="bg-white rounded-xl p-5 card-shadow mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+            <h3 class="text-lg font-semibold">网络状态</h3>
+            <div class="flex items-center space-x-2 mt-2 md:mt-0">
+                <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                <span class="text-sm text-success">Solana主网 - 已连接</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-light-1/50 rounded-lg p-4">
+                <p class="text-dark-2 text-sm mb-1">当前区块高度</p>
+                <p class="text-xl font-bold">25,389,147</p>
+            </div>
+            <div class="bg-light-1/50 rounded-lg p-4">
+                <p class="text-dark-2 text-sm mb-1">交易池大小</p>
+                <p class="text-xl font-bold">1,284</p>
+            </div>
+            <div class="bg-light-1/50 rounded-lg p-4">
+                <p class="text-dark-2 text-sm mb-1">平均处理时间</p>
+                <p class="text-xl font-bold text-success">0.42 秒</p>
+            </div>
+            <div class="bg-light-1/50 rounded-lg p-4">
+                <p class="text-dark-2 text-sm mb-1">网络拥堵程度</p>
+                <p class="text-xl font-bold text-warning">中等</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交易处理速度图表 -->
+    <div class="bg-white rounded-xl p-5 card-shadow mb-6">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-semibold">交易处理速度趋势</h3>
+            <div class="flex space-x-2">
+                <button class="px-3 py-1 text-xs rounded-full bg-primary text-white">1小时</button>
+                <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">24小时</button>
+                <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">7天</button>
+            </div>
+        </div>
+        <div class="h-64">
+            <canvas id="transactionSpeedChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 筛选和控制区域 -->
+    <div class="bg-white rounded-xl p-5 card-shadow mb-6">
+        <div class="flex flex-col md:flex-row justify-between gap-4">
+            <!-- 搜索框 -->
+            <div class="relative flex-grow max-w-md">
+                <input type="text" placeholder="搜索交易哈希、账户地址..."
+                       class="w-full pl-10 pr-4 py-2 rounded-lg border border-light-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all">
+                <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-dark-2"></i>
+            </div>
+
+            <!-- 筛选器 -->
+            <div class="flex flex-wrap gap-3">
+                <!-- 交易类型筛选 -->
+                <div class="relative">
+                    <select class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-light-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all bg-white">
+                        <option value="all">所有交易类型</option>
+                        <option value="transfer">转账交易</option>
+                        <option value="contract">智能合约交易</option>
+                        <option value="stake">质押交易</option>
+                        <option value="vote">投票交易</option>
+                        <option value="create">账户创建</option>
+                    </select>
+                    <i class="fa fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-dark-2 pointer-events-none text-xs"></i>
+                </div>
+
+                <!-- 手续费筛选 -->
+                <div class="relative">
+                    <select class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-light-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all bg-white">
+                        <option value="all">所有手续费</option>
+                        <option value="highest" selected>最高手续费优先</option>
+                        <option value="lowest">最低手续费优先</option>
+                        <option value="medium">中等手续费</option>
+                    </select>
+                    <i class="fa fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-dark-2 pointer-events-none text-xs"></i>
+                </div>
+
+                <!-- 时间筛选 -->
+                <div class="relative">
+                    <select class="appearance-none pl-4 pr-10 py-2 rounded-lg border border-light-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all bg-white">
+                        <option value="all">所有时间</option>
+                        <option value="10m">最近10分钟</option>
+                        <option value="1h">最近1小时</option>
+                        <option value="24h">最近24小时</option>
+                    </select>
+                    <i class="fa fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-dark-2 pointer-events-none text-xs"></i>
+                </div>
+
+                <!-- 刷新按钮 -->
+                <button class="flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors">
+                    <i class="fa fa-refresh"></i>
+                    <span>刷新</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 交易类型快捷筛选标签 -->
+        <div class="mt-4 flex flex-wrap gap-2">
+            <span class="text-sm text-dark-2">快速筛选:</span>
+            <button class="px-3 py-1 text-xs rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                全部
+            </button>
+            <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">
+                <i class="fa fa-exchange mr-1"></i>转账交易
+            </button>
+            <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">
+                <i class="fa fa-cubes mr-1"></i>智能合约
+            </button>
+            <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">
+                <i class="fa fa-handshake-o mr-1"></i>质押交易
+            </button>
+            <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">
+                <i class="fa fa-check-square-o mr-1"></i>投票交易
+            </button>
+            <button class="px-3 py-1 text-xs rounded-full bg-light-1 hover:bg-light-2 transition-colors">
+                <i class="fa fa-user-plus mr-1"></i>账户创建
+            </button>
+        </div>
+    </div>
+
+    <!-- 交易池表格 -->
+    <div class="bg-white rounded-xl overflow-hidden card-shadow mb-6">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                <tr class="bg-light-1/50 text-left">
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">交易哈希</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">类型</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">发送方</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">接收方</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">金额 (SOL)</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">手续费 (SOL)</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">提交时间</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">状态</th>
+                    <th class="px-6 py-4 text-dark-2 text-sm font-medium">操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- 交易1 - 智能合约交易 -->
+                <tr class="border-t border-light-2 hover:bg-light-1/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium truncate max-w-xs">5gC8...9fD2</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700">
+                  <i class="fa fa-cubes mr-1"></i>智能合约
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">8ZfZ...7kL3</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">9xHj...2pQ7</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm">2.548</td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm font-medium text-danger">0.0025</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-dark-2">2分钟前</td>
+                    <td class="px-6 py-4">
+                <span class="flex items-center text-warning text-sm">
+                  <span class="w-2 h-2 rounded-full bg-warning animate-pulse mr-2"></span>
+                  处理中
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <button class="text-primary hover:text-primary/80 text-sm">详情</button>
+                    </td>
+                </tr>
+
+                <!-- 交易2 - 转账交易 -->
+                <tr class="border-t border-light-2 hover:bg-light-1/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium truncate max-w-xs">a7b2...3cD9</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
+                  <i class="fa fa-exchange mr-1"></i>转账
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">3sTk...8mN5</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">5dRj...1sP9</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm">10.250</td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm font-medium text-danger">0.0018</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-dark-2">5分钟前</td>
+                    <td class="px-6 py-4">
+                <span class="flex items-center text-warning text-sm">
+                  <span class="w-2 h-2 rounded-full bg-warning animate-pulse mr-2"></span>
+                  处理中
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <button class="text-primary hover:text-primary/80 text-sm">详情</button>
+                    </td>
+                </tr>
+
+                <!-- 交易3 - 质押交易 -->
+                <tr class="border-t border-light-2 hover:bg-light-1/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium truncate max-w-xs">e2f7...8gH1</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                  <i class="fa fa-handshake-o mr-1"></i>质押
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">2wQp...6rS4</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">7vBu...3tY8</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm">50.000</td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm font-medium text-danger">0.0015</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-dark-2">10分钟前</td>
+                    <td class="px-6 py-4">
+                <span class="flex items-center text-warning text-sm">
+                  <span class="w-2 h-2 rounded-full bg-warning animate-pulse mr-2"></span>
+                  处理中
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <button class="text-primary hover:text-primary/80 text-sm">详情</button>
+                    </td>
+                </tr>
+
+                <!-- 交易4 - 投票交易 -->
+                <tr class="border-t border-light-2 hover:bg-light-1/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium truncate max-w-xs">c3d9...4eF2</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                  <i class="fa fa-check-square-o mr-1"></i>投票
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">9kLi...2mOj</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">4nPk...7qRl</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm">-</td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm font-medium text-danger">0.0012</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-dark-2">15分钟前</td>
+                    <td class="px-6 py-4">
+                <span class="flex items-center text-success text-sm">
+                  <i class="fa fa-check-circle mr-2"></i>
+                  已确认
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <button class="text-primary hover:text-primary/80 text-sm">详情</button>
+                    </td>
+                </tr>
+
+                <!-- 交易5 - 账户创建 -->
+                <tr class="border-t border-light-2 hover:bg-light-1/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium truncate max-w-xs">b8a3...6cD7</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                <span class="px-2 py-1 text-xs rounded-full bg-indigo-100 text-indigo-700">
+                  <i class="fa fa-user-plus mr-1"></i>账户创建
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">1mNo...5pQ2</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <span class="text-sm truncate max-w-xs">8rSt...3uV6</span>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm">0.002</td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm font-medium text-danger">0.0010</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-dark-2">20分钟前</td>
+                    <td class="px-6 py-4">
+                <span class="flex items-center text-danger text-sm">
+                  <i class="fa fa-times-circle mr-2"></i>
+                  失败
+                </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <button class="text-primary hover:text-primary/80 text-sm">详情</button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        <div class="px-6 py-4 border-t border-light-2 flex justify-between items-center">
+            <div class="text-sm text-dark-2">
+                显示 1 至 5，共 1,284 条
+            </div>
+            <div class="flex items-center space-x-1">
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fa fa-angle-left"></i>
+                </button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-white">1</button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 hover:border-primary hover:text-primary transition-colors">2</button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 hover:border-primary hover:text-primary transition-colors">3</button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 hover:border-primary hover:text-primary transition-colors">4</button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 hover:border-primary hover:text-primary transition-colors">5</button>
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg border border-light-2 text-dark-2 hover:border-primary hover:text-primary transition-colors">
+                    <i class="fa fa-angle-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交易类型分布 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- 交易类型占比 -->
+        <div class="bg-white rounded-xl p-5 card-shadow">
+            <h3 class="text-lg font-semibold mb-4">交易类型分布</h3>
+            <div class="h-64">
+                <canvas id="transactionTypeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 手续费分布 -->
+        <div class="bg-white rounded-xl p-5 card-shadow">
+            <h3 class="text-lg font-semibold mb-4">手续费分布</h3>
+            <div class="h-64">
+                <canvas id="feeDistributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- 页脚 -->
+<footer class="bg-white border-t border-light-2 py-8">
+    <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                    <i class="fa fa-link text-white text-sm"></i>
+                </div>
+                <span class="text-dark font-medium">Solana Java</span>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm text-dark-2 mb-4 md:mb-0">
+                <a href="#" class="hover:text-primary transition-colors">关于我们</a>
+                <a href="#" class="hover:text-primary transition-colors">文档中心</a>
+                <a href="#" class="hover:text-primary transition-colors">API参考</a>
+                <a href="#" class="hover:text-primary transition-colors">常见问题</a>
+                <a href="#" class="hover:text-primary transition-colors">联系支持</a>
+            </div>
+
+            <div class="flex space-x-4">
+                <a href="#" class="w-8 h-8 rounded-full bg-light-1 flex items-center justify-center text-dark-2 hover:bg-primary hover:text-white transition-colors">
+                    <i class="fa fa-github"></i>
+                </a>
+                <a href="#" class="w-8 h-8 rounded-full bg-light-1 flex items-center justify-center text-dark-2 hover:bg-primary hover:text-white transition-colors">
+                    <i class="fa fa-twitter"></i>
+                </a>
+                <a href="#" class="w-8 h-8 rounded-full bg-light-1 flex items-center justify-center text-dark-2 hover:bg-primary hover:text-white transition-colors">
+                    <i class="fa fa-discord"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="mt-6 text-center text-xs text-dark-2">
+            © 2025 Solana Java 开发工具包. 保留所有权利.
+        </div>
+    </div>
+</footer>
+
+<!-- 交易详情模态框 (默认隐藏) -->
+<div id="transactionModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div class="p-5 border-b border-light-2 flex justify-between items-center sticky top-0 bg-white z-10">
+            <h3 class="text-lg font-semibold">交易详情</h3>
+            <button id="closeModal" class="text-dark-2 hover:text-dark transition-colors">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <div class="p-5">
+            <!-- 交易详情内容 -->
+            <div class="mb-6">
+                <p class="text-dark-2 text-sm mb-1">交易哈希</p>
+                <div class="flex items-center">
+                    <p class="text-sm font-medium">5gC8F9eD0sT1rY2uI3oP4aS5dF6gH7jK8lZ9fD2</p>
+                    <button class="ml-2 text-primary text-xs hover:underline">复制</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <p class="text-dark-2 text-sm mb-1">交易类型</p>
+                    <p class="text-sm font-medium">智能合约交易</p>
+                </div>
+                <div>
+                    <p class="text-dark-2 text-sm mb-1">状态</p>
+                    <p class="text-sm font-medium text-warning">处理中</p>
+                </div>
+                <div>
+                    <p class="text-dark-2 text-sm mb-1">提交时间</p>
+                    <p class="text-sm font-medium">2025-11-11 14:32:45</p>
+                </div>
+                <div>
+                    <p class="text-dark-2 text-sm mb-1">预计确认时间</p>
+                    <p class="text-sm font-medium">约 30 秒</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium mb-3">参与账户</h4>
+                <div class="space-y-3">
+                    <div class="p-3 bg-light-1/50 rounded-lg">
+                        <p class="text-dark-2 text-xs mb-1">发送方</p>
+                        <div class="flex items-center">
+                            <p class="text-sm font-medium truncate">8ZfZ7xX6cC5vV4bB3nN2mM1kL3jH4gG5fF6eE7dD</p>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看</button>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-light-1/50 rounded-lg">
+                        <p class="text-dark-2 text-xs mb-1">接收方 (智能合约)</p>
+                        <div class="flex items-center">
+                            <p class="text-sm font-medium truncate">9xHj8wW7qQ6pP5oO4nN3mM2lL1kK2jJ3iI4hH5gG</p>
+                            <button class="ml-2 text-primary text-xs hover:underline">查看合约</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium mb-3">交易金额</h4>
+                <div class="p-3 bg-light-1/50 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <p class="text-dark-2 text-sm">金额</p>
+                        <p class="text-sm font-medium">2.548 SOL</p>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <p class="text-dark-2 text-sm">手续费</p>
+                        <p class="text-sm font-medium text-danger">0.0025 SOL</p>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <p class="text-dark-2 text-sm">总金额</p>
+                        <p class="text-sm font-medium">2.5505 SOL</p>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="font-medium mb-3">交易数据</h4>
+                <div class="p-3 bg-light-1/50 rounded-lg overflow-x-auto">
+            <pre class="text-xs text-dark-2 whitespace-pre-wrap"><code>{
+  "version": 0,
+  "signatures": [
+    "5gC8F9eD0sT1rY2uI3oP4aS5dF6gH7jK8lZ9fD2..."
+  ],
+  "message": {
+    "header": {
+      "numRequiredSignatures": 1,
+      "numReadonlySignedAccounts": 0,
+      "numReadonlyUnsignedAccounts": 1
+    },
+    "accountKeys": [
+      "8ZfZ7xX6cC5vV4bB3nN2mM1kL3jH4gG5fF6eE7dD",
+      "9xHj8wW7qQ6pP5oO4nN3mM2lL1kK2jJ3iI4hH5gG",
+      "11111111111111111111111111111111"
+    ],
+    "recentBlockhash": "EtZ9...",
+    "instructions": [
+      {
+        "programIdIndex": 2,
+        "accounts": [0, 1],
+        "data": "3Bk..."
+      }
+    ]
+  }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-5 border-t border-light-2 flex justify-end sticky bottom-0 bg-white z-10">
+            <button class="px-4 py-2 rounded-lg border border-light-2 mr-2 hover:bg-light-1 transition-colors">
+                关闭
+            </button>
+            <button class="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors">
+                在区块浏览器中查看
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+    // 页面加载完成后初始化图表
+    document.addEventListener('DOMContentLoaded', function() {
+        // 交易处理速度图表
+        const speedCtx = document.getElementById('transactionSpeedChart').getContext('2d');
+        new Chart(speedCtx, {
+            type: 'line',
+            data: {
+                labels: ['0分钟', '5分钟', '10分钟', '15分钟', '20分钟', '25分钟', '30分钟', '35分钟', '40分钟', '45分钟', '50分钟', '55分钟'],
+                datasets: [{
+                    label: '处理速度 (交易/秒)',
+                    data: [320, 310, 340, 360, 350, 370, 390, 380, 410, 400, 395, 420],
+                    borderColor: '#0055FF',
+                    backgroundColor: 'rgba(0, 85, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: '平均处理时间 (秒)',
+                    data: [0.45, 0.47, 0.43, 0.41, 0.42, 0.40, 0.38, 0.39, 0.37, 0.38, 0.39, 0.36],
+                    borderColor: '#0FC6C2',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '交易/秒'
+                        }
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '处理时间 (秒)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // 交易类型分布图表
+        const typeCtx = document.getElementById('transactionTypeChart').getContext('2d');
+        new Chart(typeCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['转账交易', '智能合约交易', '质押交易', '投票交易', '账户创建'],
+                datasets: [{
+                    data: [45, 25, 15, 10, 5],
+                    backgroundColor: [
+                        '#3B82F6', // 蓝色 - 转账
+                        '#8B5CF6', // 紫色 - 智能合约
+                        '#10B981', // 绿色 - 质押
+                        '#F59E0B', // 黄色 - 投票
+                        '#6366F1'  // 靛蓝色 - 账户创建
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+
+        // 手续费分布图表
+        const feeCtx = document.getElementById('feeDistributionChart').getContext('2d');
+        new Chart(feeCtx, {
+            type: 'bar',
+            data: {
+                labels: ['0-0.0005', '0.0005-0.001', '0.001-0.0015', '0.0015-0.002', '0.002+'],
+                datasets: [{
+                    label: '交易数量',
+                    data: [320, 450, 280, 150, 84],
+                    backgroundColor: '#0055FF',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '手续费 (SOL)'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '交易数量'
+                        }
+                    }
+                }
+            }
+        });
+
+        // 模态框控制
+        const modal = document.getElementById('transactionModal');
+        const detailButtons = document.querySelectorAll('button:contains("详情")');
+        const closeModal = document.getElementById('closeModal');
+
+        // 自定义选择器: 包含特定文本的元素
+        jQuery.expr[':'].contains = function(a, i, m) {
+            return jQuery(a).text().toUpperCase()
+                .indexOf(m[3].toUpperCase()) >= 0;
+        };
+
+        // 打开模态框
+        detailButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.body.style.overflow = 'hidden';
+            });
+        });
+
+        // 关闭模态框
+        closeModal.addEventListener('click', function() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = 'auto';
+        });
+
+        // 点击模态框外部关闭
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.body.style.overflow = 'auto';
+            }
+        });
+
+        // 滚动时导航栏效果
+        window.addEventListener('scroll', function() {
+            const header = document.querySelector('header');
+            if (window.scrollY > 10) {
+                header.classList.add('shadow');
+            } else {
+                header.classList.remove('shadow');
+            }
+        });
+    });
+</script>
+</body>
+</html>

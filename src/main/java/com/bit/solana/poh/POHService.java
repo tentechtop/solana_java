@@ -45,4 +45,6 @@ public interface POHService {
      * @return 最新哈希值
      */
     String getLatestHash();
+
+    POHRecord getCurrentPOH();
 }

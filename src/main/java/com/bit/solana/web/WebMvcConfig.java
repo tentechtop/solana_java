@@ -18,6 +18,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .setViewName("forward:/block/index.html");
         registry.addViewController("/solana/account")
                 .setViewName("forward:/account/accountAdmin.html");
+        registry.addViewController("/solana/txpool")
+                .setViewName("forward:/txpool/txPool.html");
 
     }
 }

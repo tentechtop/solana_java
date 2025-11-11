@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Transaction Pool | Account Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#00FFA3',
+                        secondary: '#9945FF',
+                        dark: '#0F172A',
+                        darker: '#0A0F1C',
+                        'dark-card': '#1E293B',
+                        'dark-hover': '#273449',
+                        'danger': '#FF4560',
+                        'warning': '#FFAB00',
+                        'info': '#00B8D9'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .text-shadow {
+                text-shadow: 0 0 8px rgba(0, 255, 163, 0.5);
+            }
+            .glow {
+                box-shadow: 0 0 15px rgba(0, 255, 163, 0.3);
+            }
+            .gradient-border {
+                position: relative;
+                border-radius: 0.5rem;
+            }
+            .gradient-border::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                border-radius: 0.5rem;
+                padding: 1px;
+                background: linear-gradient(45deg, #00FFA3, #9945FF);
+                -webkit-mask:
+                        linear-gradient(#fff 0 0) content-box,
+                        linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor;
+                mask-composite: exclude;
+                pointer-events: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-darker font-inter text-gray-100 min-h-screen flex flex-col">
+<!-- 顶部导航 -->
+<header class="bg-dark border-b border-gray-800 sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <div class="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
+                <i class="fa fa-link text-dark text-xl"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">
+                <span class="text-primary">Solana</span> Transaction Pool
+            </h1>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-6">
+            <a href="#" class="text-primary font-medium hover:text-primary/80 transition-colors">Dashboard</a>
+            <a href="#" class="text-gray-400 hover:text-primary transition-colors">Validators</a>
+            <a href="#" class="text-gray-400 hover:text-primary transition-colors">Analytics</a>
+            <a href="#" class="text-gray-400 hover:text-primary transition-colors">Settings</a>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+            <i class="fa fa-search text-gray-500"></i>
+          </span>
+                <input type="text" placeholder="Search transactions..." class="bg-dark-card border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary w-48 lg:w-64 transition-all">
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+                    <i class="fa fa-user text-gray-300"></i>
+                </div>
+                <span class="hidden md:inline text-sm font-medium">Admin</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- 主内容区 -->
+<main class="flex-grow container mx-auto px-4 py-6">
+    <!-- 状态概览 -->
+    <section class="mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 交易池大小 -->
+            <div class="bg-dark-card rounded-xl p-5 hover:bg-dark-hover transition-all duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-gray-400 text-sm">Transaction Pool Size</p>
+                        <h3 class="text-2xl font-bold mt-1">1,284</h3>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <i class="fa fa-exchange text-primary"></i>
+                    </div>
+                </div>
+                <div class="flex items-center text-sm">
+            <span class="text-primary flex items-center">
+              <i class="fa fa-arrow-up mr-1"></i>12%
+            </span>
+                    <span class="text-gray-500 ml-2">from last hour</span>
+                </div>
+            </div>
+
+            <!-- 平均处理时间 -->
+            <div class="bg-dark-card rounded-xl p-5 hover:bg-dark-hover transition-all duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-gray-400 text-sm">Avg. Processing Time</p>
+                        <h3 class="text-2xl font-bold mt-1">0.87s</h3>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                        <i class="fa fa-clock-o text-info"></i>
+                    </div>
+                </div>
+                <div class="flex items-center text-sm">
+            <span class="text-green-400 flex items-center">
+              <i class="fa fa-arrow-down mr-1"></i>4%
+            </span>
+                    <span class="text-gray-500 ml-2">from last hour</span>
+                </div>
+            </div>
+
+            <!-- 平均手续费 -->
+            <div class="bg-dark-card rounded-xl p-5 hover:bg-dark-hover transition-all duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-gray-400 text-sm">Avg. Fee (SOL)</p>
+                        <h3 class="text-2xl font-bold mt-1">0.00024</h3>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
+                        <i class="fa fa-credit-card text-secondary"></i>
+                    </div>
+                </div>
+                <div class="flex items-center text-sm">
+            <span class="text-primary flex items-center">
+              <i class="fa fa-arrow-up mr-1"></i>8%
+            </span>
+                    <span class="text-gray-500 ml-2">from last hour</span>
+                </div>
+            </div>
+
+            <!-- 处理速度 -->
+            <div class="bg-dark-card rounded-xl p-5 hover:bg-dark-hover transition-all duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-gray-400 text-sm">Processing Rate</p>
+                        <h3 class="text-2xl font-bold mt-1">142 TPS</h3>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                        <i class="fa fa-tachometer text-warning"></i>
+                    </div>
+                </div>
+                <div class="flex items-center text-sm">
+            <span class="text-green-400 flex items-center">
+              <i class="fa fa-arrow-up mr-1"></i>5%
+            </span>
+                    <span class="text-gray-500 ml-2">from last hour</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 处理速度图表 -->
+    <section class="mb-8">
+        <div class="bg-dark-card rounded-xl p-5">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Transaction Processing Speed</h2>
+                <div class="flex space-x-2">
+                    <button class="px-3 py-1 text-xs bg-dark hover:bg-dark-hover rounded-lg transition-colors active">Last 1h</button>
+                    <button class="px-3 py-1 text-xs bg-dark hover:bg-dark-hover rounded-lg transition-colors">Last 24h</button>
+                    <button class="px-3 py-1 text-xs bg-dark hover:bg-dark-hover rounded-lg transition-colors">Last 7d</button>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="processingSpeedChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- 交易池控制和列表 -->
+    <section>
+        <div class="bg-dark-card rounded-xl p-5">
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <h2 class="text-xl font-bold">Transaction Pool</h2>
+
+                <div class="flex flex-wrap gap-3">
+                    <!-- 交易类型筛选 -->
+                    <div class="relative">
+                        <select id="transactionType" class="appearance-none bg-dark border border-gray-700 rounded-lg py-2 pl-4 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                            <option value="all">All Transaction Types</option>
+                            <option value="transfer">Transfers</option>
+                            <option value="smart_contract">Smart Contracts</option>
+                            <option value="stake">Staking</option>
+                            <option value="swap">Token Swaps</option>
+                            <option value="mint">Token Minting</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                            <i class="fa fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+
+                    <!-- 排序方式 -->
+                    <div class="relative">
+                        <select id="sortBy" class="appearance-none bg-dark border border-gray-700 rounded-lg py-2 pl-4 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                            <option value="recent">Most Recent</option>
+                            <option value="highest_fee">Highest Fee</option>
+                            <option value="lowest_fee">Lowest Fee</option>
+                            <option value="largest_amount">Largest Amount</option>
+                            <option value="pending_longest">Pending Longest</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                            <i class="fa fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+
+                    <!-- 刷新按钮 -->
+                    <button id="refreshBtn" class="bg-primary/10 hover:bg-primary/20 text-primary py-2 px-4 rounded-lg text-sm transition-colors flex items-center">
+                        <i class="fa fa-refresh mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- 交易列表 -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Transaction ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Sender</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Recipient</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Amount (SOL)</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Fee (SOL)</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Age</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                    <!-- 交易1 - 转账 -->
+                    <tr class="hover:bg-dark-hover transition-colors">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[160px]">4sFj...9kLp</span>
+                                <button class="ml-2 text-gray-500 hover:text-primary">
+                                    <i class="fa fa-copy text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-blue-900/30 text-blue-400">Transfer</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">89ab...cdef</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">12cd...34ef</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">12.54</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="text-primary font-medium">0.00052</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-yellow-900/30 text-yellow-400">Pending</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">24s</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <button class="text-info hover:text-info/80 mr-3">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-gray-300">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- 交易2 - 智能合约 -->
+                    <tr class="hover:bg-dark-hover transition-colors">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[160px]">7gHj...2mNq</span>
+                                <button class="ml-2 text-gray-500 hover:text-primary">
+                                    <i class="fa fa-copy text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-purple-900/30 text-purple-400">Smart Contract</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">56ef...78gh</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">90ij...12kl</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">3.89</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="text-primary font-medium">0.00125</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-yellow-900/30 text-yellow-400">Pending</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">1m 12s</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <button class="text-info hover:text-info/80 mr-3">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-gray-300">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- 交易3 - 质押 -->
+                    <tr class="hover:bg-dark-hover transition-colors">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[160px]">2pQr...5sTu</span>
+                                <button class="ml-2 text-gray-500 hover:text-primary">
+                                    <i class="fa fa-copy text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-900/30 text-green-400">Staking</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">34gh...56ij</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">78kl...90mn</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">50.00</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="text-primary font-medium">0.00038</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-900/30 text-green-400">Processing</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">45s</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <button class="text-info hover:text-info/80 mr-3">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-gray-300">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- 交易4 - 代币交换 -->
+                    <tr class="hover:bg-dark-hover transition-colors">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[160px]">8vWx...1yZz</span>
+                                <button class="ml-2 text-gray-500 hover:text-primary">
+                                    <i class="fa fa-copy text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-orange-900/30 text-orange-400">Token Swap</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">ab12...cd34</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">ef56...gh78</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">8.75</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="text-primary font-medium">0.00075</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-yellow-900/30 text-yellow-400">Pending</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">3m 20s</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <button class="text-info hover:text-info/80 mr-3">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-gray-300">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- 交易5 - 代币铸造 -->
+                    <tr class="hover:bg-dark-hover transition-colors">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[160px]">5rTq...8pOn</span>
+                                <button class="ml-2 text-gray-500 hover:text-primary">
+                                    <i class="fa fa-copy text-xs"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-red-900/30 text-red-400">Token Minting</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">ij90...kl12</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 truncate max-w-[120px]">mn34...op56</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">100.00</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="text-primary font-medium">0.00250</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <span class="px-2 py-1 text-xs rounded-full bg-red-900/30 text-red-400">Failed</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">5m 10s</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">
+                            <button class="text-info hover:text-info/80 mr-3">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-gray-300">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页 -->
+            <div class="flex justify-between items-center mt-6">
+                <div class="text-sm text-gray-400">
+                    Showing <span class="text-gray-300">1</span> to <span class="text-gray-300">5</span> of <span class="text-gray-300">1,284</span> transactions
+                </div>
+
+                <div class="flex space-x-1">
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-500 hover:bg-dark-hover disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fa fa-chevron-left text-xs"></i>
+                    </button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-dark font-medium">1</button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-300 hover:bg-dark-hover">2</button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-300 hover:bg-dark-hover">3</button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-300 hover:bg-dark-hover">4</button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-300 hover:bg-dark-hover">5</button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-dark text-gray-300 hover:bg-dark-hover">
+                        <i class="fa fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- 页脚 -->
+<footer class="bg-dark border-t border-gray-800 py-6 mt-10">
+    <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center mb-4 md:mb-0">
+                <div class="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center mr-2">
+                    <i class="fa fa-link text-dark text-sm"></i>
+                </div>
+                <span class="text-gray-400 text-sm">© 2023 Solana Java Admin. All rights reserved.</span>
+            </div>
+
+            <div class="flex space-x-6">
+                <a href="#" class="text-gray-400 hover:text-primary transition-colors text-sm">Documentation</a>
+                <a href="#" class="text-gray-400 hover:text-primary transition-colors text-sm">API</a>
+                <a href="#" class="text-gray-400 hover:text-primary transition-colors text-sm">GitHub</a>
+                <a href="#" class="text-gray-400 hover:text-primary transition-colors text-sm">Support</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- 交易详情模态框 (默认隐藏) -->
+<div id="transactionModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-card w-full max-w-2xl rounded-xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="p-5 border-b border-gray-800 flex justify-between items-center">
+            <h3 class="text-lg font-bold">Transaction Details</h3>
+            <button id="closeModal" class="text-gray-400 hover:text-gray-200">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-grow overflow-y-auto p-5">
+            <div class="mb-6">
+                <p class="text-gray-400 text-sm mb-1">Transaction ID</p>
+                <div class="flex items-center">
+                    <span class="text-gray-300 font-mono text-sm">4sFjK9aLbMcNdOePfQgRhSiTjUvWxYz123456789kLp</span>
+                    <button class="ml-2 text-gray-500 hover:text-primary">
+                        <i class="fa fa-copy text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Type</p>
+                    <p class="text-gray-300">Transfer</p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Status</p>
+                    <p class="text-yellow-400">Pending</p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Timestamp</p>
+                    <p class="text-gray-300">2023-06-15T14:32:45Z</p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Age</p>
+                    <p class="text-gray-300">24 seconds</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium mb-3">Parties</h4>
+                <div class="bg-dark rounded-lg p-4 mb-4">
+                    <p class="text-gray-400 text-sm mb-1">Sender</p>
+                    <div class="flex items-center">
+                        <span class="text-gray-300 font-mono text-sm truncate">89abcdef1234567890abcdef1234567890abcdef</span>
+                        <button class="ml-2 text-gray-500 hover:text-primary">
+                            <i class="fa fa-copy text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-dark rounded-lg p-4">
+                    <p class="text-gray-400 text-sm mb-1">Recipient</p>
+                    <div class="flex items-center">
+                        <span class="text-gray-300 font-mono text-sm truncate">12cdef1234567890abcdef1234567890abcdef12</span>
+                        <button class="ml-2 text-gray-500 hover:text-primary">
+                            <i class="fa fa-copy text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium mb-3">Amount & Fees</h4>
+                <div class="bg-dark rounded-lg p-4">
+                    <div class="flex justify-between mb-3 pb-3 border-b border-gray-800">
+                        <span class="text-gray-400">Amount</span>
+                        <span class="text-gray-300 font-medium">12.54 SOL</span>
+                    </div>
+                    <div class="flex justify-between mb-3 pb-3 border-b border-gray-800">
+                        <span class="text-gray-400">Fee</span>
+                        <span class="text-primary font-medium">0.00052 SOL</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Total</span>
+                        <span class="text-gray-300">12.54052 SOL</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="font-medium mb-3">Raw Data</h4>
+                <div class="bg-dark rounded-lg p-4 overflow-x-auto">
+            <pre class="text-gray-400 text-xs font-mono whitespace-pre"><code>{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": 1623767565,
+    "fee": 520000,
+    "memo": null,
+    "signature": "4sFjK9aLbMcNdOePfQgRhSiTjUvWxYz123456789kLp",
+    "slot": 94521800,
+    "status": {
+      "Ok": null
+    },
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          "89abcdef1234567890abcdef1234567890abcdef",
+          "12cdef1234567890abcdef1234567890abcdef12",
+          "11111111111111111111111111111111"
+        ],
+        "header": {
+          "numReadonlySignedAccounts": 0,
+          "numReadonlyUnsignedAccounts": 1,
+          "numRequiredSignatures": 1
+        },
+        "instructions": [
+          {
+            "accounts": [0, 1],
+            "data": "3Bxs41",
+            "programIdIndex": 2
+          }
+        ],
+        "recentBlockhash": "5DvG9Xz9qQr9kf46s9x8H2z4j6q6Y7p8r9s0t1u2v3w4x5y6z"
+      },
+      "signatures": [
+        "4sFjK9aLbMcNdOePfQgRhSiTjUvWxYz123456789kLp"
+      ]
+    }
+  },
+  "id": 1
+}</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-5 border-t border-gray-800 flex justify-end">
+            <button class="bg-dark hover:bg-dark-hover text-gray-300 py-2 px-4 rounded-lg text-sm mr-2 transition-colors">
+                View on Explorer
+            </button>
+            <button class="bg-primary text-dark py-2 px-4 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 处理交易处理速度图表
+    const initProcessingSpeedChart = () => {
+        const ctx = document.getElementById('processingSpeedChart').getContext('2d');
+
+        // 生成模拟数据 - 过去一小时的TPS数据
+        const generateData = () => {
+            const data = [];
+            const now = new Date();
+
+            // 生成60个数据点（每分钟一个）
+            for (let i = 60; i >= 0; i--) {
+                const time = new Date(now - i * 60000);
+                data.push({
+                    time: time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    tps: Math.floor(Math.random() * 50) + 120 // 120-170 TPS之间的随机值
+                });
+            }
+
+            return data;
+        };
+
+        const chartData = generateData();
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.map(item => item.time),
+                datasets: [{
+                    label: 'Transactions Per Second',
+                    data: chartData.map(item => item.tps),
+                    borderColor: '#00FFA3',
+                    backgroundColor: 'rgba(0, 255, 163, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: '#00FFA3',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#1E293B',
+                        titleColor: '#FFFFFF',
+                        bodyColor: '#CBD5E1',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.raw} TPS`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#94A3B8',
+                            maxRotation: 0,
+                            maxTicksLimit: 8
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#94A3B8',
+                            callback: function(value) {
+                                return value + ' TPS';
+                            }
+                        },
+                        min: 0
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    };
+
+    // 初始化模态框功能
+    const initModal = () => {
+        const modal = document.getElementById('transactionModal');
+        const viewButtons = document.querySelectorAll('button .fa-eye').forEach(icon => {
+            const button = icon.parentElement;
+            button.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            });
+        });
+
+        const closeButtons = document.querySelectorAll('#closeModal, #transactionModal .bg-primary, #transactionModal .bg-dark');
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            });
+        });
+
+        // 点击模态框外部关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        });
+    };
+
+    // 初始化刷新按钮功能
+    const initRefreshButton = () => {
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn.addEventListener('click', () => {
+            // 添加旋转动画
+            const icon = refreshBtn.querySelector('i');
+            icon.classList.add('animate-spin');
+
+            // 模拟加载延迟
+            setTimeout(() => {
+                icon.classList.remove('animate-spin');
+                // 这里可以添加实际刷新数据的逻辑
+            }, 1000);
+        });
+    };
+
+    // 初始化排序和筛选功能
+    const initFilters = () => {
+        const transactionType = document.getElementById('transactionType');
+        const sortBy = document.getElementById('sortBy');
+
+        // 为筛选器添加变化事件
+        transactionType.addEventListener('change', () => {
+            console.log('Transaction type changed to:', transactionType.value);
+            // 这里可以添加实际筛选交易的逻辑
+        });
+
+        sortBy.addEventListener('change', () => {
+            console.log('Sorting by:', sortBy.value);
+            // 这里可以添加实际排序交易的逻辑
+        });
+    };
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        initProcessingSpeedChart();
+        initModal();
+        initRefreshButton();
+        initFilters();
+    });
+</script>
+</body>
+</html>

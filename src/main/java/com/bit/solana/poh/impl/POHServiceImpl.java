@@ -161,4 +161,9 @@ public class POHServiceImpl implements POHService {
     public String getLatestHash() {
         return ByteUtils.bytesToHex(pohEngine.getLastHash());
     }
+
+    @Override
+    public POHRecord getCurrentPOH() {
+        return null;
+    }
 }

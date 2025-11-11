@@ -95,4 +95,8 @@ public class BlockHeader {
      * 作用：交易费用计算规则的哈希，确保全网按统一规则计算交易费用
      */
     private FeeCalculatorHash feeCalculatorHash;
+
+    public long getHeaderSize() {
+        return 0;
+    }
 }

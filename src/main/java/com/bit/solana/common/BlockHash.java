@@ -7,6 +7,7 @@ public class BlockHash extends ByteHash32 {
 
     // 零哈希常量（创世区块的父哈希等场景使用）
     public static final BlockHash ZERO = new BlockHash(new byte[HASH_LENGTH]);
+    public static final BlockHash EMPTY = ZERO;
 
 
     public BlockHash(byte[] value) {

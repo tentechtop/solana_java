@@ -1,6 +1,19 @@
 package com.bit.solana.blockchain;
 
+import com.bit.solana.result.Result;
+import com.bit.solana.structure.block.Block;
+
+/**
+ * 从代码片段看，BlockChain接口定义了区块链的基础能力（交易验证、区块生成等），BlockChainImpl作为其实现类，应聚焦于：
+ * 区块的生成、验证和存储（全局状态维护）；
+ * 交易的最终确认（结合共识结果）；
+ * 区块链核心逻辑的串联（如 POH 时序与区块的绑定）。
+ * 若将质押和投票逻辑嵌入其中，会导致类职责过重，不符合单一职责原则，且难以维护和扩展。
+ */
 public interface BlockChain {
+    Result processBlock(Block block);
+
+    Block getLatestBlock();
 
     //区块链本身的验证功能
     //区块链作为分布式账本系统，提供了全局的、最终的交易验证：

@@ -1,5 +1,6 @@
 package com.bit.solana.txpool;
 
+import com.bit.solana.common.TransactionHash;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.structure.tx.TransactionStatus;
@@ -35,6 +36,8 @@ public interface TxPool {
      * @param transactionIds 已处理交易ID列表
      */
     void removeProcessedTransactions(List<String> transactionIds);
+
+    void removeTransactions(List<TransactionHash> transactionIds);
 
     /**
      * 获取当前交易池大小

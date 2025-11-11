@@ -1,5 +1,6 @@
 package com.bit.solana.poh;
 
+import com.bit.solana.common.PoHHash;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -102,5 +103,14 @@ public class POHRecord implements Serializable {
      */
     public boolean isEmptyEvent() {
         return !isNonEmptyEvent;
+    }
+
+    public PoHHash getHash() {
+        return null;
+    }
+
+    public long getHeight() {
+
+        return 0;
     }
 }

@@ -1,6 +1,7 @@
 package com.bit.solana.txpool.impl;
 
 import com.bit.solana.common.BlockHash;
+import com.bit.solana.common.TransactionHash;
 import com.bit.solana.poh.POHRecord;
 import com.bit.solana.poh.POHService;
 import com.bit.solana.result.Result;
@@ -585,6 +586,12 @@ public class TxPoolImpl implements TxPool {
     public void removeProcessedTransactions(List<String> transactionIds) {
 
     }
+
+    @Override
+    public void removeTransactions(List<TransactionHash> transactionIds) {
+
+    }
+
 
     @Override
     public int getPoolSize() {

@@ -104,5 +104,17 @@ public abstract class ByteHash32 implements Serializable {
         return bytes;
     }
 
-
+    /**
+     * 将32字节哈希转换为int数组（每个int表示一个字节的无符号值）
+     * 用于需要以整数形式处理哈希字节的场景（如某些加密运算或协议交互）
+     * @return 长度为32的int数组，每个元素范围为0-255
+     */
+    public int[] getBytes() {
+        int[] result = new int[HASH_LENGTH];
+        for (int i = 0; i < HASH_LENGTH; i++) {
+            // 将字节转换为无符号int（byte范围是-128~127，转换后为0~255）
+            result[i] = value[i] & 0xFF;
+        }
+        return result;
+    }
 }
