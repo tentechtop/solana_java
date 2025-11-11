@@ -1,6 +1,5 @@
-package com.bit.solana.structure.dto;
+package com.bit.solana.structure.account.json;
 
-import com.bit.solana.common.Pubkey;
 import lombok.Data;
 
 @Data

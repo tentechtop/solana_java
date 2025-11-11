@@ -1,10 +1,10 @@
 package com.bit.solana.api;
 
-import com.bit.solana.monitor.impl.dto.CpuMetrics;
 import com.bit.solana.result.Result;
 import com.bit.solana.service.AccountService;
-import com.bit.solana.structure.dto.AccountDTO;
+import com.bit.solana.structure.account.json.AccountDTO;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
+import com.bit.solana.structure.tx.json.TransferTx;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +53,9 @@ public class AccountApi {
 
 
     // 发起一笔交易 如智能合约交易
-
+    @PostMapping("/submit")
+    public Result<String> submitTx(@RequestBody TransferTx transferTx) {
+        return accountService.submitTx(transferTx);
+    }
 
 }
