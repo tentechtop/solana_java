@@ -278,7 +278,7 @@ public class Ed25519Signer {
 
     // ------------------------------ 测试方法 ------------------------------
 
-    public static void main(String[] args) {
+/*    public static void main(String[] args) {
 
         // 生成助记词
         List<String> mnemonic = generateMnemonic();
@@ -292,7 +292,6 @@ public class Ed25519Signer {
         System.out.println("私钥(hex): " + Hex.toHexString(keyInfo.getPrivateKey()));
         System.out.println("公钥(hex): " + Hex.toHexString(keyInfo.getPublicKey()));
         System.out.println("Solana地址: " + keyInfo.getAddress());
-
 
         // 2. 提取核心字节
         byte[] corePriv = keyInfo.getPrivateKey();
@@ -321,7 +320,84 @@ public class Ed25519Signer {
         byte[] signature = applySignature(recoveredPriv, data);
         boolean verifyResult = verifySignature(recoveredPub, data, signature);
         log.info("恢复的密钥验签结果: {}", verifyResult); // 应输出true
+
+
+        KeyInfo solanaKeyPair = getSolanaKeyPair(mnemonic, 1, 0);//改变账户
+        getSolanaKeyPair(mnemonic, 0, 1);//改变地址
+
+
+
+
+
+    }*/
+
+
+    public static void main(String[] args) {
+        //路径 m/44'/501'/0'/0/0 → 地址 0 的私钥 A、公钥 A'
+        //路径 m/44'/501'/0'/0/1 → 地址 1 的私钥 B、公钥 B'
+
+
+        // 1. 生成助记词（固定助记词用于测试对比，实际使用时保持随机生成）
+        List<String> mnemonic = generateMnemonic();
+        System.out.println("===== 基础信息 =====");
+        System.out.println("助记词: " + String.join(" ", mnemonic));
+        System.out.println("---------------------");
+
+        // 2. 生成基准密钥对（路径：m/44'/501'/0'/0/0）
+        KeyInfo baseKey = getSolanaKeyPair(mnemonic, 0, 0);
+        System.out.println("===== 基准密钥对（账户0，地址0） =====");
+        System.out.println("派生路径: " + baseKey.getPath());
+        System.out.println("私钥(hex): " + Hex.toHexString(baseKey.getPrivateKey()));
+        System.out.println("公钥(hex): " + Hex.toHexString(baseKey.getPublicKey()));
+        System.out.println("Solana地址: " + baseKey.getAddress());
+        System.out.println("---------------------");
+
+        // 3. 验证公钥与地址的一致性
+        byte[] corePriv = baseKey.getPrivateKey();
+        byte[] corePub = Ed25519Signer.derivePublicKeyFromPrivateKey(corePriv);
+        String addressFromPub = Base58.encode(corePub);
+        System.out.println("===== 公钥与地址一致性验证 =====");
+        System.out.println("公钥长度: " + corePub.length + "字节（应为32）");
+        System.out.println("私钥长度: " + corePriv.length + "字节（应为32）");
+        System.out.println("公钥派生地址: " + addressFromPub);
+        System.out.println("地址一致性: " + addressFromPub.equals(baseKey.getAddress()) + "（应为true）");
+        System.out.println("---------------------");
+
+        // 4. 验证签名功能
+        byte[] testData = "Solana HD Wallet Test".getBytes(StandardCharsets.UTF_8);
+        PrivateKey privateKey = Ed25519Signer.recoverPrivateKeyFromCore(corePriv);
+        PublicKey publicKey = Ed25519Signer.recoverPublicKeyFromCore(corePub);
+        byte[] signature = Ed25519Signer.applySignature(privateKey, testData);
+        boolean verifyResult = Ed25519Signer.verifySignature(publicKey, testData, signature);
+        System.out.println("===== 签名验证 =====");
+        System.out.println("签名长度: " + signature.length + "字节（应为64）");
+        System.out.println("验签结果: " + verifyResult + "（应为true）");
+        System.out.println("---------------------");
+
+        // 5. 改变账户索引（路径：m/44'/501'/1'/0/0）
+        KeyInfo account1Key = getSolanaKeyPair(mnemonic, 1, 0);
+        System.out.println("===== 改变账户索引（账户1，地址0） =====");
+        System.out.println("派生路径: " + account1Key.getPath());
+        System.out.println("Solana地址: " + account1Key.getAddress());
+        System.out.println("与基准地址是否不同: " + !account1Key.getAddress().equals(baseKey.getAddress()) + "（应为true）");
+        System.out.println("---------------------");
+
+        // 6. 改变地址索引（路径：m/44'/501'/0'/0/1）
+        KeyInfo address1Key = getSolanaKeyPair(mnemonic, 0, 1);
+        System.out.println("===== 改变地址索引（账户0，地址1） =====");
+        System.out.println("派生路径: " + address1Key.getPath());
+        System.out.println("Solana地址: " + address1Key.getAddress());
+        System.out.println("与基准地址是否不同: " + !address1Key.getAddress().equals(baseKey.getAddress()) + "（应为true）");
+        System.out.println("与账户1地址是否不同: " + !address1Key.getAddress().equals(account1Key.getAddress()) + "（应为true）");
+        System.out.println("---------------------");
+
+        // 7. 验证同路径地址一致性（重复生成相同路径）
+        KeyInfo baseKey2 = getSolanaKeyPair(mnemonic, 0, 0);
+        KeyInfo account1Key2 = getSolanaKeyPair(mnemonic, 1, 0);
+        KeyInfo address1Key2 = getSolanaKeyPair(mnemonic, 0, 1);
+        System.out.println("===== 同路径地址一致性验证 =====");
+        System.out.println("基准路径重复生成一致性: " + baseKey.getAddress().equals(baseKey2.getAddress()) + "（应为true）");
+        System.out.println("账户1重复生成一致性: " + account1Key.getAddress().equals(account1Key2.getAddress()) + "（应为true）");
+        System.out.println("地址1重复生成一致性: " + address1Key.getAddress().equals(address1Key2.getAddress()) + "（应为true）");
     }
-
-
 }

@@ -166,6 +166,8 @@ public class Ed25519HDWallet {
         KeyInfo keyInfo2 = getSolanaKeyPair(mnemonic, 0, 0);
         System.out.println("地址一致性验证: " + keyInfo.getAddress().equals(keyInfo2.getAddress())); // true
 
+        getSolanaKeyPair(mnemonic, 1, 0);//改变账户
+        getSolanaKeyPair(mnemonic, 0, 1);//改变地址
 
 
         // 验证签名
