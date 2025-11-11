@@ -1,19 +1,32 @@
 package com.bit.solana.util;
 
+import com.bit.solana.structure.key.KeyInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.util.encoders.Hex;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+import java.util.List;
+
+
+import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
+import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
+import static org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey;
 
 
 @Slf4j
 public class Ed25519Signer {
-
     // 静态代码块：注册BouncyCastle Provider（优先于系统默认）
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -160,23 +173,6 @@ public class Ed25519Signer {
     // ------------------------------ 公钥核心字节处理 ------------------------------
 
     /**
-     * 从公钥对象中提取32字节核心字节（剔除X.509头部）
-     * @param publicKey Ed25519公钥对象
-     * @return 32字节核心公钥
-     */
-    public static byte[] extractPublicKeyCore(PublicKey publicKey) {
-        byte[] encoded = publicKey.getEncoded();
-        // 验证编码长度（X.509编码公钥应为44字节：12字节头 + 32字节核心）
-        if (encoded.length != X509_HEADER_LENGTH + CORE_KEY_LENGTH) {
-            throw new IllegalArgumentException("无效的Ed25519公钥编码，长度应为44字节");
-        }
-        // 截取后32字节作为核心公钥
-        byte[] core = new byte[CORE_KEY_LENGTH];
-        System.arraycopy(encoded, X509_HEADER_LENGTH, core, 0, CORE_KEY_LENGTH);
-        return core;
-    }
-
-    /**
      * 从32字节核心公钥恢复公钥对象（自动补全X.509头部）
      * @param corePublicKey 32字节核心公钥
      * @return Ed25519公钥对象
@@ -261,20 +257,48 @@ public class Ed25519Signer {
     }
 
 
+
+    // 在 Ed25519Signer 中添加：
+    /**
+     * 从 Ed25519 私钥（32字节）派生公钥（32字节）
+     * 核心逻辑：使用 Ed25519 算法从私钥计算公钥（非对称加密的核心步骤）
+     */
+    public static byte[] derivePublicKeyFromPrivateKey(byte[] privateKey) {
+        if (privateKey.length != CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("私钥必须为32字节");
+        }
+        // 使用 BouncyCastle 的 Ed25519 实现派生公钥
+        Ed25519PrivateKeyParameters privateKeyParams = new Ed25519PrivateKeyParameters(privateKey, 0);
+        Ed25519PublicKeyParameters publicKeyParams = privateKeyParams.generatePublicKey();
+        return publicKeyParams.getEncoded();
+    }
+
+
+
+
     // ------------------------------ 测试方法 ------------------------------
 
     public static void main(String[] args) {
-        // 1. 生成原始密钥对
-        KeyPair keyPair = generateKeyPair();
-        PublicKey originalPub = keyPair.getPublic();
-        PrivateKey originalPriv = keyPair.getPrivate();
-        log.info("原始公钥编码长度: {}", originalPub.getEncoded().length); // 44字节（X.509）
-        log.info("原始私钥编码长度: {}", originalPriv.getEncoded().length); // 48字节（PKCS#8）
+
+        // 生成助记词
+        List<String> mnemonic = generateMnemonic();
+        System.out.println("助记词: " + String.join(" ", mnemonic));
+        // 生成第一个账户的第一个地址（路径：m/44'/501'/0'/0/0）
+        KeyInfo keyInfo = getSolanaKeyPair(mnemonic, 0, 0);
+
+
+        // 输出信息
+        System.out.println("派生路径: " + keyInfo.getPath());
+        System.out.println("私钥(hex): " + Hex.toHexString(keyInfo.getPrivateKey()));
+        System.out.println("公钥(hex): " + Hex.toHexString(keyInfo.getPublicKey()));
+        System.out.println("Solana地址: " + keyInfo.getAddress());
+
 
         // 2. 提取核心字节
-        byte[] corePub = extractPublicKeyCore(originalPub);
-        byte[] corePriv = extractPrivateKeyCore(originalPriv);
+        byte[] corePriv = keyInfo.getPrivateKey();
+        byte[] corePub = derivePublicKeyFromPrivateKey(corePriv);
 
+        log.info("公钥: {}", corePub);
         String encode = Base58.encode(corePub);
         log.info("公钥编码: {}", encode.length());
         log.info("地址: {}", encode);
