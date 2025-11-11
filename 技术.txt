@@ -49,3 +49,6 @@ JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGC
 服务器配置：至少 8 核 CPU，16GB 内存，SSD 存储
 水平扩展：通过多个交易池实例 + 负载均衡实现更高并发
 监控告警：对队列长度、处理延迟、失败率设置阈值告警
+
+
+http://localhost:18333/monitor/system
