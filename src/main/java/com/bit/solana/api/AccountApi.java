@@ -3,6 +3,7 @@ package com.bit.solana.api;
 import com.bit.solana.monitor.impl.dto.CpuMetrics;
 import com.bit.solana.result.Result;
 import com.bit.solana.service.AccountService;
+import com.bit.solana.structure.dto.AccountDTO;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,10 +30,27 @@ public class AccountApi {
     }
 
     // 查询账户余额
+    @GetMapping("/balance")
+    public Result<Long> getBalance(@RequestParam String publicKey) {
+        return accountService.getBalance(publicKey);
+    }
 
-    // 查询账户历史交易分页 指定倒序 正序  每页大小 当前页
+    // 发起转账交易
+    @PostMapping("/transfer")
+    public Result<String> transfer(
+            @RequestParam String fromPublicKey,
+            @RequestParam String toPublicKey,
+            @RequestParam long lamports,
+            @RequestParam String privateKey) {
+        return accountService.transfer(fromPublicKey, toPublicKey, lamports, privateKey);
+    }
 
-    // 转账
+    // 获取账户详情
+    @GetMapping("/detail")
+    public Result<AccountDTO> getAccountDetail(@RequestParam String publicKey) {
+        return accountService.getAccountDetail(publicKey);
+    }
+
 
     // 发起一笔交易 如智能合约交易
 

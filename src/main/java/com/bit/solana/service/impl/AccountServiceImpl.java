@@ -2,6 +2,7 @@ package com.bit.solana.service.impl;
 
 import com.bit.solana.result.Result;
 import com.bit.solana.service.AccountService;
+import com.bit.solana.structure.dto.AccountDTO;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
 import com.bit.solana.structure.key.KeyInfo;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,22 @@ public class AccountServiceImpl implements AccountService {
         String[] s = mnemonic.split(" ");
         KeyInfo baseKey = getSolanaKeyPair(List.of(s), req.getAccountIndex(), req.getAddressIndex());
         return Result.OKData(baseKey.getAddress());
+    }
+
+    @Override
+    public Result<Long> getBalance(String publicKey) {
+        return Result.OKData((long)0);
+    }
+
+    @Override
+    public Result<String> transfer(String fromPublicKey, String toPublicKey, long lamports, String privateKey) {
+        return null;
+    }
+
+    @Override
+    public Result<AccountDTO> getAccountDetail(String publicKey) {
+        AccountDTO accountDTO = new AccountDTO();
+        return Result.OK(accountDTO);
     }
 
 
