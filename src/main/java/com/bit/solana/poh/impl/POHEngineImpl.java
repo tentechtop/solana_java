@@ -1,5 +1,6 @@
 package com.bit.solana.poh.impl;
 
+import com.bit.solana.blockchain.BlockChain;
 import com.bit.solana.poh.POHCache;
 import com.bit.solana.poh.POHEngine;
 import com.bit.solana.poh.POHException;
@@ -25,6 +26,22 @@ import static com.bit.solana.util.ByteUtils.longToBytes;
 @Slf4j
 @Component
 public class POHEngineImpl implements POHEngine {
+    // 在POHEngineImpl中新增配置
+    private long blockTriggerEmptyCounter = 500; // 累计500个空事件触发出块
+    private long blockTriggerChainHeight = 5000; // 累计5000个哈希链高度触发出块
+
+    //1. 哈希链：用哈希值串联事件
+    //POH 链的每个节点（事件）的哈希值，由前一个节点的哈希 + 当前事件数据 + 空事件计数器计算得出，公式为：current_hash = SHA-256(previous_hash + event_data + empty_counter)
+    //这种链式结构保证了不可篡改性：只要前一个节点的哈希不变，后续节点的哈希就唯一确定；任何对历史事件的篡改都会导致后续所有哈希值失效。
+    //事件在链中的位置（chainHeight）直接反映了发生顺序：chainHeight=100的事件一定晚于chainHeight=50的事件。
+    //2. 空事件：用哈希计算标记 “时间间隔”
+    //当没有实际业务事件（如交易）时，POH 会自动生成空事件（Empty Entries），通过固定频率的哈希计算来 “填充时间”。
+    //空事件的event_data为全 0 字节，仅通过empty_counter记录连续空事件的次数（如连续 5 个空事件，empty_counter=5）。
+    //空事件的生成频率固定（如每 1ms 生成 1 个），因此empty_counter可间接反映物理时间间隔（例如：empty_counter=500约等于 500ms）。
+
+    @Autowired
+    private BlockChain chain;
+
     @Autowired
     private POHCache pohCache;
     // 当前哈希值
@@ -76,6 +93,12 @@ public class POHEngineImpl implements POHEngine {
         }
     }
 
+
+    /**
+     * 增加事件
+     * @param eventData 事件数据（交易数据/系统事件，null表示空事件）
+     * @return
+     */
     @Override
     public synchronized Result<POHRecord> appendEvent(byte[] eventData) {
         try {
@@ -111,6 +134,13 @@ public class POHEngineImpl implements POHEngine {
         }
     }
 
+
+    // 触发区块生成（调用区块构建器）
+    private void triggerBlockGeneration() {
+        // 调用区块生成服务，从交易池提取交易并打包
+
+
+    }
 
     @Override
     public Result<POHRecord> timestampTransaction(Transaction transaction) {

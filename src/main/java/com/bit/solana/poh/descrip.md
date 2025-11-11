@@ -155,3 +155,6 @@ public class POHRecord implements Serializable {
 3. 补充`slot`和`nodeSignature`，适配分布式场景与区块链结构。
 
 这种设计既能满足POH的时序验证需求，又能与Solana的交易处理、区块生成等模块无缝衔接。
+
+
+基于哈希链高度：每增长M个哈希链节点（如 5000 个，对应处理 5000 笔交易）。

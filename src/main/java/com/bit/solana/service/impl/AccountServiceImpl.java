@@ -17,6 +17,10 @@ import java.util.List;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 
+/**
+ * 租户模式  当账户金额大于等于 10sol  永久保留账户 当小于10sol  每月扣除1SOL  直到余额为零 等待清除
+ */
+
 @Slf4j
 @Component
 public class AccountServiceImpl implements AccountService {
