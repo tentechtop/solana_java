@@ -26,9 +26,10 @@ import static com.bit.solana.util.ByteUtils.longToBytes;
 @Slf4j
 @Component
 public class POHEngineImpl implements POHEngine {
-    // 在POHEngineImpl中新增配置
-    private long blockTriggerEmptyCounter = 500; // 累计500个空事件触发出块
-    private long blockTriggerChainHeight = 5000; // 累计5000个哈希链高度触发出块
+    // 出块触发条件配置
+    private long blockTriggerEmptyCounter = 500; // 连续500个空事件触发出块（约500ms）
+    private long blockTriggerChainHeight = 5000; // 累计5000个事件触发出块
+    private long lastNonEmptyEventHeight = 0;    // 最后一个非空事件的链高度
 
     //1. 哈希链：用哈希值串联事件
     //POH 链的每个节点（事件）的哈希值，由前一个节点的哈希 + 当前事件数据 + 空事件计数器计算得出，公式为：current_hash = SHA-256(previous_hash + event_data + empty_counter)
@@ -44,12 +45,16 @@ public class POHEngineImpl implements POHEngine {
 
     @Autowired
     private POHCache pohCache;
+
     // 当前哈希值
     private final AtomicLong sequenceNumber = new AtomicLong(0);
-
     // 最新哈希值
     private final byte[] lastHash = new byte[32];
+    private final AtomicLong emptyEventCounter = new AtomicLong(0); // 连续空事件计数器
 
+
+
+    // 节点标识与线程资源
     // 节点ID（实际环境中应配置）
     private final byte[] nodeId = new byte[32];
 
@@ -95,37 +100,50 @@ public class POHEngineImpl implements POHEngine {
 
 
     /**
-     * 增加事件
-     * @param eventData 事件数据（交易数据/系统事件，null表示空事件）
-     * @return
+     * 追加事件到POH链，区分空事件和非空事件
      */
     @Override
     public synchronized Result<POHRecord> appendEvent(byte[] eventData) {
         try {
-            // 计算事件哈希
-            byte[] eventHash = eventData != null ? Sha.applySHA256(eventData) : new byte[32];
+            boolean isNonEmpty = eventData != null;
+            byte[] eventHash = isNonEmpty ? Sha.applySHA256(eventData) : new byte[32];
 
-            // 计算新哈希 = SHA256(lastHash + eventHash + sequenceNumber)
-            byte[] combined = combine(lastHash, eventHash, sequenceNumber.get());
+            // 计算新哈希：前序哈希 + 事件哈希 + 空事件计数器
+            byte[] combined = combine(lastHash, eventHash, emptyEventCounter.get());
             byte[] newHash = Sha.applySHA256(combined);
 
-            // 创建记录
+            // 创建POH记录
             POHRecord record = new POHRecord();
-            record.setEventHash(eventHash);
             record.setPreviousHash(lastHash.clone());
+            record.setEventHash(eventHash);
+            record.setCurrentHash(newHash.clone());
             record.setSequenceNumber(sequenceNumber.get());
             record.setPhysicalTimestamp(Instant.now());
             record.setNodeId(nodeId.clone());
+            record.setNonEmptyEvent(isNonEmpty);
+            record.setEmptyEventCounter(emptyEventCounter.get());
 
             // 更新状态
             System.arraycopy(newHash, 0, lastHash, 0, lastHash.length);
-            sequenceNumber.incrementAndGet();
+            long newHeight = sequenceNumber.incrementAndGet();
 
-            // 定期同步到缓存
-            if (sequenceNumber.get() % 1000 == 0) {
-                pohCache.putBytes(POHCache.KEY_LAST_HASH, lastHash);
-                pohCache.putLong(POHCache.KEY_CHAIN_HEIGHT, sequenceNumber.get());
+            // 重置或递增空事件计数器
+            if (isNonEmpty) {
+                emptyEventCounter.set(0);
+                lastNonEmptyEventHeight = newHeight; // 更新最后非空事件高度
+            } else {
+                emptyEventCounter.incrementAndGet();
             }
+
+            // 定期持久化状态
+            if (newHeight % 1000 == 0) {
+                pohCache.putBytes(POHCache.KEY_LAST_HASH, lastHash);
+                pohCache.putLong(POHCache.KEY_CHAIN_HEIGHT, newHeight);
+                pohCache.putLong(POHCache.KEY_EMPTY_COUNTER, emptyEventCounter.get());
+            }
+
+            // 检查是否满足出块条件
+            checkAndTriggerBlock(newHeight);
 
             return Result.OK(record);
         } catch (Exception e) {
@@ -134,9 +152,25 @@ public class POHEngineImpl implements POHEngine {
         }
     }
 
+    /**
+     * 检查出块条件并触发区块生成
+     */
+    private void checkAndTriggerBlock(long currentHeight) {
+        // 条件1：累计事件数达到阈值
+        boolean reachHeightThreshold = currentHeight - lastNonEmptyEventHeight >= blockTriggerChainHeight;
+        // 条件2：连续空事件数达到阈值（无交易时按时间触发）
+        boolean reachEmptyThreshold = emptyEventCounter.get() >= blockTriggerEmptyCounter;
+
+        if (reachHeightThreshold || reachEmptyThreshold) {
+            log.info("触发区块生成，当前高度: {}, 空事件计数: {}", currentHeight, emptyEventCounter.get());
+            triggerBlockGeneration(currentHeight);
+            // 重置出块相关计数器（避免重复触发）
+            lastNonEmptyEventHeight = currentHeight;
+        }
+    }
 
     // 触发区块生成（调用区块构建器）
-    private void triggerBlockGeneration() {
+    private void triggerBlockGeneration(long currentHeight) {
         // 调用区块生成服务，从交易池提取交易并打包
 
 
