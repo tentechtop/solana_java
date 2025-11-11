@@ -173,17 +173,18 @@
             <artifactId>jcuda-natives</artifactId>
             <version>12.6.0</version> <!-- 保持版本一致 -->
         </dependency>
-        <!--Caffeine  内存 缓存 UTXO -->
 
         <dependency>
             <groupId>org.ow2.asm</groupId>
             <artifactId>asm</artifactId>
             <version>9.5</version>
         </dependency>
+
+        <!-- 系统信息监控库 -->
         <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-commons</artifactId>
-            <version>9.5</version>
+            <groupId>com.github.oshi</groupId>
+            <artifactId>oshi-core</artifactId>
+            <version>6.4.1</version>
         </dependency>
     </dependencies>
 
