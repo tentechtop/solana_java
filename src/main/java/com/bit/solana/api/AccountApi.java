@@ -23,9 +23,8 @@ public class AccountApi {
         return accountService.createMnemonic();
     }
 
+    //生成地址  创建账户
 
-
-    //创建账户
 
 
 }

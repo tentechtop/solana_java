@@ -121,6 +121,14 @@ public class Result<T> implements Serializable {
         return r;
     }
 
+    public static<T> Result<T> OKData(T data) {
+        Result<T> r = new Result<T>();
+        r.setSuccess(true);
+        r.setCode(SC_OK_200);
+        r.setData(data);
+        return r;
+    }
+
     public static<T> Result<T> OK(String msg, T data) {
         Result<T> r = new Result<T>();
         r.setSuccess(true);

@@ -25,7 +25,8 @@ public class Ed25519HDWallet {
     // Ed25519 密钥长度（私钥/公钥均为 32 字节）
     private static final int KEY_LENGTH = 32;
     // 助记词熵长度（12 个单词对应 128 位熵）
-    private static final int MNEMONIC_ENTROPY_LENGTH = 24; // 16*8=128 bits
+    private static final int MNEMONIC_ENTROPY_LENGTH = 16; // 16*8=128 bits
+
     // Ed25519 根密钥派生的 HMAC 盐值
     private static final byte[] ED25519_SEED = "ed25519 seed".getBytes(StandardCharsets.UTF_8);
 
