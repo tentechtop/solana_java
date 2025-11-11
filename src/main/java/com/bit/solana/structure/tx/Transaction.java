@@ -14,6 +14,9 @@ import static com.bit.solana.util.Sha.applySHA256;
  */
 @Data
 public class Transaction {
+    //单笔交易最大大小为 1232字节 12*12*10  = 12.kb
+
+    //合约大小最大 256KB - 512KB
 
     /**
      * 交易ID缓存

@@ -13,4 +13,8 @@ public interface BlockChain {
      * 交易验证
      */
 
+
+    /**
+     * 固定生成区块
+     */
 }

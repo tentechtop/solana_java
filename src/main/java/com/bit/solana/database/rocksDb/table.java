@@ -17,14 +17,16 @@ public class table {
     // 枚举ColumnFamily：补充getActualName方法（原有字段不变）
 
     enum ColumnFamily {
+        //链信息
+        CHAIN("CHAIN", "chain",new ColumnFamilyOptions()),
 
-        //区块链信息 存储一切和区块链有关的信息
-        BLOCK_CHAIN("CF_BLOCK_CHAIN", "blockChain",new ColumnFamilyOptions()),
-
-        //UTXO 基础索引
-        UTXO("CF_UTXO", "utxo",new ColumnFamilyOptions().setTableFormatConfig(new BlockBasedTableConfig()
+        //区块信息
+        BLOCK("BLOCK", "utxo",new ColumnFamilyOptions()
+                .setTableFormatConfig(new BlockBasedTableConfig()
                         .setBlockCacheSize(128 * 1024 * 1024)
                         .setCacheIndexAndFilterBlocks(true))),
+
+
         ;
         final String logicalName;
         final String actualName;
@@ -38,4 +40,8 @@ public class table {
         @Getter
         private ColumnFamilyHandle handle;
     }
+
+    /**
+     * 初始化
+     */
 }
