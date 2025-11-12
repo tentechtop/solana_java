@@ -18,11 +18,19 @@ public class Instruction {
     private byte[] programId;  // 固定32字节
 
     /**
+     * 程序ID索引（变长整数）
+     * 指向 Transaction.accounts 列表中程序账户（智能合约）的位置
+     * 例如：若 accounts[2] 是系统程序公钥，则 programIdIndex=2 表示该指令由系统程序处理
+     */
+    private int programIdIndex;  // 索引值，对应 accounts 列表中的位置
+
+
+    /**
      * 账户索引列表（u8类型，0-255）
      * 每个索引指向Transaction.accounts中的某个账户，标识该指令仅使用这些账户
      * 作用：缩小指令涉及的账户范围，优化并行执行效率
      */
-    private List<Byte> accounts;  // 每个元素为u8（0-255）
+    private List<Integer> accounts;
 
     /**
      * 指令数据（字节数组）
@@ -30,4 +38,6 @@ public class Instruction {
      * 格式由programId对应的程序定义（需程序自行解析）
      */
     private byte[] data;
+
+
 }

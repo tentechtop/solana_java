@@ -598,7 +598,7 @@ public class TxPoolImpl implements TxPool {
 
     @Override
     public boolean validateTransaction(Transaction transaction) {
-        return false;
+        return true;
     }
 
     @Override

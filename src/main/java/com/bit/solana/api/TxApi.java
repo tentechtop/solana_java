@@ -13,17 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/tx")
 public class TxApi {
 
-    @Autowired
-    private TxService txService;
 
 
-    /**
-     * 通过Http提交一笔交易
-     * @param tx
-     * @return
-     */
-    public Result<String> submitTx(Transaction tx) {
-        return  txService.submitTx(tx);
-    }
 
 }

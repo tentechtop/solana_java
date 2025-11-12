@@ -6,8 +6,12 @@ import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.structure.account.AccountMeta;
 import lombok.Data;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import static com.bit.solana.util.Sha.applySHA256;
 
@@ -15,6 +19,7 @@ import static com.bit.solana.util.Sha.applySHA256;
  * Solana交易实体类，包含完整的交易信息
  * 参考：https://docs.solana.com/developing/programming-model/transactions
  * 目标：10万TPS提交，1万TPS处理成功，500ms超时，400ms出块
+ * 签名的本质是证明交易发起者（私钥持有者）认可该交易的全部内容，防止交易被篡改或伪造。
  */
 @Data
 public class Transaction {
@@ -111,5 +116,123 @@ public class Transaction {
         // 验证POH记录中的交易ID与当前交易ID一致
         return Arrays.equals(pohRecord.getEventId(), this.getTxId());
     }
+
+    //签名的本质是证明交易发起者（私钥持有者）认可该交易的全部内容，防止交易被篡改或伪造。
+    //需要签名的数据有
+    //1、对参与交易的accounts 中的公钥进行签名 将公钥  N* 32字节 拼接在一起
+    //2、最新区块Hash recentBlockhash 32字节  同上拼接在一起
+    //3、将指令数据 //拼接在一起
+    //最后执行Sha256Hash
+    // 并对这个Hash签名 生成签名数据
+
+    /**
+     * 构建待签名的原始数据（按Solana规范序列化交易核心字段）
+     * 签名数据 = 序列化(账户元数据列表 + 最近区块哈希 + 指令列表)
+     * @return 待签名的字节数组
+     */
+    public byte[] buildSignData() {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+
+            // 1. 序列化账户元数据列表（Account Metas）
+            serializeAccounts(dos);
+
+            // 2. 序列化最近区块哈希（Recent Blockhash）
+            serializeRecentBlockhash(dos);
+
+            // 3. 序列化指令列表（Instructions）
+            serializeInstructions(dos);
+
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("构建交易签名数据失败", e);
+        }
+    }
+
+    /**
+     * 序列化账户元数据列表
+     * 格式：[账户数量(变长整数)] + [每个账户的序列化数据]
+     * 每个账户数据：[公钥(32字节)] + [isSigner(1字节)] + [isWritable(1字节)]
+     */
+    private void serializeAccounts(DataOutputStream dos) throws IOException {
+        Objects.requireNonNull(accounts, "账户列表不能为空");
+        // 写入账户数量（使用Solana变长整数编码，节省空间）
+        writeVarInt(dos, accounts.size());
+        // 逐个写入账户元数据
+        for (AccountMeta account : accounts) {
+            byte[] publicKey = account.getPublicKey();
+            Objects.requireNonNull(publicKey, "账户公钥不能为空");
+            if (publicKey.length != 32) {
+                throw new IllegalArgumentException("账户公钥必须为32字节，实际为" + publicKey.length + "字节");
+            }
+            // 写入公钥（32字节）
+            dos.write(publicKey);
+            // 写入isSigner标志（1字节，0=false，1=true）
+            dos.write(account.isSigner() ? 1 : 0);
+            // 写入isWritable标志（1字节，0=false，1=true）
+            dos.write(account.isWritable() ? 1 : 0);
+        }
+    }
+
+    /**
+     * 序列化最近区块哈希
+     * 格式：[区块哈希(32字节)]
+     */
+    private void serializeRecentBlockhash(DataOutputStream dos) throws IOException {
+        Objects.requireNonNull(recentBlockhash, "最近区块哈希不能为空");
+        byte[] blockHashBytes = recentBlockhash.getBytes();
+        if (blockHashBytes.length != 32) {
+            throw new IllegalArgumentException("区块哈希必须为32字节，实际为" + blockHashBytes.length + "字节");
+        }
+        dos.write(blockHashBytes);
+    }
+
+    /**
+     * 序列化指令列表
+     * 格式：[指令数量(变长整数)] + [每个指令的序列化数据]
+     * 每个指令数据：[程序ID索引(变长整数)] + [账户索引列表(变长整数数组)] + [指令数据长度(变长整数)] + [指令数据]
+     */
+    private void serializeInstructions(DataOutputStream dos) throws IOException {
+        Objects.requireNonNull(instructions, "指令列表不能为空");
+        // 写入指令数量（变长整数）
+        dos.writeInt(instructions.size());
+
+        // 逐个写入指令
+        for (int i = 0; i < instructions.size(); i++) {
+            Instruction instruction = instructions.get(i);
+            // 程序ID索引：指向accounts列表中程序账户的位置（变长整数）
+            writeVarInt(dos, instruction.getProgramIdIndex());
+            // 账户索引列表：该指令涉及的账户在accounts中的索引（变长整数数组）
+            List<Integer> accountIndices  = instruction.getAccounts();
+            Objects.requireNonNull(accountIndices, "指令的账户索引列表不能为空");
+            writeVarInt(dos, accountIndices.size()); // 索引数量
+            for (int index : accountIndices) {
+                writeVarInt(dos, index);
+            }
+            // 指令数据：二进制参数（长度+数据）
+            byte[] data = instruction.getData();
+            Objects.requireNonNull(data, "指令数据不能为空");
+            writeVarInt(dos, data.length); // 数据长度（变长整数）
+            dos.write(data); // 数据内容
+        }
+    }
+
+
+    /**
+     * 写入Solana风格的变长整数（VarInt）
+     * 编码规则：每个字节的最高位表示是否继续（1=有后续字节，0=结束），低7位表示数据
+     * 参考：https://docs.solana.com/developing/programming-model/transactions#varint
+     */
+    private void writeVarInt(DataOutputStream dos, int value) throws IOException {
+        if (value < 0) {
+            throw new IllegalArgumentException("变长整数不能为负数：" + value);
+        }
+        while (value >= 0x80) { // 0x80 = 128，需要多字节存储
+            dos.write((value & 0x7F) | 0x80); // 低7位数据 + 最高位1（表示继续）
+            value >>>= 7; // 右移7位处理下一组数据
+        }
+        dos.write(value & 0x7F); // 最后一个字节（最高位0）
+    }
+
 
 }

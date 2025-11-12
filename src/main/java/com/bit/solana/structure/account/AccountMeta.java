@@ -1,12 +1,16 @@
 package com.bit.solana.structure.account;
 
 import com.bit.solana.common.PubkeyHash;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 账户元数据，描述交易涉及的账户及其权限
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class AccountMeta {
 
     /**
