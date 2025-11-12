@@ -70,7 +70,6 @@ public class AccountTransferTest {
         // 2.2 转账指令（包含字节码数据）
         Instruction transferInstruction = new Instruction();
         transferInstruction.setProgramId(SYSTEM_PROGRAM_ID); // 系统程序处理
-        transferInstruction.setAccounts(Arrays.asList((byte) 0, (byte) 1)); // 引用账户元数据索引
         transferInstruction.setData(transferData); // 关键：指令数据为转账金额的字节码
 
         // 2.3 模拟签名（实际需用发送方私钥签名）

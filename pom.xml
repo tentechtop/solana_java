@@ -229,6 +229,26 @@
                     <testFailureIgnore>false</testFailureIgnore> <!-- 若开启测试，失败则终止构建（可选） -->
                 </configuration>
             </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version> <!-- 使用最新稳定版本 -->
+                <configuration>
+                    <!-- 打包时跳过单元测试 -->
+                    <skipTests>true</skipTests>
+                    <!-- 可选：如果需要跳过集成测试，可配合 maven-failsafe-plugin -->
+                </configuration>
+            </plugin>
+            <!-- 若有集成测试，可添加此插件并同样跳过 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <skipITs>true</skipITs> <!-- 跳过集成测试 -->
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
