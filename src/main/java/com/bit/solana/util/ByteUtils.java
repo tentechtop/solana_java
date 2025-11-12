@@ -7,11 +7,14 @@ public class ByteUtils {
     /**
      * long 类型转 byte[]
      *
-     * @param val
      * @return
      */
-    public static byte[] longToBytes(long val) {
-        return ByteBuffer.allocate(Long.BYTES).putLong(val).array();
+    public static byte[] longToBytes(long value) {
+        byte[] bytes = new byte[8]; // long 占 8 字节，必须初始化长度为 8
+        for (int i = 0; i < 8; i++) {
+            bytes[i] = (byte) (value >>> (8 * i)); // 小端模式（低位在前）
+        }
+        return bytes;
     }
 
     /**
@@ -44,6 +47,26 @@ public class ByteUtils {
         }
         return data;
     }
+
+
+    public static byte[] combine(byte[] lastHash, byte[] data, long sequence) {
+        byte[] sequenceBytes = ByteUtils.longToBytes(sequence);
+        byte[] combined = new byte[lastHash.length + data.length + sequenceBytes.length];
+        System.arraycopy(lastHash, 0, combined, 0, lastHash.length);
+        System.arraycopy(data, 0, combined, lastHash.length, data.length);
+        System.arraycopy(sequenceBytes, 0, combined, lastHash.length + data.length, sequenceBytes.length);
+        return combined;
+    }
+
+
+/*    public byte[] combine(byte[] lastHash, byte[] data, long sequence) {
+        byte[] sequenceBytes = longToBytes(sequence);
+        byte[] combined = new byte[lastHash.length + data.length + sequenceBytes.length];
+        System.arraycopy(lastHash, 0, combined, 0, lastHash.length);
+        System.arraycopy(data, 0, combined, lastHash.length, data.length);
+        System.arraycopy(sequenceBytes, 0, combined, lastHash.length + data.length, sequenceBytes.length);
+        return combined;
+    }*/
 
 
 }

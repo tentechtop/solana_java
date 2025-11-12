@@ -502,7 +502,7 @@ public class TxPoolImpl implements TxPool {
         lastProcessedCount = currentProcessed;
 
         // 定期打印统计信息
-        if (currentProcessed % 10000 == 0) {
+/*        if (currentProcessed % 10000 == 0) {
             log.info("交易池统计 - TPS: {}, 总提交: {}, 总处理: {}, 总失败: {}, 总超时: {}, 当前池大小: {}",
                     tps,
                     submittedCount.sum(),
@@ -510,7 +510,7 @@ public class TxPoolImpl implements TxPool {
                     failedCount.sum(),
                     timeoutCount.sum(),
                     poolSize.get());
-        }
+        }*/
     }
 
 

@@ -15,6 +15,8 @@ public interface BlockChain {
 
     Block getLatestBlock();
 
+    void generateBlock(long currentHeight, byte[] clone);
+
     //区块链本身的验证功能
     //区块链作为分布式账本系统，提供了全局的、最终的交易验证：
     //区块验证：当交易被打包进区块后，全网节点会验证整个区块的有效性，包括区块结构、共识证明和所有交易的执行结果

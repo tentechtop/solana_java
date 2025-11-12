@@ -41,12 +41,18 @@ public interface POHEngine {
      */
     byte[] getLastHash();
 
+
+    long getCurrentHeight();
+
     /**
      * 验证事件序列的合法性
      * @param records 待验证的POH记录列表
      * @return 验证结果（成功/失败原因）
      */
     Result<Boolean> verifyRecords(List<POHRecord> records);
+
+    Result<Boolean> verifyRecord(POHRecord records);
+
 
     /**
      * 启动POH引擎

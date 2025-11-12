@@ -1,11 +1,10 @@
 package com.bit.solana.poh.impl;
 
 import com.bit.solana.blockchain.BlockChain;
-import com.bit.solana.poh.POHCache;
 import com.bit.solana.poh.POHEngine;
-import com.bit.solana.poh.POHException;
 import com.bit.solana.poh.POHRecord;
 import com.bit.solana.result.Result;
+import com.bit.solana.structure.dto.POHVerificationResult;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.util.Sha;
 import jakarta.annotation.PostConstruct;
@@ -15,334 +14,593 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.bit.solana.util.ByteUtils.longToBytes;
+import static com.bit.solana.common.ByteHash32.HASH_LENGTH;
+import static com.bit.solana.util.ByteUtils.*;
 
 
 @Slf4j
 @Component
 public class POHEngineImpl implements POHEngine {
-    // 出块触发条件配置
-    private long blockTriggerEmptyCounter = 500; // 连续500个空事件触发出块（约500ms）
-    private long blockTriggerChainHeight = 5000; // 累计5000个事件触发出块
-    private long lastNonEmptyEventHeight = 0;    // 最后一个非空事件的链高度
+    /**
+     * 核心配置参数
+     */
+    private static final int TICKS_PER_SLOT = 64;          // 每个slot包含的tick数量
+    private static final int HASHES_PER_TICK = 12_500;     // 每个tick包含的哈希计算次数
+    // 移除目标耗时相关配置，不再强制控制时间
 
-    //1. 哈希链：用哈希值串联事件
-    //POH 链的每个节点（事件）的哈希值，由前一个节点的哈希 + 当前事件数据 + 空事件计数器计算得出，公式为：current_hash = SHA-256(previous_hash + event_data + empty_counter)
-    //这种链式结构保证了不可篡改性：只要前一个节点的哈希不变，后续节点的哈希就唯一确定；任何对历史事件的篡改都会导致后续所有哈希值失效。
-    //事件在链中的位置（chainHeight）直接反映了发生顺序：chainHeight=100的事件一定晚于chainHeight=50的事件。
-    //2. 空事件：用哈希计算标记 “时间间隔”
-    //当没有实际业务事件（如交易）时，POH 会自动生成空事件（Empty Entries），通过固定频率的哈希计算来 “填充时间”。
-    //空事件的event_data为全 0 字节，仅通过empty_counter记录连续空事件的次数（如连续 5 个空事件，empty_counter=5）。
-    //空事件的生成频率固定（如每 1ms 生成 1 个），因此empty_counter可间接反映物理时间间隔（例如：empty_counter=500约等于 500ms）。
+    /**
+     * 全局静态变量存储核心状态
+     */
+    private static class GlobalState {
+        private static final byte[] lastHash = new byte[HASH_LENGTH];
+        private static final AtomicLong currentTick = new AtomicLong(0);
+        private static final AtomicLong currentSlot = new AtomicLong(0);
+        private static final Object lock = new Object();
+
+        static {
+            Arrays.fill(lastHash, (byte) 0);
+        }
+
+        static byte[] getLastHash() {
+            synchronized (lock) {
+                return lastHash.clone();
+            }
+        }
+
+        static void setLastHash(byte[] newHash) {
+            if (newHash.length != HASH_LENGTH) {
+                throw new IllegalArgumentException("哈希长度必须为32字节");
+            }
+            synchronized (lock) {
+                System.arraycopy(newHash, 0, lastHash, 0, HASH_LENGTH);
+            }
+        }
+
+        static long getCurrentTick() {
+            return currentTick.get();
+        }
+
+        static long incrementTick() {
+            return currentTick.incrementAndGet();
+        }
+
+        static long getCurrentSlot() {
+            return currentSlot.get();
+        }
+
+        static long incrementSlot() {
+            return currentSlot.incrementAndGet();
+        }
+
+        static void initialize(long slot, long tick, byte[] hash) {
+            synchronized (lock) {
+                currentSlot.set(slot);
+                currentTick.set(tick);
+                if (hash != null) {
+                    System.arraycopy(hash, 0, lastHash, 0, HASH_LENGTH);
+                }
+            }
+        }
+
+        static Object getLock() {
+            return lock;
+        }
+    }
+
+    private static final byte[] EMPTY_EVENT_HASH;
+
+    static {
+        EMPTY_EVENT_HASH = new byte[HASH_LENGTH];
+        Arrays.fill(EMPTY_EVENT_HASH, (byte) 0);
+    }
 
     @Autowired
     private BlockChain chain;
 
-    @Autowired
-    private POHCache pohCache;
-
-    // 当前哈希值
-    private final AtomicLong sequenceNumber = new AtomicLong(0);
-    // 最新哈希值
-    private final byte[] lastHash = new byte[32];
-    private final AtomicLong emptyEventCounter = new AtomicLong(0); // 连续空事件计数器
-
-
-
-    // 节点标识与线程资源
-    // 节点ID（实际环境中应配置）
     private final byte[] nodeId = new byte[32];
-
-    // 批量处理线程池
-    private ExecutorService batchProcessor;
-
-    // 空事件间隔（纳秒）
-    private static final long EMPTY_EVENT_INTERVAL_NS = 1_000_000; // 1ms
-
-    // 最大批量处理大小
+    private ExecutorService blockProcessor;
     private static final int BATCH_MAX_SIZE = 1000;
+    private static final int PROCESSOR_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors());
 
-    // 运行状态标志
     private volatile boolean isRunning = false;
+    private Thread tickGeneratorThread;
+    // 新增slot开始时间戳，用于计算实际耗时
+    private long slotStartTimeNs;
 
-    // 空事件生成线程
-    private Thread emptyEventThread;
 
     @PostConstruct
     public void init() {
         try {
-            // 初始化缓存
-            pohCache.initDefaultState();
+            Arrays.fill(nodeId, (byte) 0x01);
+            blockProcessor = Executors.newFixedThreadPool(PROCESSOR_THREADS, r -> {
+                Thread t = new Thread(r, "poh-block-processor");
+                t.setDaemon(true);
+                return t;
+            });
 
-            // 从缓存加载最后状态
-            byte[] lastHashFromCache = pohCache.getBytes(POHCache.KEY_LAST_HASH);
-            if (lastHashFromCache != null) {
-                System.arraycopy(lastHashFromCache, 0, lastHash, 0, lastHash.length);
-            }
+            log.info("POH引擎初始化完成 - 起始Slot: {}, 起始Tick: {}, 配置: {} tick/slot, {} hashes/tick",
+                    GlobalState.getCurrentSlot(), GlobalState.getCurrentTick(),
+                    TICKS_PER_SLOT, HASHES_PER_TICK);
 
-            long chainHeight = pohCache.getLong(POHCache.KEY_CHAIN_HEIGHT);
-            sequenceNumber.set(chainHeight);
-
-            // 初始化线程池
-            batchProcessor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
-
-            log.info("POH引擎初始化完成，起始序列号: {}", sequenceNumber.get());
-        } catch (POHException e) {
+            start();
+        } catch (Exception e) {
             log.error("POH引擎初始化失败", e);
             throw new RuntimeException("POH引擎初始化失败", e);
         }
     }
 
 
-    /**
-     * 追加事件到POH链，区分空事件和非空事件
-     */
     @Override
-    public synchronized Result<POHRecord> appendEvent(byte[] eventData) {
+    public Result<POHRecord> appendEvent(byte[] eventData) {
         try {
+            byte[] eventHash = (eventData != null) ? Sha.applySHA256(eventData) : EMPTY_EVENT_HASH.clone();
             boolean isNonEmpty = eventData != null;
-            byte[] eventHash = isNonEmpty ? Sha.applySHA256(eventData) : new byte[32];
 
-            // 计算新哈希：前序哈希 + 事件哈希 + 空事件计数器
-            byte[] combined = combine(lastHash, eventHash, emptyEventCounter.get());
-            byte[] newHash = Sha.applySHA256(combined);
-
-            // 创建POH记录
-            POHRecord record = new POHRecord();
-            record.setPreviousHash(lastHash.clone());
-            record.setEventHash(eventHash);
-            record.setCurrentHash(newHash.clone());
-            record.setSequenceNumber(sequenceNumber.get());
-            record.setPhysicalTimestamp(Instant.now());
-            record.setNodeId(nodeId.clone());
-            record.setNonEmptyEvent(isNonEmpty);
-            record.setEmptyEventCounter(emptyEventCounter.get());
-
-            // 更新状态
-            System.arraycopy(newHash, 0, lastHash, 0, lastHash.length);
-            long newHeight = sequenceNumber.incrementAndGet();
-
-            // 重置或递增空事件计数器
-            if (isNonEmpty) {
-                emptyEventCounter.set(0);
-                lastNonEmptyEventHeight = newHeight; // 更新最后非空事件高度
-            } else {
-                emptyEventCounter.incrementAndGet();
+            Object stateLock = GlobalState.getLock();
+            synchronized (stateLock) {
+                byte[] currentLastHash = GlobalState.getLastHash();
+                long currentTick = GlobalState.getCurrentTick();
+                long currentSlot = GlobalState.getCurrentSlot();
+                byte[] iteratedHash = currentLastHash.clone();
+                for (int i = 0; i < HASHES_PER_TICK; i++) {
+                    byte[] combinedIter = combine(iteratedHash, longToBytes(i), currentTick);
+                    iteratedHash = Sha.applySHA256(combinedIter);
+                }
+                byte[] combined = combine(iteratedHash, eventHash, currentTick);
+                byte[] newHash = Sha.applySHA256(combined);
+                POHRecord record = new POHRecord();
+                record.setPreviousHash(currentLastHash);
+                record.setEventHash(eventHash);
+                record.setCurrentHash(newHash.clone());
+                record.setSequenceNumber(currentTick);
+                record.setSlot(currentSlot);
+                record.setPhysicalTimestamp(Instant.now());
+                record.setNodeId(nodeId.clone());
+                record.setNonEmptyEvent(isNonEmpty);
+                //递增tick序号
+                GlobalState.incrementTick();
+                GlobalState.setLastHash(newHash);
+                return Result.OK(record);
             }
-
-            // 定期持久化状态
-            if (newHeight % 1000 == 0) {
-                pohCache.putBytes(POHCache.KEY_LAST_HASH, lastHash);
-                pohCache.putLong(POHCache.KEY_CHAIN_HEIGHT, newHeight);
-                pohCache.putLong(POHCache.KEY_EMPTY_COUNTER, emptyEventCounter.get());
-            }
-
-            // 检查是否满足出块条件
-            checkAndTriggerBlock(newHeight);
-
-            return Result.OK(record);
         } catch (Exception e) {
             log.error("追加POH事件失败", e);
             return Result.error("追加POH事件失败: " + e.getMessage());
         }
     }
 
-    /**
-     * 检查出块条件并触发区块生成
-     */
-    private void checkAndTriggerBlock(long currentHeight) {
-        // 条件1：累计事件数达到阈值
-        boolean reachHeightThreshold = currentHeight - lastNonEmptyEventHeight >= blockTriggerChainHeight;
-        // 条件2：连续空事件数达到阈值（无交易时按时间触发）
-        boolean reachEmptyThreshold = emptyEventCounter.get() >= blockTriggerEmptyCounter;
 
-        if (reachHeightThreshold || reachEmptyThreshold) {
-            log.info("触发区块生成，当前高度: {}, 空事件计数: {}", currentHeight, emptyEventCounter.get());
-            triggerBlockGeneration(currentHeight);
-            // 重置出块相关计数器（避免重复触发）
-            lastNonEmptyEventHeight = currentHeight;
+    /**
+     * 生成新的tick
+     */
+    private void generateTick() {
+        Object stateLock = GlobalState.getLock();
+        synchronized (stateLock) {
+            // 记录当前tick的开始时间
+            long tickStartNs = System.nanoTime();
+
+            byte[] currentHash = GlobalState.getLastHash();
+            long currentTick = GlobalState.getCurrentTick();
+
+            // 执行哈希计算
+            for (int i = 0; i < HASHES_PER_TICK; i++) {
+                byte[] combined = combine(currentHash, longToBytes(i), currentTick);
+                currentHash = Sha.applySHA256(combined);
+            }
+
+            // 更新状态
+            GlobalState.setLastHash(currentHash);
+            long newTick = GlobalState.incrementTick();
+
+            // 计算当前tick的实际耗时
+            long tickDurationNs = System.nanoTime() - tickStartNs;
+
+            // 检查是否是新slot的第一个tick
+            if (newTick % TICKS_PER_SLOT == 1) {
+                slotStartTimeNs = tickStartNs;  // 记录slot开始时间
+                log.debug("开始新Slot - 起始Tick: {}, 开始时间: {}", newTick, slotStartTimeNs);
+            }
+
+            // 检查是否达到slot边界
+            if (newTick % TICKS_PER_SLOT == 0) {
+                long newSlot = GlobalState.incrementSlot();
+                // 计算整个slot的实际耗时（从第一个tick开始到最后一个tick结束）
+                long slotDurationNs = System.nanoTime() - slotStartTimeNs;
+                long slotDurationMs = slotDurationNs / 1_000_000;
+
+                log.info("Slot生成完成 - Slot: {}, 最终Tick: {}, 实际耗时: {}ms ({}ns), 哈希: {}",
+                        newSlot, newTick, slotDurationMs, slotDurationNs, bytesToHex(currentHash));
+
+                triggerBlockGeneration(newSlot, newTick, currentHash);
+            } else {
+                // 可选：记录每个tick的耗时，用于性能分析
+                log.trace("Tick生成完成 - Tick: {}, 耗时: {}ns", newTick, tickDurationNs);
+            }
         }
     }
 
-    // 触发区块生成（调用区块构建器）
-    private void triggerBlockGeneration(long currentHeight) {
-        // 调用区块生成服务，从交易池提取交易并打包
-
-
+    private void triggerBlockGeneration(long slot, long tick, byte[] blockHash) {
+        blockProcessor.submit(() -> {
+            try {
+                log.debug("生成区块 - Slot: {}, 最终Tick: {}, 哈希: {}", slot, tick, bytesToHex(blockHash));
+                chain.generateBlock(slot, blockHash);
+            } catch (Exception e) {
+                log.error("区块生成失败 - Slot: {}", slot, e);
+            }
+        });
     }
 
     @Override
     public Result<POHRecord> timestampTransaction(Transaction transaction) {
         try {
-            // 获取交易ID作为事件数据
             byte[] txId = transaction.getTxId();
-
-            // 追加事件并获取记录
-            Result<POHRecord> result = appendEvent(txId);
-            if (result.isSuccess()) {
-                // 设置交易ID到记录中
-                POHRecord record = result.getData();
-                record.setTransactionId(txId);
-                return Result.OK(record);
+            if (txId == null || txId.length == 0) {
+                return Result.error("交易ID为空，无法生成时间戳");
             }
 
+            Result<POHRecord> result = appendEvent(txId);
+            if (result.isSuccess()) {
+                POHRecord record = result.getData();
+                record.setTransactionId(txId.clone());
+                return Result.OK(record);
+            }
             return result;
         } catch (Exception e) {
-            log.error("为交易生成POH时间戳失败", e);
-            return Result.error("为交易生成POH时间戳失败: " + e.getMessage());
+            log.error("为交易生成时间戳失败", e);
+            return Result.error("交易时间戳失败: " + e.getMessage());
         }
     }
 
     @Override
     public Result<List<POHRecord>> batchTimestampTransactions(List<Transaction> transactions) {
-        try {
-            if (transactions.size() > BATCH_MAX_SIZE) {
-                return Result.error("批量处理大小超过上限: " + BATCH_MAX_SIZE);
-            }
+        if (transactions == null || transactions.isEmpty()) {
+            return Result.OK(new ArrayList<>(0));
+        }
+        if (transactions.size() > BATCH_MAX_SIZE) {
+            return Result.error("批量大小超过上限: " + BATCH_MAX_SIZE);
+        }
 
-            List<POHRecord> records = new ArrayList<>(transactions.size());
-
-            // 同步处理以保证顺序性
-            for (Transaction tx : transactions) {
+        List<POHRecord> records = new ArrayList<>(transactions.size());
+        for (Transaction tx : transactions) {
+            try {
                 Result<POHRecord> result = timestampTransaction(tx);
                 if (result.isSuccess()) {
                     records.add(result.getData());
                 } else {
-                    log.warn("交易{}的POH时间戳生成失败: {}", tx.getTxId(), result.getMessage());
+                    log.warn("交易[{}]时间戳生成失败: {}", bytesToHex(tx.getTxId()), result.getMessage());
                 }
+            } catch (Exception e) {
+                log.warn("处理交易[{}]时发生异常", bytesToHex(tx.getTxId()), e);
             }
-
-            return Result.OK(records);
-        } catch (Exception e) {
-            log.error("批量为交易生成POH时间戳失败", e);
-            return Result.error("批量为交易生成POH时间戳失败: " + e.getMessage());
         }
+        return Result.OK(records);
     }
 
     @Override
     public byte[] getLastHash() {
-        synchronized (lastHash) {
-            return lastHash.clone();
-        }
+        return GlobalState.getLastHash();
+    }
+
+    @Override
+    public long getCurrentHeight() {
+        return GlobalState.getCurrentSlot();
+    }
+
+    public long getCurrentTick() {
+        return GlobalState.getCurrentTick();
     }
 
     @Override
     public Result<Boolean> verifyRecords(List<POHRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return Result.error("待验证的记录列表不能为空");
+        }
+
+        // 1. 先验证每条记录自身的哈希合法性性（单条记录的哈希计算正确）
+        for (int i = 0; i < records.size(); i++) {
+            POHRecord record = records.get(i);
+            Result<Boolean> singleVerify = verifyRecord(record);
+            if (!singleVerify.isSuccess()) {
+                return Result.error("第 " + i + " 条记录验证失败: " + singleVerify.getMessage());
+            }
+        }
+
+        // 2. 按 sequenceNumber 排序（确保按时间顺序验证）
+        List<POHRecord> sortedRecords = new ArrayList<>(records);
+        sortedRecords.sort(Comparator.comparingLong(POHRecord::getSequenceNumber));
+
+        // 3. 验证序号严格递增（允许跳跃，因为中间可能有 tick 插入）
+        long prevSeq = sortedRecords.get(0).getSequenceNumber();
+        for (int i = 1; i < sortedRecords.size(); i++) {
+            long currSeq = sortedRecords.get(i).getSequenceNumber();
+            if (currSeq <= prevSeq) {
+                return Result.error(String.format(
+                        "记录 %d 与 %d 序号不递增 - 上一序号: %d, 当前序号: %d",
+                        i - 1, i, prevSeq, currSeq
+                ));
+            }
+            prevSeq = currSeq;
+        }
+
+        // 4. 验证所有记录属于同一条 POH 链（通过哈希链追溯性验证）
+        // 核心逻辑：每条记录的 previousHash 必须能在全局 POH 链中找到对应的前置哈希（可能是前一条记录，也可能是中间的 tick）
+        // 这里通过“重放 POH 链”验证：从最早的记录开始，模拟计算到下一条记录的前置哈希，确认能匹配
+        POHRecord firstRecord = sortedRecords.get(0);
+        byte[] currentChainHash = firstRecord.getPreviousHash().clone(); // 从第一条记录的前置哈希开始
+        long currentChainSeq = firstRecord.getSequenceNumber() - 1; // 前置哈希对应的序号
+
+        for (POHRecord record : sortedRecords) {
+            long targetSeq = record.getSequenceNumber();
+            byte[] targetPrevHash = record.getPreviousHash();
+
+            // 重放从 currentChainSeq 到 targetSeq-1 的哈希计算（模拟中间可能的 tick 或事件）
+            // 目标：计算到 targetSeq-1 时的哈希，必须等于 record 的 previousHash
+            for (long seq = currentChainSeq + 1; seq < targetSeq; seq++) {
+                // 模拟中间的 tick 计算（与 generateTick 逻辑一致）
+                byte[] iterHash = currentChainHash.clone();
+                for (int i = 0; i < HASHES_PER_TICK; i++) {
+                    byte[] combined = combine(iterHash, longToBytes(i), seq);
+                    iterHash = Sha.applySHA256(combined);
+                }
+                currentChainHash = iterHash;
+                currentChainSeq = seq;
+            }
+
+            // 验证重放后的哈希是否与当前记录的 previousHash 一致
+            if (!Arrays.equals(currentChainHash, targetPrevHash)) {
+                return Result.error(String.format(
+                        "记录 %d 与全局POH链断裂 - 预期前置哈希: %s, 实际计算哈希: %s, 序号范围: [%d, %d]",
+                        sortedRecords.indexOf(record),
+                        bytesToHex(targetPrevHash),
+                        bytesToHex(currentChainHash),
+                        currentChainSeq + 1,
+                        targetSeq
+                ));
+            }
+
+            // 更新链状态到当前记录的哈希（当前记录已融入链中）
+            currentChainHash = record.getCurrentHash().clone();
+            currentChainSeq = targetSeq;
+        }
+
+        // 5. 验证物理时间戳合理性（非严格递增，但不应大幅倒流）
+        Instant prevTime = sortedRecords.get(0).getPhysicalTimestamp();
+        for (int i = 1; i < sortedRecords.size(); i++) {
+            Instant currTime = sortedRecords.get(i).getPhysicalTimestamp();
+            if (currTime.isBefore(prevTime.minusMillis(1000))) { // 允许1秒内波动
+                return Result.error(String.format(
+                        "记录 %d 与 %d 时间戳异常倒流 - 上一时间: %s, 当前时间: %s",
+                        i - 1, i, prevTime, currTime
+                ));
+            }
+            prevTime = currTime;
+        }
+
+        return Result.OK(true);
+    }
+
+
+    /**
+     * 验证成功的核心是 复现哈希计算过程，并对比结果是否与记录中的 currentHash 一致，步骤如下：
+     * 获取记录中的关键信息：从 POHRecord 中提取 previousHash（上一个哈希）、eventHash（事件哈希）、sequenceNumber（tick 序号）。
+     * 复现迭代哈希：使用 previousHash 作为初始值，重复执行 HASHES_PER_TICK 次 SHA-256 计算（与生成时的迭代逻辑完全一致，包括迭代索引和 sequenceNumber 的组合）。
+     * 复现最终哈希：将迭代后的哈希与 eventHash 组合，再次计算 SHA-256，得到一个验证用的哈希值。
+     * 对比结果：如果验证用的哈希值与记录中的 currentHash 完全一致，则说明该事件的哈希链未被篡改，验证成功。
+     * @param record
+     * @return
+     */
+    @Override
+    public Result<Boolean> verifyRecord(POHRecord record) {
+        if (record == null) {
+            return Result.error("待验证的POH记录不能为空");
+        }
         try {
-            if (records == null || records.isEmpty()) {
-                return Result.OK(true);
+            if (record.getPreviousHash() == null || record.getPreviousHash().length != HASH_LENGTH) {
+                return Result.error("前序哈希必须为32字节");
             }
 
-            // 验证记录链的连续性和哈希正确性
-            POHRecord previous = records.get(0);
-            for (int i = 1; i < records.size(); i++) {
-                POHRecord current = records.get(i);
+            byte[] currentHash = record.getPreviousHash().clone();
+            long sequence = record.getSequenceNumber();
 
-                // 验证序列号连续
-                if (current.getSequenceNumber() != previous.getSequenceNumber() + 1) {
-                    return Result.error("POH记录序列号不连续，位置: " + i);
-                }
 
-                // 验证哈希链
-                byte[] combined = combine(
-                        previous.getPreviousHash(),
-                        previous.getEventHash(),
-                        previous.getSequenceNumber()
-                );
-                byte[] expectedHash = Sha.applySHA256(combined);
-
-                if (!java.util.Arrays.equals(current.getPreviousHash(), expectedHash)) {
-                    return Result.error("POH记录哈希验证失败，位置: " + i);
-                }
-
-                previous = current;
+            for (int i = 0; i < HASHES_PER_TICK; i++) {
+                byte[] combined = combine(currentHash, longToBytes(i), sequence);
+                currentHash = Sha.applySHA256(combined);
             }
 
+            byte[] eventCombined = combine(currentHash, record.getEventHash(), sequence);
+            byte[] eventHash = Sha.applySHA256(eventCombined);
+
+            if (!Arrays.equals(eventHash, record.getCurrentHash())) {
+                return Result.error(String.format(
+                        "哈希验证失败 - 预期: %s, 实际: %s",
+                        bytesToHex(eventHash),
+                        bytesToHex(record.getCurrentHash())
+                ));
+            }
             return Result.OK(true);
         } catch (Exception e) {
-            log.error("验证POH记录失败", e);
-            return Result.error("验证POH记录失败: " + e.getMessage());
+            log.error("单条POH记录验证失败", e);
+            return Result.error("验证失败: " + e.getMessage());
         }
     }
 
 
     /**
-     * 组合数据用于哈希计算
+     * 验证记录是否属于同一POH链，若通过则返回按序号排序后的记录
+     * @param records 待验证的POH记录列表
+     * @return 包含验证结果和排序后记录的封装对象
      */
-    private byte[] combine(byte[] lastHash, byte[] eventHash, long sequence) {
-        byte[] sequenceBytes = longToBytes(sequence);
-        byte[] combined = new byte[lastHash.length + eventHash.length + sequenceBytes.length];
+    public POHVerificationResult verifyAndSortRecords(List<POHRecord> records) {
+        // 1. 基础校验：记录不能为空
+        if (records == null || records.isEmpty()) {
+            return new POHVerificationResult(false, "待验证的记录列表不能为空", null);
+        }
 
-        System.arraycopy(lastHash, 0, combined, 0, lastHash.length);
-        System.arraycopy(eventHash, 0, combined, lastHash.length, eventHash.length);
-        System.arraycopy(sequenceBytes, 0, combined, lastHash.length + eventHash.length, sequenceBytes.length);
+        // 2. 验证每条记录自身的哈希合法性
+        for (int i = 0; i < records.size(); i++) {
+            POHRecord record = records.get(i);
+            Result<Boolean> singleVerify = verifyRecord(record);
+            if (!singleVerify.isSuccess()) {
+                String errorMsg = String.format("第 %d 条记录哈希验证失败: %s", i, singleVerify.getMessage());
+                return new POHVerificationResult(false, errorMsg, null);
+            }
+        }
 
-        return combined;
+        // 3. 按序号排序记录（无论后续验证是否通过，先获取排序结果）
+        List<POHRecord> sortedRecords = new ArrayList<>(records);
+        sortedRecords.sort(Comparator.comparingLong(POHRecord::getSequenceNumber));
+
+        // 4. 验证序号严格递增
+        long prevSeq = sortedRecords.get(0).getSequenceNumber();
+        for (int i = 1; i < sortedRecords.size(); i++) {
+            long currSeq = sortedRecords.get(i).getSequenceNumber();
+            if (currSeq <= prevSeq) {
+                String errorMsg = String.format(
+                        "记录 %d 与 %d 序号不递增 - 上一序号: %d, 当前序号: %d",
+                        i - 1, i, prevSeq, currSeq
+                );
+                return new POHVerificationResult(false, errorMsg, null);
+            }
+            prevSeq = currSeq;
+        }
+
+        // 5. 验证哈希链连续性（核心：确认所有记录属于同一POH链）
+        POHRecord firstRecord = sortedRecords.get(0);
+        byte[] currentChainHash = firstRecord.getPreviousHash().clone();
+        long currentChainSeq = firstRecord.getSequenceNumber() - 1;
+
+        for (POHRecord record : sortedRecords) {
+            long targetSeq = record.getSequenceNumber();
+            byte[] targetPrevHash = record.getPreviousHash();
+
+            // 重放中间的哈希计算，验证链的连续性
+            for (long seq = currentChainSeq + 1; seq < targetSeq; seq++) {
+                byte[] iterHash = currentChainHash.clone();
+                for (int i = 0; i < HASHES_PER_TICK; i++) {
+                    byte[] combined = combine(iterHash, longToBytes(i), seq);
+                    iterHash = Sha.applySHA256(combined);
+                }
+                currentChainHash = iterHash;
+                currentChainSeq = seq;
+            }
+
+            // 验证当前记录的前置哈希是否与链计算结果一致
+            if (!Arrays.equals(currentChainHash, targetPrevHash)) {
+                String errorMsg = String.format(
+                        "记录 %d 与全局POH链断裂 - 预期前置哈希: %s, 实际计算哈希: %s",
+                        sortedRecords.indexOf(record),
+                        bytesToHex(targetPrevHash),
+                        bytesToHex(currentChainHash)
+                );
+                return new POHVerificationResult(false, errorMsg, null);
+            }
+
+            // 更新链状态
+            currentChainHash = record.getCurrentHash().clone();
+            currentChainSeq = targetSeq;
+        }
+
+        // 6. 验证物理时间戳合理性
+        Instant prevTime = sortedRecords.get(0).getPhysicalTimestamp();
+        for (int i = 1; i < sortedRecords.size(); i++) {
+            Instant currTime = sortedRecords.get(i).getPhysicalTimestamp();
+            if (currTime.isBefore(prevTime.minusMillis(1000))) {
+                String errorMsg = String.format(
+                        "记录 %d 与 %d 时间戳异常倒流 - 上一时间: %s, 当前时间: %s",
+                        i - 1, i, prevTime, currTime
+                );
+                return new POHVerificationResult(false, errorMsg, null);
+            }
+            prevTime = currTime;
+        }
+
+        // 所有验证通过，返回排序后的记录
+        return new POHVerificationResult(true, "验证通过，记录已按序号排序", sortedRecords);
     }
+
+
 
     @Override
     public void start() {
+        if (isRunning) {
+            log.warn("POH引擎已处于运行状态");
+            return;
+        }
+
         isRunning = true;
-
-        // 启动空事件生成线程
-        emptyEventThread = new Thread(this::generateEmptyEvents, "poh-empty-event-generator");
-        emptyEventThread.setDaemon(true);
-        emptyEventThread.start();
-
-        log.info("POH引擎已启动");
+        tickGeneratorThread = new Thread(this::tickGenerationLoop, "poh-tick-generator");
+        tickGeneratorThread.setDaemon(true);
+        tickGeneratorThread.start();
+        log.info("POH引擎启动成功 - 开始生成tick");
     }
 
     @Override
     public void stop() {
+        if (!isRunning) {
+            log.warn("POH引擎已处于停止状态");
+            return;
+        }
+
         isRunning = false;
 
-        if (emptyEventThread != null) {
-            emptyEventThread.interrupt();
+        if (tickGeneratorThread != null) {
+            tickGeneratorThread.interrupt();
             try {
-                emptyEventThread.join(1000);
+                tickGeneratorThread.join(1000);
             } catch (InterruptedException e) {
-                log.warn("POH空事件线程停止超时", e);
+                log.warn("tick生成线程停止超时", e);
             }
         }
 
-        if (batchProcessor != null) {
-            batchProcessor.shutdown();
+        if (blockProcessor != null) {
+            blockProcessor.shutdown();
         }
 
-        // 保存最后状态到缓存
-        try {
-            pohCache.putBytes(POHCache.KEY_LAST_HASH, lastHash);
-            pohCache.putLong(POHCache.KEY_CHAIN_HEIGHT, sequenceNumber.get());
-        } catch (POHException e) {
-            log.error("POH引擎停止时保存状态失败", e);
-        }
-
-        log.info("POH引擎已停止");
+        log.info("POH引擎已停止 - 最终Slot: {}, 最终Tick: {}",
+                GlobalState.getCurrentSlot(), GlobalState.getCurrentTick());
     }
 
     /**
-     * 生成空事件以保持POH链的连续性
+     * 无休眠的Tick生成循环
+     * 持续计算tick，通过时间戳准确记录每个slot的实际耗时
      */
-    private void generateEmptyEvents() {
-        log.info("POH空事件生成线程已启动");
-
+    private void tickGenerationLoop() {
+        log.info("Tick生成线程启动 - 配置: {} hashes/tick, {} ticks/slot (无休眠模式)",
+                HASHES_PER_TICK, TICKS_PER_SLOT);
+        // 初始化第一个slot的开始时间
+        if (GlobalState.getCurrentTick() % TICKS_PER_SLOT == 0) {
+            slotStartTimeNs = System.nanoTime();
+        }
         while (isRunning) {
             try {
-                // 定期生成空事件
-                Thread.sleep(0, (int) EMPTY_EVENT_INTERVAL_NS);
-                appendEvent(null);
+                // 持续生成tick，不进行主动休眠
+                generateTick();
+
+                // 检查中断标志（允许优雅停止）
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
             } catch (InterruptedException e) {
-                log.info("POH空事件生成线程被中断");
-                Thread.currentThread().interrupt();
+                log.info("Tick生成线程被中断");
                 break;
             } catch (Exception e) {
-                log.error("生成POH空事件失败", e);
+                log.error("Tick生成失败", e);
+                // 发生异常时短暂停顿，避免CPU空转
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
+        log.info("Tick生成线程停止");
     }
 }

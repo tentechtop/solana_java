@@ -21,4 +21,9 @@ public class BlockChainImpl implements BlockChain {
     public Block getLatestBlock() {
         return null;
     }
+
+    @Override
+    public void generateBlock(long currentHeight, byte[] clone) {
+
+    }
 }
