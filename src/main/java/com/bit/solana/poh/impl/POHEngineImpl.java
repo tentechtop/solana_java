@@ -2,9 +2,10 @@ package com.bit.solana.poh.impl;
 
 import com.bit.solana.blockchain.BlockChain;
 import com.bit.solana.poh.POHEngine;
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.dto.POHVerificationResult;
+import com.bit.solana.structure.poh.PohEventType;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.util.Sha;
 import jakarta.annotation.PostConstruct;
@@ -161,6 +162,7 @@ public class POHEngineImpl implements POHEngine {
                 record.setCurrentHash(newHash.clone());
                 record.setSequenceNumber(currentTick);
                 record.setSlot(currentSlot);
+                record.setEventType(PohEventType.EMPTY);
                 record.setPhysicalTimestamp(Instant.now());
                 record.setNodeId(nodeId.clone());
                 record.setNonEmptyEvent(isNonEmpty);
@@ -173,6 +175,61 @@ public class POHEngineImpl implements POHEngine {
             log.error("追加POH事件失败", e);
             return Result.error("追加POH事件失败: " + e.getMessage());
         }
+    }
+
+
+    /**
+     * 为交易打上POH时间戳，将交易与POH链关联
+     * @param transaction 待处理交易
+     * @return 包含POH记录的结果对象
+     */
+    @Override
+    public Result<POHRecord> timestampTransaction(Transaction transaction) {
+        try {
+            // 1. 验证交易合法性
+            if (transaction == null) {
+                return Result.error("交易对象不能为空");
+            }
+
+            // 2. 获取或生成交易唯一标识（确保非空且有效）
+            byte[] txId = transaction.getTxId();
+            if (txId == null || txId.length == 0) {
+                // 若交易未生成ID，主动计算（假设Transaction有生成ID的方法）
+                txId = transaction.getTxId();
+                if (txId == null || txId.length == 0) {
+                    return Result.error("交易ID生成失败，无法生成时间戳");
+                }
+            }
+
+            // 3. 追加交易事件到POH链（复用appendEvent基础逻辑）
+            Result<POHRecord> result = appendEvent(txId);
+            if (!result.isSuccess()) {
+                return Result.error("追加交易事件到POH链失败: " + result.getMessage());
+            }
+
+            // 4. 完善交易相关的POH记录信息
+            POHRecord record = result.getData();
+            record.setEventId(txId.clone());
+            record.setEventType(PohEventType.TRANSACTION);
+
+            transaction.setPohRecord(record);
+            log.debug("交易[{}]已打上POH时间戳 - Slot: {}, Tick: {}",
+                    bytesToHex(txId), record.getSlot(), record.getSequenceNumber());
+            return Result.OK(record);
+        } catch (Exception e) {
+            log.error("为交易生成时间戳失败", e);
+            return Result.error("交易时间戳处理失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 计算逻辑时间戳（Slot和Tick的组合表示）
+     * @param slot 槽位号
+     * @param tick 滴答号
+     * @return 逻辑时间戳字符串
+     */
+    private String computeLogicalTimestamp(long slot, long tick) {
+        return String.format("slot=%d,tick=%d", slot, tick);
     }
 
 
@@ -226,26 +283,7 @@ public class POHEngineImpl implements POHEngine {
         }
     }
 
-    @Override
-    public Result<POHRecord> timestampTransaction(Transaction transaction) {
-        try {
-            byte[] txId = transaction.getTxId();
-            if (txId == null || txId.length == 0) {
-                return Result.error("交易ID为空，无法生成时间戳");
-            }
 
-            Result<POHRecord> result = appendEvent(txId);
-            if (result.isSuccess()) {
-                POHRecord record = result.getData();
-                record.setTransactionId(txId.clone());
-                return Result.OK(record);
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("为交易生成时间戳失败", e);
-            return Result.error("交易时间戳失败: " + e.getMessage());
-        }
-    }
 
     @Override
     public Result<List<POHRecord>> batchTimestampTransactions(List<Transaction> transactions) {

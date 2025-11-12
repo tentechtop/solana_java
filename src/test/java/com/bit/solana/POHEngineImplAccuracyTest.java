@@ -1,6 +1,6 @@
 package com.bit.solana;
 
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.poh.impl.POHEngineImpl;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.dto.POHVerificationResult;
@@ -8,13 +8,10 @@ import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.util.ByteUtils;
 import com.bit.solana.util.Sha;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;

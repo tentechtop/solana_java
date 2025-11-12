@@ -1,6 +1,7 @@
 package com.bit.solana.poh;
 
 import com.bit.solana.result.Result;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.structure.tx.Transaction;
 
 import java.util.List;

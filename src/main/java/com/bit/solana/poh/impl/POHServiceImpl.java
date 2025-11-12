@@ -1,7 +1,6 @@
 package com.bit.solana.poh.impl;
 
-import com.bit.solana.poh.POHCache;
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.poh.POHService;
 import com.bit.solana.structure.poh.PohEntry;
 import com.bit.solana.structure.tx.Transaction;
@@ -44,7 +43,7 @@ public class POHServiceImpl implements POHService {
             // 这里可以将POH记录与交易关联，例如添加到交易的扩展字段
             // 假设Transaction有一个setPohRecord方法
             if (record != null) {
-                // transaction.setPohRecord(record); // 如果允许修改structure包，可添加此方法
+                transaction.setPohRecord(record);
                 log.debug("为交易{}生成POH时间戳，序列号: {}",
                         ByteUtils.bytesToHex(transaction.getTxId()),
                         record.getSequenceNumber());

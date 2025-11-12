@@ -1,6 +1,6 @@
 package com.bit.solana.structure.dto;
 
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

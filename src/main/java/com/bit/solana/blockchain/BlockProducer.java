@@ -2,7 +2,7 @@ package com.bit.solana.blockchain;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.common.TransactionHash;
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.poh.POHService;
 import com.bit.solana.structure.block.Block;
 import com.bit.solana.structure.block.BlockBody;
@@ -19,9 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**

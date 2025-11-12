@@ -2,8 +2,11 @@ package com.bit.solana.structure.tx;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.common.TransactionHash;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.structure.account.AccountMeta;
 import lombok.Data;
+
+import java.util.Arrays;
 import java.util.List;
 
 import static com.bit.solana.util.Sha.applySHA256;
@@ -53,7 +56,7 @@ public class Transaction {
      * 规则：accounts中第一个"isSigner=true且isWritable=true"的账户即为费用支付者
      */
 
-
+    private POHRecord pohRecord;
 
     /**
      * 生成交易ID（txId）：取第一个签名的字节数组，转换为十六进制字符串
@@ -99,4 +102,14 @@ public class Transaction {
 
         return null;
     }
+
+
+    public boolean isValidPOHRecord() {
+        if (pohRecord == null) {
+            return false;
+        }
+        // 验证POH记录中的交易ID与当前交易ID一致
+        return Arrays.equals(pohRecord.getEventId(), this.getTxId());
+    }
+
 }

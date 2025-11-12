@@ -2,7 +2,7 @@ package com.bit.solana.txpool.impl;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.common.TransactionHash;
-import com.bit.solana.poh.POHRecord;
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.poh.POHService;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.account.AccountMeta;
@@ -22,7 +22,6 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.w3c.dom.css.Counter;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -32,7 +31,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.stream.Collectors;
 
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ByteUtils.hexToBytes;

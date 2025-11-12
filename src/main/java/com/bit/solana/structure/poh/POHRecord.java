@@ -1,4 +1,4 @@
-package com.bit.solana.poh;
+package com.bit.solana.structure.poh;
 
 import com.bit.solana.common.PoHHash;
 import lombok.AllArgsConstructor;
@@ -68,16 +68,26 @@ public class POHRecord implements Serializable {
     private long sequenceNumber;
 
     /**
-     * 关联的交易ID（仅非空事件且为交易时有效）
-     * 与交易池中的交易形成关联
+     * 通用事件ID（32字节，与事件类型匹配）
+     * - 交易事件：存储交易ID（txId）
+     * - 区块事件：存储区块Hash（blockHash）
+     * - 系统事件（如Slot切换）：存储事件专属ID（如Slot+时间戳的哈希）
+     * - 空事件：null 或全0字节（无实际业务事件）
      */
-    private byte[] transactionId;
+    private byte[] eventId;
+
+    /**
+     * 事件类型（通过枚举定义，底层存储为1字节）
+     * 决定eventId的语义（交易ID/区块Hash等）
+     */
+    private PohEventType eventType;
 
     /**
      * 生成该事件的节点ID
      * 分布式场景下用于追踪事件来源
      */
     private byte[] nodeId;
+
 
     /**
      * 所属的区块槽位（Slot）
@@ -91,12 +101,6 @@ public class POHRecord implements Serializable {
      */
     private byte[] nodeSignature;
 
-    /**
-     * 检查当前记录是否是交易事件
-     */
-    public boolean isTransactionRecord() {
-        return isNonEmptyEvent && transactionId != null && transactionId.length > 0;
-    }
 
     /**
      * 检查当前记录是否是空事件
@@ -110,7 +114,31 @@ public class POHRecord implements Serializable {
     }
 
     public long getHeight() {
-
-        return 0;
+        return chainHeight;
     }
+
+    /**
+     * 检查当前记录是否是交易事件（替代原有isTransactionRecord()）
+     */
+    public boolean isTransactionEvent() {
+        return PohEventType.TRANSACTION.equals(eventType)
+                && eventId != null
+                && eventId.length > 0;
+    }
+
+    /**
+     * 检查当前记录是否是非空事件（兼容原有isNonEmptyEvent的语义）
+     */
+    public boolean isNonEmptyEvent() {
+        return !isEmptyEvent();
+    }
+
+    /**
+     * 获取事件类型的可读描述（日志/调试用）
+     */
+    public String getEventTypeDesc() {
+        return eventType != null ? eventType.getDescription() : "未设置事件类型";
+    }
+
+
 }

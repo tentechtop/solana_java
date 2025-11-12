@@ -1,5 +1,6 @@
 package com.bit.solana.poh;
 
+import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.structure.poh.PohEntry;
 import com.bit.solana.structure.tx.Transaction;
 
