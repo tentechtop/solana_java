@@ -217,23 +217,13 @@ public class POHEngineImpl implements POHEngine {
                 log.info("Slot生成完成 - Slot: {}, 最终Tick: {}, 实际耗时: {}ms ({}ns), 哈希: {}",
                         newSlot, newTick, slotDurationMs, slotDurationNs, bytesToHex(currentHash));
 
-                triggerBlockGeneration(newSlot, newTick, currentHash);
             } else {
                 // 可选：记录每个tick的耗时，用于性能分析
                 log.trace("Tick生成完成 - Tick: {}, 耗时: {}ns", newTick, tickDurationNs);
             }
-        }
-    }
 
-    private void triggerBlockGeneration(long slot, long tick, byte[] blockHash) {
-        blockProcessor.submit(() -> {
-            try {
-                log.debug("生成区块 - Slot: {}, 最终Tick: {}, 哈希: {}", slot, tick, bytesToHex(blockHash));
-                chain.generateBlock(slot, blockHash);
-            } catch (Exception e) {
-                log.error("区块生成失败 - Slot: {}", slot, e);
-            }
-        });
+
+        }
     }
 
     @Override
