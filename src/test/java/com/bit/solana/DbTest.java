@@ -30,14 +30,19 @@ public class DbTest {
     void dataBaseTest() {
         DataBase dataBase = dbConfig.getDataBase();
         String  keyS = "key";
+
+
         String  keyV = "value";
-        dataBase.insert(TableEnum.CHAIN,keyS.getBytes(),keyV.getBytes());
+ /*       dataBase.insert(TableEnum.CHAIN, keyS.getBytes(), keyV.getBytes());*/
 
         byte[] bytes = dataBase.get(TableEnum.CHAIN, keyS.getBytes());
         log.info("查询的数据是{} ", Arrays.equals(bytes, keyV.getBytes()));
 
-        byte[] bytes1 = dataBase.get(TableEnum.BLOCK, keyS.getBytes());
+        byte[] bytes1 = dataBase.get(TableEnum.CHAIN, keyS.getBytes());
         log.info("查询的数据是{} ", Arrays.equals(bytes1, keyV.getBytes()));
+
+        byte[] bytes12 = dataBase.get(TableEnum.BLOCK, keyS.getBytes());
+        log.info("查询的数据是{} ", Arrays.equals(bytes12, keyV.getBytes()));
 
 
     }
