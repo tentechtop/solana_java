@@ -1,11 +1,15 @@
-package com.bit.solana.service;
+package com.bit.solana.account;
 
 import com.bit.solana.result.Result;
+import com.bit.solana.structure.account.Account;
 import com.bit.solana.structure.account.json.AccountDTO;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
 import com.bit.solana.structure.tx.json.TransferTx;
 
 public interface AccountService {
+
+    Account getAccountByHash(byte[] hash);
+
     Result createMnemonic();
 
     Result createAccount(CreateAccountByMnemonicAndIndex createAccountByMnemonicAndIndex);

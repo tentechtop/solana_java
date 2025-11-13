@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贺长庚 - Java开发工程师</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        dark: '#1D2129',
+                        light: '#F2F3F5',
+                        accent: '#FF7D00',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .card-hover {
+                transition: all 0.3s ease;
+            }
+            .card-hover:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            }
+            .section-fade {
+                opacity: 0;
+                transform: translateY(20px);
+                transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+            }
+            .section-fade.active {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-dark">
+<!-- 导航栏 -->
+<header id="navbar" class="fixed w-full bg-white/90 backdrop-blur-sm shadow-sm z-50 transition-all duration-300">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+            <a href="#" class="text-primary font-bold text-xl">贺长庚</a>
+
+            <!-- 桌面导航 -->
+            <nav class="hidden md:flex space-x-8">
+                <a href="#about" class="text-gray-600 hover:text-primary transition-colors">关于我</a>
+                <a href="#skills" class="text-gray-600 hover:text-primary transition-colors">技术能力</a>
+                <a href="#experience" class="text-gray-600 hover:text-primary transition-colors">工作经历</a>
+                <a href="#projects" class="text-gray-600 hover:text-primary transition-colors">项目经验</a>
+                <a href="#contact" class="text-gray-600 hover:text-primary transition-colors">联系方式</a>
+            </nav>
+
+            <!-- 移动端菜单按钮 -->
+            <button id="menuBtn" class="md:hidden text-gray-600 focus:outline-none">
+                <i class="fa fa-bars text-xl"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 移动端导航菜单 -->
+    <div id="mobileMenu" class="hidden md:hidden bg-white border-t">
+        <div class="container mx-auto px-4 py-3 space-y-3">
+            <a href="#about" class="block text-gray-600 hover:text-primary transition-colors py-2">关于我</a>
+            <a href="#skills" class="block text-gray-600 hover:text-primary transition-colors py-2">技术能力</a>
+            <a href="#experience" class="block text-gray-600 hover:text-primary transition-colors py-2">工作经历</a>
+            <a href="#projects" class="block text-gray-600 hover:text-primary transition-colors py-2">项目经验</a>
+            <a href="#contact" class="block text-gray-600 hover:text-primary transition-colors py-2">联系方式</a>
+        </div>
+    </div>
+</header>
+
+<!-- 英雄区域 -->
+<section class="pt-28 pb-20 bg-gradient-to-br from-primary/5 to-primary/10">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col md:flex-row items-center">
+            <div class="md:w-1/2 mb-10 md:mb-0">
+                <h1 class="text-[clamp(2rem,5vw,3.5rem)] font-bold leading-tight text-dark mb-4">
+                    贺长庚
+                    <span class="text-primary block">Java开发工程师</span>
+                </h1>
+                <p class="text-gray-600 text-lg mb-6 max-w-lg">
+                    4年以上Java开发经验，专注于高并发、分布式系统设计与实现，热衷于技术创新与挑战。
+                </p>
+                <div class="flex flex-wrap gap-4">
+                    <a href="#contact" class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all shadow-lg hover:shadow-primary/30">
+                        联系我
+                    </a>
+                    <a href="https://github.com/tentechtop" target="_blank" class="bg-white hover:bg-gray-50 text-primary border border-primary px-6 py-3 rounded-lg transition-all">
+                        <i class="fa fa-github mr-2"></i>GitHub
+                    </a>
+                </div>
+            </div>
+            <div class="md:w-1/2 flex justify-center">
+                <div class="relative">
+                    <div class="w-64 h-64 sm:w-80 sm:h-80 rounded-full overflow-hidden border-4 border-white shadow-xl">
+                        <img src="https://picsum.photos/seed/profile/400/400" alt="贺长庚" class="w-full h-full object-cover">
+                    </div>
+                    <div class="absolute -bottom-4 -right-4 bg-accent text-white p-4 rounded-lg shadow-lg">
+                        <p class="font-bold">4+ 年经验</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 关于我 -->
+<section id="about" class="py-20 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">关于我</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div>
+                <h3 class="text-xl font-semibold mb-4 text-primary">个人信息</h3>
+                <ul class="space-y-4">
+                    <li class="flex items-start">
+                        <i class="fa fa-user-circle text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">姓名：</span>
+                            <span>贺长庚</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-calendar text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">年龄：</span>
+                            <span>26岁</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-phone text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">电话：</span>
+                            <span>17872290157</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-envelope text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">邮箱：</span>
+                            <span>hcg2077@163.com</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-graduation-cap text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">院校专业：</span>
+                            <span>湖南科技学院 - 计算机科学与技术</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-map-marker text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">现居住：</span>
+                            <span>深圳 - 坂田</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-briefcase text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">工作经验：</span>
+                            <span>4年以上</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <i class="fa fa-money text-primary mt-1 mr-3"></i>
+                        <div>
+                            <span class="font-medium">期望薪资：</span>
+                            <span>18-22K * 12</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="text-xl font-semibold mb-4 text-primary">自我评价</h3>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-start mb-4">
+                        <div class="bg-primary/10 p-3 rounded-full mr-4">
+                            <i class="fa fa-lightbulb-o text-primary text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium mb-1">敢创新</h4>
+                            <p class="text-gray-600">打破常规，探索新路径</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start mb-4">
+                        <div class="bg-primary/10 p-3 rounded-full mr-4">
+                            <i class="fa fa-graduation-cap text-primary text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium mb-1">学习能力强</h4>
+                            <p class="text-gray-600">快速吸收，学以致用</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start mb-4">
+                        <div class="bg-primary/10 p-3 rounded-full mr-4">
+                            <i class="fa fa-rocket text-primary text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium mb-1">积极主动</h4>
+                            <p class="text-gray-600">预判需求，提前推进</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="bg-primary/10 p-3 rounded-full mr-4">
+                            <i class="fa fa-shield text-primary text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium mb-1">敢于担责</h4>
+                            <p class="text-gray-600">直面问题，不推诿不逃避</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="text-xl font-semibold mt-8 mb-4 text-primary">离职原因</h3>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <p>希望突破，喜欢挑战</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 技术能力 -->
+<section id="skills" class="py-20 bg-gray-50 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">技术能力</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Java核心 -->
+            <div class="bg-white p-6 rounded-lg shadow-md card-hover">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-coffee text-primary mr-2"></i>Java核心
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Java编程语言</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 90%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>JVM底层机制</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>并发编程</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Java锁机制</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>设计模式</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 框架与中间件 -->
+            <div class="bg-white p-6 rounded-lg shadow-md card-hover">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-cubes text-primary mr-2"></i>框架与中间件
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Spring/SpringBoot</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 90%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>SpringCloud微服务</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Netty框架</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>MyBatis/MyBatis-Plus</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Kafka/RabbitMQ</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据库 -->
+            <div class="bg-white p-6 rounded-lg shadow-md card-hover">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-database text-primary mr-2"></i>数据库
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>MySQL/Oracle</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Redis</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>MongoDB</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>ElasticSearch</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>LevelDB/RocksDB</span>
+                            <span>熟悉</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 65%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 部署与其他 -->
+            <div class="bg-white p-6 rounded-lg shadow-md card-hover">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-cog text-primary mr-2"></i>部署与其他
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Docker/K8s</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Jenkins/CI/CD</span>
+                            <span>熟悉</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 65%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Linux系统操作</span>
+                            <span>熟练</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Vue/React前端</span>
+                            <span>熟悉</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 60%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span>Go语言</span>
+                            <span>了解</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: 40%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 技能分布图表 -->
+        <div class="mt-12 bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-lg font-semibold mb-6 text-center">技能分布</h3>
+            <div class="h-80">
+                <canvas id="skillsChart"></canvas>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 教育背景 -->
+<section class="py-10 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">教育背景</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md relative">
+            <div class="absolute left-0 top-0 h-full w-1 bg-primary/20 ml-4"></div>
+            <div class="relative pl-12">
+                <div class="absolute left-0 top-3 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white">
+                    <i class="fa fa-graduation-cap"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">湖南科技学院</h3>
+                <p class="text-gray-600 mb-1">计算机科学与技术 | 本科</p>
+                <p class="text-gray-500">2018年9月 - 2022年6月</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 工作经历 -->
+<section id="experience" class="py-20 bg-gray-50 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">工作经历</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="max-w-4xl mx-auto">
+            <!-- 第二份工作 -->
+            <div class="bg-white p-8 rounded-lg shadow-md mb-8 relative card-hover">
+                <div class="absolute left-0 top-0 h-full w-1 bg-accent"></div>
+                <div class="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold">深圳市平方科技(上市)</h3>
+                    <span class="bg-accent/10 text-accent px-3 py-1 rounded-full text-sm inline-block mt-2 md:mt-0">
+              2024年7月 – 2025年10月
+            </span>
+                </div>
+                <p class="text-primary font-medium mb-4">Java开发工程师</p>
+                <p class="text-gray-600">
+                    参与网络货运平台项目开发，负责生产作业平台装卸车模块全流程开发、无人车/有人车及门吊系统作业流程控制系统开发，
+                    重点解决"作业流程不贯通、设备协同效率低、操作界面不直观"等痛点问题，显著提升了系统性能和用户体验。
+                </p>
+            </div>
+
+            <!-- 第一份工作 -->
+            <div class="bg-white p-8 rounded-lg shadow-md relative card-hover">
+                <div class="absolute left-0 top-0 h-full w-1 bg-primary"></div>
+                <div class="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold">深圳市怪虫机器人</h3>
+                    <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm inline-block mt-2 md:mt-0">
+              2022年8月 – 2024年7月
+            </span>
+                </div>
+                <p class="text-primary font-medium mb-4">Java开发工程师</p>
+                <p class="text-gray-600">
+                    负责公司核心产品的后端开发工作，参与系统架构设计与实现，运用Java、SpringBoot、SpringCloud等技术栈构建高可用、
+                    高并发的分布式系统，解决了多个技术难题，提升了系统的稳定性和性能。
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 项目经验 -->
+<section id="projects" class="py-20 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">项目经验</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <!-- 项目标签页 -->
+        <div class="flex justify-center mb-10 flex-wrap gap-2">
+            <button class="project-tab active px-6 py-2 rounded-full bg-primary text-white" data-tab="all">全部项目</button>
+            <button class="project-tab px-6 py-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors" data-tab="official">网络货运平台</button>
+            <button class="project-tab px-6 py-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors" data-tab="personal">点对点电子现金系统</button>
+        </div>
+
+        <!-- 项目内容 -->
+        <div class="space-y-12">
+            <!-- 网络货运平台项目 -->
+            <div class="project-item" data-category="official">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="md:flex">
+                        <div class="md:w-1/3">
+                            <img src="https://picsum.photos/seed/freight/600/400" alt="网络货运平台项目" class="h-full w-full object-cover">
+                        </div>
+                        <div class="md:w-2/3 p-8">
+                            <div class="flex justify-between items-start mb-4">
+                                <h3 class="text-2xl font-bold">网络货运平台项目</h3>
+                                <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm">
+                    核心开发者
+                  </span>
+                            </div>
+                            <p class="text-gray-600 mb-6">
+                                面向铁路货运场景构建的全流程数字化支撑系统，基于微服务架构与领域驱动设计（DDD）思想，
+                                解决传统铁路货运"线下管控效率低、人工录入错误高、跨环节协同差"的痛点。
+                            </p>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">技术栈</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Java</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">SpringBoot</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">SpringCloud</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">MySQL</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Redis</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Kafka</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Vue2</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">我的职责</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>生产作业平台装卸车模块全流程开发（含界面开发）</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>卸车作业模块的状态跟踪与数据校验</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>装卸作业安全流程优化（F-TR锁防吊起系统设计）</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h4 class="font-semibold mb-2 text-primary">工作成果</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>单股道日均装卸车数量从15辆提升至24辆，单辆车作业时间从30分钟缩短至18分钟</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>人工操作错误率降低75%，装卸单据准确率从80%提升至98%</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>多设备协同作业衔接时间缩短60%，新员工上手时间从3天缩短至1天</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>F-TR锁四重防吊起系统实现挂锁事故零发生</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- 点对点电子现金系统项目 -->
+            <div class="project-item" data-category="personal">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="md:flex">
+                        <div class="md:w-1/3">
+                            <img src="https://picsum.photos/seed/bitcoin/600/400" alt="点对点电子现金系统" class="h-full w-full object-cover">
+                        </div>
+                        <div class="md:w-2/3 p-8">
+                            <div class="flex justify-between items-start mb-4">
+                                <h3 class="text-2xl font-bold">基于Java实现的点对点电子现金系统</h3>
+                                <span class="bg-accent/10 text-accent px-3 py-1 rounded-full text-sm">
+                    个人项目
+                  </span>
+                            </div>
+                            <p class="text-gray-600 mb-6">
+                                基于Java 21开发的去中心化点对点电子现金系统，深度借鉴比特币核心协议，构建了从底层数据结构到上层应用接口的完整区块链生态。
+                            </p>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">技术栈</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Java 21</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">SpringBoot</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">RocksDB</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Netty</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">ECDSA</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">SHA-256</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">JCuda</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">核心功能模块</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>区块链核心模块：区块结构、共识验证、链上状态管理等</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>交易池模块：多交易类型支持、交易全生命周期管理等</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>P2P网络模块：分布式节点通信、数据同步机制等</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>挖矿模块：工作量证明实现、GPU加速挖矿等</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">价值与创新</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-lightbulb-o text-accent mt-1 mr-2"></i>
+                                        <span>填补Java生态在比特币核心协议实现的空白，降低技术门槛</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-lightbulb-o text-accent mt-1 mr-2"></i>
+                                        <span>模块化架构与标准化接口设计，提升区块链系统的可扩展性</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-lightbulb-o text-accent mt-1 mr-2"></i>
+                                        <span>通过GPU加速突破Java在高性能区块链场景的瓶颈</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <a href="https://github.com/tentechtop/PopCoin" target="_blank" class="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
+                                    <i class="fa fa-github mr-2"></i>查看项目源码
+                                </a>
+
+                            </div>
+
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Java-Solana区块链系统项目 -->
+            <div class="project-item" data-category="personal">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="md:flex">
+                        <div class="md:w-1/3">
+                            <img src="https://picsum.photos/seed/javasolana/600/400" alt="Java-Solana区块链系统" class="h-full w-full object-cover">
+                        </div>
+                        <div class="md:w-2/3 p-8">
+                            <div class="flex justify-between items-start mb-4">
+                                <h3 class="text-2xl font-bold">Java-Solana 高性能区块链系统</h3>
+                                <span class="bg-accent/10 text-accent px-3 py-1 rounded-full text-sm">
+                                    项目负责人
+                                </span>
+                            </div>
+                            <p class="text-gray-600 mb-6">
+                                基于Java生态实现的Solana兼容区块链系统，继承POH历史证明、Tower BFT共识核心架构，解决原生Rust开发门槛高的痛点，目标支撑10万TPS高并发交易场景。
+                            </p>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">技术栈</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Java 21</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Netty</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">RocksDB</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Redis Cluster</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">BouncyCastle</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">Wasmtime-Java</span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">ForkJoinPool</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <h4 class="font-semibold mb-2 text-primary">核心职责</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>设计并实现POH时序引擎，基于SHA-256哈希链与批量压缩机制优化性能</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>基于Netty开发Turbine网络协议，实现分片传输与动态负载均衡</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>开发并行交易处理引擎，通过账户锁机制与ForkJoinPool实现无冲突交易并行执行</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+                                        <span>集成Wasm虚拟机，兼容Solana SPL代币标准与智能合约部署</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h4 class="font-semibold mb-2 text-primary">项目成果</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>单节点TPS达8.5万，接近设计目标，延迟稳定在400-500ms</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>JVM优化后GC停顿控制在10ms内，无明显性能波动</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>兼容Solana生态工具，支持Phantom钱包连接与Anchor合约部署</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fa fa-star text-accent mt-1 mr-2"></i>
+                                        <span>节点部署支持Windows/Linux/Mac跨平台，Docker镜像体积压缩至300MB</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <a href="https://github.com/tentechtop/solana_java" target="_blank" class="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
+                                    <i class="fa fa-github mr-2"></i>查看项目源码
+                                </a>
+                                <a href="http://101.35.87.31:18333/solana" target="_blank" class="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
+                                    <i class="fa fa-github mr-2"></i>查看项目原型
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- 联系方式 -->
+<section id="contact" class="py-20 bg-gray-50 section-fade">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold mb-4">联系方式</h2>
+            <div class="w-20 h-1 bg-primary mx-auto"></div>
+        </div>
+
+        <div class="max-w-4xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-6">联系信息</h3>
+                    <ul class="space-y-6">
+                        <li class="flex items-start">
+                            <div class="bg-primary/10 p-3 rounded-full mr-4">
+                                <i class="fa fa-phone text-primary"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium mb-1">电话</h4>
+                                <p class="text-gray-600">17872290157</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="bg-primary/10 p-3 rounded-full mr-4">
+                                <i class="fa fa-envelope text-primary"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium mb-1">邮箱</h4>
+                                <p class="text-gray-600">hcg2077@163.com</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="bg-primary/10 p-3 rounded-full mr-4">
+                                <i class="fa fa-map-marker text-primary"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium mb-1">地址</h4>
+                                <p class="text-gray-600">深圳 - 坂田</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <div class="bg-primary/10 p-3 rounded-full mr-4">
+                                <i class="fa fa-github text-primary"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium mb-1">GitHub</h4>
+                                <a href="https://github.com/tentechtop" target="_blank" class="text-primary hover:underline">github.com/tentechtop</a>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <div class="mt-8">
+                        <h4 class="font-medium mb-4">求职意向</h4>
+                        <p class="text-gray-600 mb-2">Java开发工程师</p>
+                        <p class="text-gray-600">期望薪资：18-22K * 12</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-6">给我留言</h3>
+                    <form>
+                        <div class="mb-4">
+                            <label for="name" class="block text-gray-700 mb-2">姓名</label>
+                            <input type="text" id="name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="您的姓名">
+                        </div>
+                        <div class="mb-4">
+                            <label for="email" class="block text-gray-700 mb-2">邮箱</label>
+                            <input type="email" id="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="您的邮箱">
+                        </div>
+                        <div class="mb-6">
+                            <label for="message" class="block text-gray-700 mb-2">留言内容</label>
+                            <textarea id="message" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="请输入留言内容"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg transition-colors">发送留言</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="bg-dark text-white py-10">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center">
+            <h3 class="text-xl font-bold mb-4">贺长庚 - Java开发工程师</h3>
+            <p class="text-gray-400 mb-6">4年以上Java开发经验，专注于高并发、分布式系统设计与实现</p>
+            <div class="flex justify-center space-x-4 mb-6">
+                <a href="https://github.com/tentechtop" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fa fa-github text-xl"></i>
+                </a>
+                <a href="mailto:hcg2077@163.com" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fa fa-envelope text-xl"></i>
+                </a>
+                <a href="tel:17872290157" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fa fa-phone text-xl"></i>
+                </a>
+            </div>
+            <p class="text-gray-500 text-sm">© 2025 贺长庚. 保留所有权利.</p>
+        </div>
+    </div>
+</footer>
+
+<!-- 回到顶部按钮 -->
+<button id="backToTop" class="fixed bottom-8 right-8 bg-primary text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg opacity-0 invisible transition-all z-50">
+    <i class="fa fa-arrow-up"></i>
+</button>
+
+<script>
+    // 移动端菜单切换
+    const menuBtn = document.getElementById('menuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+
+    menuBtn.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+        if (mobileMenu.classList.contains('hidden')) {
+            menuBtn.innerHTML = '<i class="fa fa-bars text-xl"></i>';
+        } else {
+            menuBtn.innerHTML = '<i class="fa fa-times text-xl"></i>';
+        }
+    });
+
+    // 平滑滚动
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+
+            // 关闭移动端菜单
+            if (!mobileMenu.classList.contains('hidden')) {
+                mobileMenu.classList.add('hidden');
+                menuBtn.innerHTML = '<i class="fa fa-bars text-xl"></i>';
+            }
+
+            const targetId = this.getAttribute('href');
+            if (targetId === '#') return;
+
+            const targetElement = document.querySelector(targetId);
+            if (targetElement) {
+                window.scrollTo({
+                    top: targetElement.offsetTop - 80,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
+
+    // 导航栏滚动效果
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 50) {
+            navbar.classList.add('py-2', 'shadow');
+            navbar.classList.remove('py-4');
+        } else {
+            navbar.classList.add('py-4');
+            navbar.classList.remove('py-2', 'shadow');
+        }
+    });
+
+    // 回到顶部按钮
+    const backToTopBtn = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+            backToTopBtn.classList.remove('opacity-0', 'invisible');
+            backToTopBtn.classList.add('opacity-100', 'visible');
+        } else {
+            backToTopBtn.classList.add('opacity-0', 'invisible');
+            backToTopBtn.classList.remove('opacity-100', 'visible');
+        }
+    });
+
+    backToTopBtn.addEventListener('click', () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    // 滚动动画
+    const fadeElements = document.querySelectorAll('.section-fade');
+
+    const fadeInOnScroll = () => {
+        fadeElements.forEach(element => {
+            const elementTop = element.getBoundingClientRect().top;
+            const elementVisible = 150;
+
+            if (elementTop < window.innerHeight - elementVisible) {
+                element.classList.add('active');
+            }
+        });
+    };
+
+    window.addEventListener('scroll', fadeInOnScroll);
+    // 初始加载时执行一次
+    fadeInOnScroll();
+
+    // 项目标签切换
+    const projectTabs = document.querySelectorAll('.project-tab');
+    const projectItems = document.querySelectorAll('.project-item');
+
+    projectTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // 移除所有标签的active类
+            projectTabs.forEach(t => {
+                t.classList.remove('active', 'bg-primary', 'text-white');
+                t.classList.add('bg-gray-200');
+            });
+
+            // 给当前标签添加active类
+            tab.classList.add('active', 'bg-primary', 'text-white');
+            tab.classList.remove('bg-gray-200');
+
+            const tabValue = tab.getAttribute('data-tab');
+
+            // 显示对应的项目
+            projectItems.forEach(item => {
+                if (tabValue === 'all' || item.getAttribute('data-category') === tabValue) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // 技能图表
+    const ctx = document.getElementById('skillsChart').getContext('2d');
+    const skillsChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: [
+                'Java核心',
+                '框架开发',
+                '数据库',
+                '中间件',
+                '分布式系统',
+                '前端技术',
+                'DevOps'
+            ],
+            datasets: [{
+                label: '技能熟练度',
+                data: [90, 85, 80, 85, 80, 60, 70],
+                backgroundColor: 'rgba(22, 93, 255, 0.2)',
+                borderColor: 'rgba(22, 93, 255, 1)',
+                pointBackgroundColor: 'rgba(22, 93, 255, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(22, 93, 255, 1)'
+            }]
+        },
+        options: {
+            scales: {
+                r: {
+                    angleLines: {
+                        display: true
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 100
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

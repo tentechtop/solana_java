@@ -1,4 +1,4 @@
-package com.bit.solana.service;
+package com.bit.solana.tx;
 
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;

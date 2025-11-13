@@ -59,6 +59,13 @@ public interface DataBase {
      */
     byte[] get(String table,byte[] key);
 
+    /**
+     * 数据数量
+     * @param table
+     * @return
+     */
+    int count(String table);
+
     //在一个事务内完成 自动提交
     void batchInsert(String table,byte[][] keys, byte[][] values);
     void batchDelete(String table,byte[][] keys);
@@ -68,6 +75,7 @@ public interface DataBase {
     void compact(byte[] start, byte[] limit);
 
     //提交一堆操作 在一个事务内完成  保障原子性
+
 
 
 }

@@ -1,15 +1,12 @@
-package com.bit.solana.service.impl;
+package com.bit.solana.tx.impl;
 
 import com.bit.solana.result.Result;
-import com.bit.solana.service.TxService;
+import com.bit.solana.tx.TxService;
 import com.bit.solana.structure.tx.Transaction;
-import com.bit.solana.structure.tx.TransactionStatus;
 import com.bit.solana.txpool.TxPool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component

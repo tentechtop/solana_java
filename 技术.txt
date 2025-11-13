@@ -52,3 +52,6 @@ JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGC
 
 
 http://localhost:18333/monitor/system
+
+保存区块是保存了 区块Hash 和 数据索引
+

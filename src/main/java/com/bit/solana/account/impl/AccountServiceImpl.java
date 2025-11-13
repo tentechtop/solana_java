@@ -1,11 +1,13 @@
-package com.bit.solana.service.impl;
+package com.bit.solana.account.impl;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.common.PubkeyHash;
 import com.bit.solana.result.Result;
-import com.bit.solana.service.AccountService;
+import com.bit.solana.account.AccountService;
+import com.bit.solana.structure.account.Account;
 import com.bit.solana.structure.account.AccountMeta;
 import com.bit.solana.structure.account.json.AccountDTO;
+import com.bit.solana.structure.block.Block;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
 import com.bit.solana.structure.key.KeyInfo;
 import com.bit.solana.structure.tx.Instruction;
@@ -15,17 +17,19 @@ import com.bit.solana.structure.tx.json.TransferTx;
 import com.bit.solana.txpool.TxPool;
 import com.bit.solana.util.ByteUtils;
 import com.bit.solana.util.Ed25519Signer;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalListener;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
@@ -38,8 +42,33 @@ import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 @Component
 public class AccountServiceImpl implements AccountService {
 
+    /**
+     * 账户缓存 先查询缓存再查数据库  公钥 - > 账户具体信息
+     */
+    private LoadingCache<byte[], Account> accountCache;
+
+    @PostConstruct
+    public void init() {
+        accountCache =  Caffeine.newBuilder()
+                .maximumSize(2000)  // 最大缓存
+                .expireAfterWrite(10, TimeUnit.MINUTES)  // 10分钟过期
+                .recordStats()  // 记录缓存统计（命中率等）
+                .removalListener((RemovalListener<byte[], Account>) (hash, Account, cause) ->
+                        log.debug("Block cache removed: hash={}, cause={}", hash, cause)
+                )
+                .build(this::getAccountByHash);// 缓存未命中时从数据源加载
+    }
+
+
+
     @Autowired
     private TxPool txPool;
+
+    @Override
+    public Account getAccountByHash(byte[] hash) {
+
+        return null;
+    }
 
     //生成助记词
     @Override

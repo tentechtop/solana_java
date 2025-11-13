@@ -2,6 +2,7 @@ package com.bit.solana.blockchain;
 
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.block.Block;
+import com.bit.solana.structure.tx.Transaction;
 
 /**
  * 从代码片段看，BlockChain接口定义了区块链的基础能力（交易验证、区块生成等），BlockChainImpl作为其实现类，应聚焦于：
@@ -11,6 +12,13 @@ import com.bit.solana.structure.block.Block;
  * 若将质押和投票逻辑嵌入其中，会导致类职责过重，不符合单一职责原则，且难以维护和扩展。
  */
 public interface BlockChain {
+
+    Block getBlockByHash(byte[] hash);
+
+    byte[] getBlockHashByHeight(long height);
+
+    Transaction getTransactionByTxHash(byte[] hash);
+
     Result processBlock(Block block);
 
     Block getLatestBlock();

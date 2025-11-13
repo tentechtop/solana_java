@@ -47,6 +47,11 @@ public class MemoryDb implements DataBase {
     }
 
     @Override
+    public int count(String table) {
+        return 0;
+    }
+
+    @Override
     public void batchInsert(String table, byte[][] keys, byte[][] values) {
 
     }
