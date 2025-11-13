@@ -10,17 +10,23 @@ import com.alibaba.csp.sentinel.slots.block.degrade.DegradeRule;
 import com.alibaba.csp.sentinel.slots.block.degrade.DegradeRuleManager;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 // 实现 InitFunc 接口，在应用启动时初始化规则
 public class SentinelInit implements InitFunc {
     @Override
     public void init() throws Exception {
         // 初始化限流规则
         initFlowRules();
+        log.info("initFlowRules");
         // 初始化熔断规则
         initCircuitBreakerRules();
+        log.info("initCircuitBreakerRules");
     }
 
     // 限流规则：限制接口的 QPS
@@ -38,6 +44,12 @@ public class SentinelInit implements InitFunc {
         rules.add(rule);
 
         //限流二
+        // 为 paymentService:pay 添加限流规则（关键）
+        FlowRule payFlowRule = new FlowRule();
+        payFlowRule.setResource("paymentService:pay"); // 资源名与 @SentinelResource 的 value 一致
+        payFlowRule.setGrade(RuleConstant.FLOW_GRADE_QPS); // 按 QPS 限流
+        payFlowRule.setCount(5); // 阈值：每秒最多 5 次请求（测试时调小，容易触发）
+        rules.add(payFlowRule);
 
 
         FlowRuleManager.loadRules(rules);
@@ -55,27 +67,18 @@ public class SentinelInit implements InitFunc {
     private void initCircuitBreakerRules() {
         List<DegradeRule> rules = new ArrayList<>();
 
-        //规则一
-        DegradeRule rule = new DegradeRule();
-        rule.setResource("paymentService:pay"); // 保护的资源名
-        // 熔断触发条件：按异常比例（异常请求占比）
-        rule.setGrade(RuleConstant.DEGRADE_GRADE_EXCEPTION_RATIO);
-        rule.setCount(0.5); // 异常比例阈值：50%（超过则熔断）
-        rule.setTimeWindow(10); // 熔断时长：10秒（期间不调用该资源）
-        rule.setMinRequestAmount(20); // 最小请求数：至少20个请求才判断异常比例
-        rule.setStatIntervalMs(1000); // 统计窗口：1秒内的请求
-        rules.add(rule);
 
-        //规则二
-        // 新增规则：orderService:createOrder（示例）
-        DegradeRule createOrderRule = new DegradeRule();
-        createOrderRule.setResource("orderService:createOrder"); // 接口资源名
-        createOrderRule.setGrade(RuleConstant.DEGRADE_GRADE_EXCEPTION_RATIO); // 异常比例
-        createOrderRule.setCount(0.5); // 异常比例阈值50%
-        createOrderRule.setTimeWindow(10); // 熔断10秒
-        createOrderRule.setMinRequestAmount(20); // 至少20个请求
-        createOrderRule.setStatIntervalMs(1000); // 1秒统计窗口
-        rules.add(createOrderRule); // 添加到规则列表
+        // 针对 paymentService:pay 的熔断规则
+        DegradeRule payRule = new DegradeRule();
+        payRule.setResource("paymentService:pay"); // 与 @SentinelResource 的 value 一致
+        payRule.setGrade(RuleConstant.DEGRADE_GRADE_EXCEPTION_COUNT); // 按异常次数熔断
+        payRule.setCount(3); // 异常次数阈值：3次
+        payRule.setTimeWindow(10); // 熔断时长：10秒（期间请求被拦截）
+        payRule.setStatIntervalMs(5000); // 统计窗口：5秒内
+        payRule.setMinRequestAmount(3); // 最小请求数：至少3次请求才判断
+        rules.add(payRule);
+
+
         DegradeRuleManager.loadRules(rules); // 加载熔断规则
     }
 }
