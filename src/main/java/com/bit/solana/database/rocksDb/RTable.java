@@ -11,9 +11,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-public class table {
+public class RTable {
     // 核心：表名 -> 列族 映射（表名即ColumnFamily的actualName）
-    private final Map<String, ColumnFamily> tableToCfMap = new HashMap<>();
+    private static  Map<String, ColumnFamily> tableToCfMap = new HashMap<>();
     // 枚举ColumnFamily：补充getActualName方法（原有字段不变）
 
     enum ColumnFamily {
@@ -44,4 +44,28 @@ public class table {
     /**
      * 初始化
      */
+    /**
+     * 初始化：将所有ColumnFamily枚举值添加到tableToCfMap中
+     */
+    public RTable() {
+        // 遍历ColumnFamily所有枚举值，以actualName为key，枚举实例为value存入map
+        for (ColumnFamily cf : ColumnFamily.values()) {
+            tableToCfMap.put(cf.actualName, cf);
+        }
+        log.info("RTable初始化完成，加载列族数量：{}", tableToCfMap.size());
+    }
+
+    /**
+     * 获取表对应的列族句柄
+     */
+    public static ColumnFamilyHandle getColumnFamilyHandleByTable(String table) {
+        // 从map中根据表名（actualName）获取对应的ColumnFamily
+        ColumnFamily cf = tableToCfMap.get(table);
+        if (cf != null) {
+            return cf.getHandle(); // 返回列族句柄
+        }
+        log.warn("表不存在: {}", table);
+        return null;
+    }
+
 }

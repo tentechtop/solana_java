@@ -62,7 +62,6 @@ public enum MessageType {
 
     RPC_REQUEST(80, "RPC请求"),
     RPC_RESPONSE(81, "RPC响应"),
-
     ;
 
     private final int code;

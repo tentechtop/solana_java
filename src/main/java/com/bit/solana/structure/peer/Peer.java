@@ -1,6 +1,6 @@
 package com.bit.solana.structure.peer;
 
-import com.bit.solana.p2p.enums.NodeType;
+import com.bit.solana.p2p.enums.NodeServerType;
 import lombok.*;
 
 import java.time.Instant;
@@ -57,7 +57,7 @@ public class Peer {
      * - FULL_NODE：全节点（存储完整账本，不参与共识）
      * - LIGHT_NODE：轻节点（仅同步区块头，不存储完整数据）
      */
-    private NodeType nodeType;
+    private NodeServerType nodeType;
 
     /**
      * 是否在线 true在线 / false 离线
