@@ -1,0 +1,56 @@
+package com.bit.solana.database.rocksDb;
+
+import lombok.Getter;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.ColumnFamilyOptions;
+
+
+/**
+ * 表枚举（集中管理所有表的元信息，作为唯一数据源）
+ */
+public enum TableEnum {
+    // 链信息表：定义表标识、列族名称、列族配置
+    CHAIN(
+            (short) 1,
+            "chain",  // 列族实际存储名称
+            new ColumnFamilyOptions()  // 列族配置
+    ),
+    // 区块信息表：定义表标识、列族名称、列族配置
+    BLOCK(
+            (short) 2,
+            "block",  // 列族实际存储名称
+            new ColumnFamilyOptions()  // 列族配置
+                    .setTableFormatConfig(new BlockBasedTableConfig()
+                            .setBlockCacheSize(128 * 1024 * 1024)  // 128MB缓存
+                            .setCacheIndexAndFilterBlocks(true))
+    );
+
+    @Getter private final short code;  // 表唯一标识（short类型）
+    @Getter private final String columnFamilyName;  // 列族实际存储名称
+    @Getter private final ColumnFamilyOptions columnFamilyOptions;  // 列族配置
+
+    // 构造方法：集中初始化表的所有元信息
+    TableEnum(short code, String columnFamilyName, ColumnFamilyOptions columnFamilyOptions) {
+        this.code = code;
+        this.columnFamilyName = columnFamilyName;
+        this.columnFamilyOptions = columnFamilyOptions;
+    }
+
+    // 缓存：标识 -> 枚举实例（提高查询效率）
+    private static final Map<Short, TableEnum> CODE_TO_ENUM = new HashMap<>();
+
+    static {
+        for (TableEnum table : values()) {
+            CODE_TO_ENUM.put(table.code, table);
+        }
+    }
+
+    // 根据short标识获取枚举实例
+    public static TableEnum getByCode(short code) {
+        return CODE_TO_ENUM.get(code);
+    }
+}

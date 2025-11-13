@@ -2,7 +2,6 @@ package com.bit.solana.database.rocksDb;
 
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.DbConfig;
-import com.bit.solana.structure.block.Block;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -13,10 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -53,25 +49,26 @@ public class RocksDb implements DataBase {
                 return false;
             }
 
-            // 初始化列族
+            // 初始化列族描述符列表
             List<ColumnFamilyDescriptor> cfDescriptors = new ArrayList<>();
             List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
 
-            // 添加默认列族
+            // 1. 添加默认列族（索引0）
             cfDescriptors.add(new ColumnFamilyDescriptor(
                     RocksDB.DEFAULT_COLUMN_FAMILY,
                     new ColumnFamilyOptions()
             ));
 
+            // 2. 获取自定义列族描述符（用LinkedHashMap保证顺序）
+            Map<TableEnum, ColumnFamilyDescriptor> customDescriptors = RTable.getColumnFamilyDescriptors();
+            List<TableEnum> tableEnums = new ArrayList<>(customDescriptors.keySet());
 
-            // 添加自定义表（列族）
-            for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
-                String cfName = cf.actualName;
-                ColumnFamilyOptions options = cf.options;
-                cfDescriptors.add(new ColumnFamilyDescriptor(cfName.getBytes(), options));
+            // 关键：将自定义列族描述符添加到cfDescriptors（否则不会创建）
+            for (TableEnum table : tableEnums) {
+                cfDescriptors.add(customDescriptors.get(table));
             }
 
-            // 打开数据库
+            // 3. 打开数据库（此时cfDescriptors包含：默认列族 + 所有自定义列族）
             DBOptions options = new DBOptions()
                     .setCreateIfMissing(true)
                     .setCreateMissingColumnFamilies(true)
@@ -79,21 +76,33 @@ public class RocksDb implements DataBase {
 
             db = RocksDB.open(options, dbPath, cfDescriptors, cfHandles);
 
-            // 绑定列族句柄
-            for (int i = 0; i < RTable.ColumnFamily.values().length; i++) {
-                RTable.ColumnFamily.values()[i].setHandle(cfHandles.get(i + 1));
+            // 4. 绑定列族句柄（cfHandles顺序与cfDescriptors严格一致）
+            // 校验句柄数量是否匹配（避免索引越界）
+            if (cfHandles.size() != cfDescriptors.size()) {
+                throw new RuntimeException("列族句柄数量与描述符不匹配，初始化失败");
+            }
+
+            // 自定义列族从索引1开始绑定
+            for (int i = 0; i < tableEnums.size(); i++) {
+                int handleIndex = i + 1; // 索引0是默认列族
+                if (handleIndex >= cfHandles.size()) {
+                    throw new RuntimeException("列族句柄索引越界，表：" + tableEnums.get(i));
+                }
+                TableEnum table = tableEnums.get(i);
+                ColumnFamilyHandle handle = cfHandles.get(handleIndex);
+                RTable.setColumnFamilyHandle(table, handle);
+                log.debug("绑定表[{}]的列族句柄，索引: {}", table, handleIndex);
             }
 
             // 注册关闭钩子
             Runtime.getRuntime().addShutdownHook(new Thread(this::close));
-            log.info("RocksDB创建成功，路径: {}", dbPath);
+            log.info("RocksDB创建成功，路径: {}，列族总数: {}", dbPath, cfDescriptors.size());
             return true;
         } catch (RocksDBException e) {
             log.error("创建RocksDB失败", e);
             return false;
         }
     }
-
 
     @Override
     public boolean closeDatabase() {
@@ -108,7 +117,7 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public boolean isExist(String table, byte[] key) {
+    public boolean isExist(TableEnum table, byte[] key) {
         rwLock.readLock().lock();
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
@@ -124,7 +133,7 @@ public class RocksDb implements DataBase {
 
 
     @Override
-    public void insert(String table, byte[] key, byte[] value) {
+    public void insert(TableEnum table, byte[] key, byte[] value) {
         rwLock.writeLock().lock();
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
@@ -141,7 +150,7 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public void delete(String table, byte[] key) {
+    public void delete(TableEnum table, byte[] key) {
         rwLock.writeLock().lock();
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
@@ -158,14 +167,14 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public void update(String table, byte[] key, byte[] value) {
+    public void update(TableEnum table, byte[] key, byte[] value) {
         // RocksDB的更新就是覆盖写入
         insert(table, key, value);
     }
 
 
     @Override
-    public byte[] get(String table, byte[] key) {
+    public byte[] get(TableEnum table, byte[] key) {
         rwLock.readLock().lock();
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
@@ -180,13 +189,12 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public int count(String table) {
+    public int count(TableEnum table) {
         rwLock.readLock().lock();
         RocksIterator iterator = null;
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
             if (cfHandle == null) return 0;
-
             iterator = db.newIterator(cfHandle);
             iterator.seekToFirst();
             int count = 0;
@@ -202,7 +210,7 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public void batchInsert(String table, byte[][] keys, byte[][] values) {
+    public void batchInsert(TableEnum table, byte[][] keys, byte[][] values) {
         if (keys.length != values.length) {
             throw new IllegalArgumentException("键值数组长度不匹配");
         }
@@ -232,7 +240,7 @@ public class RocksDb implements DataBase {
 
 
     @Override
-    public void batchDelete(String table, byte[][] keys) {
+    public void batchDelete(TableEnum table, byte[][] keys) {
         rwLock.writeLock().lock();
         WriteBatch writeBatch = new WriteBatch();
         WriteOptions writeOptions = new WriteOptions();
@@ -257,14 +265,14 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public void batchUpdate(String table, byte[][] keys, byte[][] values) {
+    public void batchUpdate(TableEnum table, byte[][] keys, byte[][] values) {
         // 批量更新等同于批量插入（覆盖写入）
         batchInsert(table, keys, values);
     }
 
 
     @Override
-    public byte[][] batchGet(String table, byte[][] keys) {
+    public byte[][] batchGet(TableEnum table, byte[][] keys) {
         rwLock.readLock().lock();
         try {
             ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
@@ -288,14 +296,17 @@ public class RocksDb implements DataBase {
     @Override
     public void close() {
         if (db != null) {
-            // 关闭列族句柄
-            for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
-                if (cf.getHandle() != null) {
-                    cf.getHandle().close();
+            // 从TableEnum遍历所有表，释放对应列族句柄（适配新的集中管理逻辑）
+            for (TableEnum table : TableEnum.values()) {
+                ColumnFamilyHandle handle = RTable.getColumnFamilyHandle(table);
+                if (handle != null) {
+                    handle.close();
+                    log.debug("已关闭表[{}]的列族句柄", table);
                 }
             }
             db.close();
             db = null;
+            log.info("RocksDB连接已关闭");
         }
     }
 
@@ -332,12 +343,12 @@ public class RocksDb implements DataBase {
      * 注意：实际使用时需根据 T 的类型进行反序列化（这里以 byte[] 为例，如需其他类型需扩展）
      */
     @Override
-    public <T> PageResult<T> page(String table, int pageSize, byte[] lastKey) {
+    public <T> PageResult<T> page(TableEnum table, int pageSize, byte[] lastKey) {
         // 校验参数
         if (pageSize <= 0 || pageSize > 1000) {
             throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
         }
-        if (table == null || table.isEmpty()) {
+        if (table == null) {
             throw new IllegalArgumentException("表名不能为空");
         }
 
@@ -452,13 +463,13 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public <T> List<KeyValue<T>> rangeQuery(String table, byte[] startKey, byte[] endKey) {
+    public <T> List<KeyValue<T>> rangeQuery(TableEnum table, byte[] startKey, byte[] endKey) {
         return rangeQueryWithLimit(table, startKey, endKey, Integer.MAX_VALUE); // 无限制条数
     }
 
     @Override
-    public <T> List<KeyValue<T>> rangeQueryWithLimit(String table, byte[] startKey, byte[] endKey, int limit) {
-        if (table == null || table.isEmpty() || limit <= 0) {
+    public <T> List<KeyValue<T>> rangeQueryWithLimit(TableEnum table, byte[] startKey, byte[] endKey, int limit) {
+        if (table == null  || limit <= 0) {
             throw new IllegalArgumentException("无效参数：表名不能为空或limit必须为正数");
         }
 
@@ -505,23 +516,22 @@ public class RocksDb implements DataBase {
 
 
     @Override
-    public void clearCache(String table) {
-        if (table == null || table.isEmpty()) {
+    public void clearCache(TableEnum table) {
+        if (table == null) {
             log.warn("清除缓存失败：表名不能为空");
             return;
         }
-        // 遍历缓存中属于指定表的键并移除（假设键前缀包含表信息，实际实现需根据键设计调整）
+        // 遍历缓存中属于指定表的键并移除（根据前2字节表标识匹配）
         tableCaches.asMap().keySet().removeIf(key -> {
-            // 需根据实际键的编码规则实现表名提取
-            String keyTable = extractTableFromKey(key);
+            TableEnum keyTable = extractTableFromKey(key);
             return table.equals(keyTable);
         });
         log.info("已清除表[{}]的缓存", table);
     }
 
     @Override
-    public void setCachePolicy(String table, long ttl, int maxSize) {
-        if (table == null || table.isEmpty()) {
+    public void setCachePolicy(TableEnum table, long ttl, int maxSize) {
+        if (table == null ) {
             log.warn("设置缓存策略失败：表名不能为空");
             return;
         }
@@ -541,8 +551,8 @@ public class RocksDb implements DataBase {
 
 
     @Override
-    public void refreshCache(String table, byte[] key) {
-        if (table == null || table.isEmpty() || key == null) {
+    public void refreshCache(TableEnum table, byte[] key) {
+        if (table == null  || key == null) {
             log.warn("刷新缓存失败：表名或键不能为空");
             return;
         }
@@ -653,12 +663,12 @@ public class RocksDb implements DataBase {
     @Override
     public List<String> listAllTables() {
         List<String> tables = new ArrayList<>();
-        for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
-            tables.add(cf.actualName);
+        // 从 TableEnum 中获取所有表的列族名称（唯一数据源）
+        for (TableEnum table : TableEnum.values()) {
+            tables.add(table.getColumnFamilyName());
         }
         return tables;
     }
-
 
     @Override
     public boolean checkHealth() {
@@ -684,8 +694,8 @@ public class RocksDb implements DataBase {
 
 
     @Override
-    public void iterate(String table, KeyValueHandler handler) {
-        if (table == null || table.isEmpty() || handler == null) {
+    public void iterate(TableEnum table, KeyValueHandler handler) {
+        if (table == null || handler == null) {
             log.warn("迭代表失败：表名或处理器不能为空");
             return;
         }
@@ -717,8 +727,8 @@ public class RocksDb implements DataBase {
     }
 
     @Override
-    public void batchDeleteRange(String table, byte[] startKey, byte[] endKey) {
-        if (table == null || table.isEmpty() || startKey == null || endKey == null) {
+    public void batchDeleteRange(TableEnum table, byte[] startKey, byte[] endKey) {
+        if (table == null || startKey == null || endKey == null) {
             log.warn("批量删除范围失败：参数不能为空");
             return;
         }
@@ -768,20 +778,20 @@ public class RocksDb implements DataBase {
     /**
      * 获取表对应的列族句柄
      */
-    private ColumnFamilyHandle getColumnFamilyHandle(String table) {
-        return RTable.getColumnFamilyHandleByTable(table);
+    private ColumnFamilyHandle getColumnFamilyHandle(TableEnum table) {
+        return RTable.getColumnFamilyHandle(table);
     }
 
     // 内部静态类：封装事务中的单个操作
     public static class DbOperation {
         public enum OpType { INSERT, UPDATE, DELETE }
 
-        public final String table; // 表名（列族）
-        public final byte[] key;   // 键
-        public final byte[] value; // 值（DELETE 操作可为 null）
-        public final OpType type;  // 操作类型
+        public final TableEnum table; // 表枚举
+        public final byte[] key;      // 键
+        public final byte[] value;    // 值（DELETE 操作可为 null）
+        public final OpType type;     // 操作类型
 
-        public DbOperation(String table, byte[] key, byte[] value, OpType type) {
+        public DbOperation(TableEnum table, byte[] key, byte[] value, OpType type) {
             this.table = table;
             this.key = key;
             this.value = value;
@@ -790,38 +800,32 @@ public class RocksDb implements DataBase {
     }
 
     /**
-     * 从缓存键中提取表名（缓存键格式：表名UTF-8字节 + 0x00分隔符 + 原始业务键）
+     * 从缓存键中提取表枚举（缓存键格式：2字节表标识(short) + 原始业务键）
+     * 表标识与TableEnum中的code字段对应（short类型，2字节）
      * @param key 缓存键（byte[] 类型）
-     * @return 提取的表名，解析失败返回空字符串
+     * @return 提取的表枚举，解析失败返回null
      */
-    private String extractTableFromKey(byte[] key) {
-        if (key == null || key.length == 0) {
-            log.warn("缓存键为空，无法提取表名");
-            return "";
+    private TableEnum extractTableFromKey(byte[] key) {
+        if (key == null || key.length < 2) {
+            log.warn("缓存键为空或长度不足2字节，无法提取表标识");
+            return null;
         }
 
-        // 查找分隔符（0x00）的位置
-        int separatorIndex = -1;
-        for (int i = 0; i < key.length; i++) {
-            if (key[i] == 0x00) { // 0x00 作为表名和业务键的分隔符
-                separatorIndex = i;
-                break;
-            }
-        }
-
-        // 无分隔符 = 键格式非法，返回空
-        if (separatorIndex == -1) {
-            log.debug("缓存键格式非法（无分隔符），键长度：{}", key.length);
-            return "";
-        }
-
-        // 提取分隔符前的字节作为表名（UTF-8解码）
+        // 前2字节为表标识（short类型），转换为short值
+        short tableCode;
         try {
-            byte[] tableBytes = Arrays.copyOfRange(key, 0, separatorIndex);
-            return new String(tableBytes, StandardCharsets.UTF_8);
+            // 字节数组转short（大端模式，与编码时保持一致）
+            tableCode = (short) ((key[0] & 0xFF) << 8 | (key[1] & 0xFF));
         } catch (Exception e) {
-            log.error("解析缓存键表名失败", e);
-            return "";
+            log.error("解析表标识失败（字节转short错误）", e);
+            return null;
         }
+
+        // 根据表标识获取对应的TableEnum
+        TableEnum table = TableEnum.getByCode(tableCode);
+        if (table == null) {
+            log.warn("未找到与表标识[{}]匹配的TableEnum", tableCode);
+        }
+        return table;
     }
 }

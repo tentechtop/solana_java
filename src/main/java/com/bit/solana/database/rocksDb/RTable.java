@@ -1,77 +1,79 @@
 package com.bit.solana.database.rocksDb;
 
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.ColumnFamilyOptions;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Slf4j
 public class RTable {
-    // 核心：表名 -> 列族 映射（表名即ColumnFamily的actualName）
-    private static  Map<String, ColumnFamily> tableToCfMap = new HashMap<>();
+    // 核心：表枚举 -> 列族句柄映射（仅维护句柄，不重复定义表信息）
+    private static final Map<TableEnum, ColumnFamilyHolder> tableToCfMap = new HashMap<>();
 
-    // 枚举ColumnFamily：补充getActualName方法（原有字段不变）
-
-    enum ColumnFamily {
-        //链信息
-        CHAIN("CHAIN", "chain",new ColumnFamilyOptions()),
-
-        //区块信息
-        BLOCK("BLOCK", "block",new ColumnFamilyOptions()
-                .setTableFormatConfig(new BlockBasedTableConfig()
-                        .setBlockCacheSize(128 * 1024 * 1024)
-                        .setCacheIndexAndFilterBlocks(true))),
-
-        ;
-        final String logicalName;
-        final String actualName;
-        final ColumnFamilyOptions options;
-        ColumnFamily(String logicalName, String actualName, ColumnFamilyOptions options) {
-            this.logicalName = logicalName;
-            this.actualName = actualName;
-            this.options = options;
-        }
-        @Setter
-        @Getter
-        private ColumnFamilyHandle handle;
+    // 内部holder：仅存储列族句柄（表信息从TableEnum获取）
+    private static class ColumnFamilyHolder {
+        @Setter @Getter
+        private ColumnFamilyHandle handle;  // 列族句柄（动态绑定）
     }
 
-    // 关键：静态代码块，类加载时自动执行，初始化映射
+    // 静态初始化：从TableEnum同步所有表，初始化映射（无需硬编码列族）
     static {
-        for (ColumnFamily cf : ColumnFamily.values()) {
-            tableToCfMap.put(cf.actualName, cf);
+        for (TableEnum table : TableEnum.values()) {
+            tableToCfMap.put(table, new ColumnFamilyHolder());
         }
         log.info("RTable静态初始化完成，加载列族数量：{}", tableToCfMap.size());
     }
 
-
     /**
-     * 初始化：将所有ColumnFamily枚举值添加到tableToCfMap中
+     * 根据表枚举获取列族句柄
      */
-    public RTable() {
-        // 遍历ColumnFamily所有枚举值，以actualName为key，枚举实例为value存入map
-        for (ColumnFamily cf : ColumnFamily.values()) {
-            tableToCfMap.put(cf.actualName, cf);
+    public static ColumnFamilyHandle getColumnFamilyHandle(TableEnum tableEnum) {
+        if (tableEnum == null) {
+            log.warn("表枚举为空，无法获取列族句柄");
+            return null;
         }
-        log.info("RTable初始化完成，加载列族数量：{}", tableToCfMap.size());
+        ColumnFamilyHolder holder = tableToCfMap.get(tableEnum);
+        return holder != null ? holder.getHandle() : null;
     }
 
     /**
-     * 获取表对应的列族句柄
+     * 绑定列族句柄（数据库初始化时调用）
+     * @param tableEnum 表枚举
+     * @param handle 列族句柄
      */
-    public static ColumnFamilyHandle getColumnFamilyHandleByTable(String table) {
-        // 从map中根据表名（actualName）获取对应的ColumnFamily
-        ColumnFamily cf = tableToCfMap.get(table);
-        if (cf != null) {
-            return cf.getHandle(); // 返回列族句柄
+    public static void setColumnFamilyHandle(TableEnum tableEnum, ColumnFamilyHandle handle) {
+        if (tableEnum == null || handle == null) {
+            log.warn("绑定列族句柄失败：表枚举或句柄为空");
+            return;
         }
-        log.warn("表不存在: {}", table);
-        return null;
+        ColumnFamilyHolder holder = tableToCfMap.get(tableEnum);
+        if (holder != null) {
+            holder.setHandle(handle);
+        }
     }
 
+    /**
+     * 获取所有列族描述符（从TableEnum动态生成，无需硬编码）
+     */
+    public static Map<TableEnum, ColumnFamilyDescriptor> getColumnFamilyDescriptors() {
+        // 使用 LinkedHashMap 保持 TableEnum 定义的顺序
+        Map<TableEnum, ColumnFamilyDescriptor> descriptors = new LinkedHashMap<>();
+        for (TableEnum table : TableEnum.values()) {
+            descriptors.put(
+                    table,
+                    new ColumnFamilyDescriptor(
+                            table.getColumnFamilyName().getBytes(StandardCharsets.UTF_8), // 显式指定编码
+                            table.getColumnFamilyOptions()
+                    )
+            );
+        }
+        return descriptors;
+    }
 }

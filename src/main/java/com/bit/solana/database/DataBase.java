@@ -2,7 +2,7 @@ package com.bit.solana.database;
 
 import com.bit.solana.database.rocksDb.PageResult;
 import com.bit.solana.database.rocksDb.RocksDb;
-import lombok.Data;
+import com.bit.solana.database.rocksDb.TableEnum;
 
 import java.util.List;
 
@@ -32,7 +32,7 @@ public interface DataBase {
      * @param key
      * @return
      */
-    boolean isExist(String table,byte[] key);
+    boolean isExist(TableEnum table, byte[] key);
 
     /**
      * 插入一条数据
@@ -40,14 +40,14 @@ public interface DataBase {
      * @param key
      * @param value
      */
-    void insert(String table,byte[] key, byte[] value);
+    void insert(TableEnum table,byte[] key, byte[] value);
 
     /**
      * 输出一条数据
      * @param table
      * @param key
      */
-    void delete(String table,byte[] key);
+    void delete(TableEnum table,byte[] key);
 
     /**
      * 修改一条数据
@@ -55,7 +55,7 @@ public interface DataBase {
      * @param key
      * @param value
      */
-    void update(String table,byte[] key, byte[] value);
+    void update(TableEnum table,byte[] key, byte[] value);
 
     /**
      * 获取一条数据
@@ -63,20 +63,20 @@ public interface DataBase {
      * @param key
      * @return
      */
-    byte[] get(String table,byte[] key);
+    byte[] get(TableEnum table,byte[] key);
 
     /**
      * 数据数量
      * @param table
      * @return
      */
-    int count(String table);
+    int count(TableEnum table);
 
     //在一个事务内完成 自动提交
-    void batchInsert(String table,byte[][] keys, byte[][] values);
-    void batchDelete(String table,byte[][] keys);
-    void batchUpdate(String table,byte[][] keys, byte[][] values);
-    byte[][] batchGet(String table,byte[][] keys);
+    void batchInsert(TableEnum table,byte[][] keys, byte[][] values);
+    void batchDelete(TableEnum table,byte[][] keys);
+    void batchUpdate(TableEnum table,byte[][] keys, byte[][] values);
+    byte[][] batchGet(TableEnum table,byte[][] keys);
     void close();
     void compact(byte[] start, byte[] limit);
 
@@ -88,7 +88,7 @@ public interface DataBase {
      * @param <T> 分页数据的类型（如 byte[]、UTXO、Block 等）
      * @return 分页结果（包含当前页数据、最后一个键、是否为最后一页）
      */
-    <T> PageResult<T> page(String table, int pageSize, byte[] lastKey);
+    <T> PageResult<T> page(TableEnum table, int pageSize, byte[] lastKey);
 
 
     /**
@@ -105,7 +105,7 @@ public interface DataBase {
      * @param <T> 数据类型
      * @return 范围内的所有数据（键值对列表）
      */
-    <T> List<KeyValue<T>> rangeQuery(String table, byte[] startKey, byte[] endKey);
+    <T> List<KeyValue<T>> rangeQuery(TableEnum table, byte[] startKey, byte[] endKey);
 
     /**
      * 按键范围查询并限制条数（避免一次性返回过多数据）
@@ -116,7 +116,7 @@ public interface DataBase {
      * @param <T> 数据类型
      * @return 范围内的有限数据
      */
-    <T> List<KeyValue<T>> rangeQueryWithLimit(String table, byte[] startKey, byte[] endKey, int limit);
+    <T> List<KeyValue<T>> rangeQueryWithLimit(TableEnum table, byte[] startKey, byte[] endKey, int limit);
 
     // 辅助类：封装键值对（用于范围查询返回结果）
     class KeyValue<T> {
@@ -133,7 +133,7 @@ public interface DataBase {
      * 清理指定表的本地缓存（如Caffeine缓存）
      * @param table 表名（null 表示清理所有表缓存）
      */
-    void clearCache(String table);
+    void clearCache(TableEnum table);
 
     /**
      * 设置表的缓存策略（如过期时间、最大容量）
@@ -141,14 +141,14 @@ public interface DataBase {
      * @param ttl 缓存存活时间（毫秒，0 表示永不过期）
      * @param maxSize 最大缓存条数
      */
-    void setCachePolicy(String table, long ttl, int maxSize);
+    void setCachePolicy(TableEnum table, long ttl, int maxSize);
 
     /**
      * 强制刷新缓存（从数据库同步最新数据到缓存）
      * @param table 表名
      * @param key 键（null 表示刷新表内所有缓存键）
      */
-    void refreshCache(String table, byte[] key);
+    void refreshCache(TableEnum table, byte[] key);
 
 
     /**
@@ -197,7 +197,7 @@ public interface DataBase {
      * @param table 表名
      * @param handler 迭代器处理器（处理每条键值对）
      */
-    void iterate(String table, KeyValueHandler handler);
+    void iterate(TableEnum table, KeyValueHandler handler);
 
     // 迭代器处理器接口（回调方式处理数据）
     @FunctionalInterface
@@ -212,7 +212,7 @@ public interface DataBase {
      * @param startKey 起始键（包含）
      * @param endKey 结束键（不包含）
      */
-    void batchDeleteRange(String table, byte[] startKey, byte[] endKey);
+    void batchDeleteRange(TableEnum table, byte[] startKey, byte[] endKey);
 
     /**
      * 开启数据库 WAL（Write-Ahead Log）日志（提升崩溃恢复能力）
