@@ -17,7 +17,9 @@ public enum TableEnum {
     CHAIN(
             (short) 1,
             "chain",  // 列族实际存储名称
-            new ColumnFamilyOptions()  // 列族配置
+            new ColumnFamilyOptions(),  // 列族配置
+            100,  //MB
+            60 * 60
     ),
     // 区块信息表：定义表标识、列族名称、列族配置
     BLOCK(
@@ -26,18 +28,24 @@ public enum TableEnum {
             new ColumnFamilyOptions()  // 列族配置
                     .setTableFormatConfig(new BlockBasedTableConfig()
                             .setBlockCacheSize(128 * 1024 * 1024)  // 128MB缓存
-                            .setCacheIndexAndFilterBlocks(true))
+                            .setCacheIndexAndFilterBlocks(true)),
+            100, //内存缓存 MB
+            60 * 60
     );
 
     @Getter private final short code;  // 表唯一标识（short类型）
     @Getter private final String columnFamilyName;  // 列族实际存储名称
     @Getter private final ColumnFamilyOptions columnFamilyOptions;  // 列族配置
+    @Getter private final long cacheSize;  // 缓存大小
+    @Getter private final long cacheTL;  // 缓存时长 单位秒
 
     // 构造方法：集中初始化表的所有元信息
-    TableEnum(short code, String columnFamilyName, ColumnFamilyOptions columnFamilyOptions) {
+    TableEnum(short code, String columnFamilyName, ColumnFamilyOptions columnFamilyOptions,long cacheSize,long cacheTL) {
         this.code = code;
         this.columnFamilyName = columnFamilyName;
         this.columnFamilyOptions = columnFamilyOptions;
+        this.cacheSize = cacheSize;
+        this.cacheTL = cacheTL;
     }
 
     // 缓存：标识 -> 枚举实例（提高查询效率）

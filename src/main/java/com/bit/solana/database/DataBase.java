@@ -199,12 +199,6 @@ public interface DataBase {
      */
     void iterate(TableEnum table, KeyValueHandler handler);
 
-    // 迭代器处理器接口（回调方式处理数据）
-    @FunctionalInterface
-    interface KeyValueHandler {
-        // 返回 false 表示停止迭代
-        boolean handle(byte[] key, byte[] value);
-    }
 
     /**
      * 批量删除指定范围的键（比逐条删除更高效）

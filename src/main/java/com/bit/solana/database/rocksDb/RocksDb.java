@@ -2,6 +2,7 @@ package com.bit.solana.database.rocksDb;
 
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.DbConfig;
+import com.bit.solana.database.KeyValueHandler;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -24,8 +25,18 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 @Data
 public class RocksDb implements DataBase {
 
-    // 类中添加缓存实例（全局唯一）
-    private Cache<byte[], byte[]> tableCaches;
+    /**
+     * 高写入吞吐量（区块、交易等高频写入）；
+     * 不可篡改性（数据一旦写入不轻易删除，仅追加）；
+     * 范围查询高效（如按区块高度、时间范围查询）；
+     * 数据一致性（尤其在节点同步场景）；
+     * 持久化可靠性（避免数据丢失）。
+     */
+
+    // 类中添加缓存实例（全局唯一）加速高频访问的完整业务对象查询  按照表隔离
+    private final Map<TableEnum, Cache<byte[], byte[]>> tableCaches = new ConcurrentHashMap<>();
+
+
     private RocksDB db;
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
     private String dbPath;
@@ -37,10 +48,15 @@ public class RocksDb implements DataBase {
             return false;
         }
         dbPath = path;
-        tableCaches = Caffeine.newBuilder()
-                .maximumSize(100_00)
-                .expireAfterWrite(10, TimeUnit.MINUTES)
-                .build();
+
+        // 初始化时为每个表创建缓存（在createDatabase中）
+        for (TableEnum table : TableEnum.values()) {
+            Cache<byte[], byte[]> cache = Caffeine.newBuilder()
+                    .maximumSize(getCacheMaxSize(table)) // 按表配置大小
+                    .expireAfterWrite(getCacheTtl(table), TimeUnit.MINUTES) // 按表配置过期时间
+                    .build();
+            tableCaches.put(table, cache);
+        }
 
         try {
             File dbDir = new File(dbPath);
@@ -517,63 +533,18 @@ public class RocksDb implements DataBase {
 
     @Override
     public void clearCache(TableEnum table) {
-        if (table == null) {
-            log.warn("清除缓存失败：表名不能为空");
-            return;
-        }
-        // 遍历缓存中属于指定表的键并移除（根据前2字节表标识匹配）
-        tableCaches.asMap().keySet().removeIf(key -> {
-            TableEnum keyTable = extractTableFromKey(key);
-            return table.equals(keyTable);
-        });
-        log.info("已清除表[{}]的缓存", table);
+
     }
 
     @Override
     public void setCachePolicy(TableEnum table, long ttl, int maxSize) {
-        if (table == null ) {
-            log.warn("设置缓存策略失败：表名不能为空");
-            return;
-        }
-        if (ttl <= 0 || maxSize <= 0) {
-            log.warn("设置缓存策略失败：ttl和maxSize必须为正数");
-            return;
-        }
-        // 重新构建缓存实例（实际应用中可能需要按表维护多个缓存）
-        this.tableCaches = Caffeine.newBuilder()
-                .maximumSize(maxSize)
-                .expireAfterWrite(ttl, TimeUnit.MILLISECONDS)
-                .removalListener((RemovalListener<byte[], byte[]>) (key, value, cause) ->
-                        log.debug("缓存移除 - 表: {}, 键: {}, 原因: {}", table, Arrays.toString(key), cause))
-                .build();
-        log.info("已设置表[{}]的缓存策略：ttl={}ms, maxSize={}", table, ttl, maxSize);
+
     }
 
 
     @Override
     public void refreshCache(TableEnum table, byte[] key) {
-        if (table == null  || key == null) {
-            log.warn("刷新缓存失败：表名或键不能为空");
-            return;
-        }
-        try {
-            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
-            if (cfHandle == null) {
-                log.warn("刷新缓存失败：表[{}]不存在", table);
-                return;
-            }
-            // 从数据库读取最新值并更新缓存
-            byte[] value = db.get(cfHandle, key);
-            if (value != null) {
-                tableCaches.put(key, value);
-                log.debug("已刷新表[{}]中键[{}]的缓存", table, Arrays.toString(key));
-            } else {
-                tableCaches.invalidate(key);
-                log.debug("表[{}]中键[{}]不存在，已移除缓存", table, Arrays.toString(key));
-            }
-        } catch (RocksDBException e) {
-            log.error("刷新缓存失败", e);
-        }
+
     }
 
     private final ConcurrentHashMap<String, WriteBatch> transactionMap = new ConcurrentHashMap<>();
@@ -827,5 +798,14 @@ public class RocksDb implements DataBase {
             log.warn("未找到与表标识[{}]匹配的TableEnum", tableCode);
         }
         return table;
+    }
+
+    // 示例：区块表缓存更大、过期时间更长，账户表按需调整
+    private long getCacheMaxSize(TableEnum table) {
+        return table.getCacheSize(); // 区块表缓存更多
+    }
+
+    private long getCacheTtl(TableEnum table) {
+        return table.getCacheTL(); // 区块表缓存更多
     }
 }

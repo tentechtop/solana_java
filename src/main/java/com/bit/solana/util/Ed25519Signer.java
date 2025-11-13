@@ -1,6 +1,8 @@
 package com.bit.solana.util;
 
 import com.bit.solana.structure.key.KeyInfo;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
@@ -8,28 +10,32 @@ import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Hex;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
-import static org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey;
 
 
 @Slf4j
 public class Ed25519Signer {
     // 静态代码块：注册BouncyCastle Provider（优先于系统默认）
+    // 签名缓存：key=公钥哈希+数据哈希（合并为字符串），value=签名结果（64字节）
+    private static final com.github.benmanes.caffeine.cache.Cache<String, byte[]> SIGNATURE_CACHE;
+
     static {
         Security.addProvider(new BouncyCastleProvider());
+        SIGNATURE_CACHE   = Caffeine.newBuilder()
+                .maximumSize(100_000) // 最大缓存10万条签名
+                .expireAfterWrite(5, TimeUnit.MINUTES) // 5分钟未访问则淘汰
+                .recordStats() // 启用统计（便于监控命中率）
+                .build();
     }
 
     // Ed25519核心密钥长度（公钥/私钥均为32字节）
@@ -257,7 +263,6 @@ public class Ed25519Signer {
     }
 
 
-
     // 在 Ed25519Signer 中添加：
     /**
      * 从 Ed25519 私钥（32字节）派生公钥（32字节）
@@ -273,8 +278,115 @@ public class Ed25519Signer {
         return publicKeyParams.getEncoded();
     }
 
+    // ------------------------------ 带缓存的签名/验签方法 ------------------------------
 
+    /**
+     * 带缓存的Ed25519签名：优先从缓存获取，未命中则签名并缓存
+     * @param privateKey Ed25519私钥
+     * @param data 待签名原始数据
+     * @return 签名结果（64字节）
+     */
+    public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
+        // 1. 生成缓存键：公钥（从私钥派生）+ 数据哈希
+        byte[] publicKeyBytes = derivePublicKeyFromPrivateKey(extractPrivateKeyCore(privateKey));
+        String cacheKey = generateCacheKey(publicKeyBytes, data);
 
+        // 2. 尝试从缓存获取
+        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
+        if (cachedSignature != null) {
+            return cachedSignature; // 缓存命中
+        }
+
+        // 3. 缓存未命中，执行签名并缓存结果
+        byte[] signature = applySignature(privateKey, data);
+        SIGNATURE_CACHE.put(cacheKey, signature);
+        return signature;
+    }
+
+    /**
+     * 带缓存的Ed25519验签：优先从缓存获取签名，未命中则执行验签
+     * @param publicKey Ed25519公钥
+     * @param data 原始数据
+     * @param signature 签名结果（64字节）
+     * @return true=验签成功，false=验签失败
+     */
+    public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
+        // 1. 生成缓存键：公钥 + 数据哈希
+        byte[] publicKeyBytes = extractPublicKeyCore(publicKey); // 提取32字节核心公钥
+        String cacheKey = generateCacheKey(publicKeyBytes, data);
+
+        // 2. 检查缓存中是否存在匹配的签名
+        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
+        if (cachedSignature != null) {
+            // 缓存中存在签名，直接对比签名是否一致（无需重新验签）
+            return Arrays.equals(cachedSignature, signature);
+        }
+
+        // 3. 缓存未命中，执行验签（不缓存验签结果，仅缓存签名）
+        return verifySignature(publicKey, data, signature);
+    }
+
+    // ------------------------------ 缓存辅助方法 ------------------------------
+
+    /**
+     * 生成缓存键：公钥哈希（前16字节） + 数据哈希（SHA-256前16字节），用冒号分隔
+     * 注：哈希压缩是为了减少键的长度，避免内存占用过大
+     */
+    private static String generateCacheKey(byte[] publicKeyBytes, byte[] data) {
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+
+            // 公钥哈希（取前16字节）
+            byte[] pubHash = sha256.digest(publicKeyBytes);
+            byte[] pubHashShort = Arrays.copyOfRange(pubHash, 0, 16);
+
+            // 数据哈希（取前16字节）
+            byte[] dataHash = sha256.digest(data);
+            byte[] dataHashShort = Arrays.copyOfRange(dataHash, 0, 16);
+
+            // 转换为十六进制字符串，用冒号分隔
+            return Hex.toHexString(pubHashShort) + ":" + Hex.toHexString(dataHashShort);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("生成缓存键失败", e);
+        }
+    }
+
+    /**
+     * 从公钥对象中提取32字节核心公钥（剔除X.509头部）
+     */
+    public static byte[] extractPublicKeyCore(PublicKey publicKey) {
+        byte[] encoded = publicKey.getEncoded();
+        // X.509编码公钥应为44字节：12字节头 + 32字节核心
+        if (encoded.length != X509_HEADER_LENGTH + CORE_KEY_LENGTH) {
+            throw new IllegalArgumentException("无效的Ed25519公钥编码，长度应为44字节");
+        }
+        // 截取后32字节作为核心公钥
+        byte[] core = new byte[CORE_KEY_LENGTH];
+        System.arraycopy(encoded, X509_HEADER_LENGTH, core, 0, CORE_KEY_LENGTH);
+        return core;
+    }
+
+    /**
+     * 获取缓存统计信息（用于监控）
+     */
+    public static String getCacheStats() {
+        CacheStats stats = SIGNATURE_CACHE.stats();
+        return String.format(
+                "签名缓存统计：命中率=%.2f%%, 总请求数=%d, 命中数=%d, 未命中数=%d",
+                stats.hitRate() * 100,
+                stats.requestCount(),
+                stats.hitCount(),
+                stats.missCount()
+        );
+    }
+
+    /**
+     * 手动清理缓存（如链重组时）
+     */
+    public static void clearCache() {
+        SIGNATURE_CACHE.invalidateAll();
+        log.info("签名缓存已清空");
+    }
 
     // ------------------------------ 测试方法 ------------------------------
 

@@ -110,9 +110,6 @@ public class BlockChainImpl implements BlockChain {
 
 
 
-
-
-
     //数据源方法
     @Override
     public Block getBlockByHash(byte[] hash) {
