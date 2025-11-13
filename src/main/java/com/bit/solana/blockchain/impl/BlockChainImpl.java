@@ -118,6 +118,10 @@ public class BlockChainImpl implements BlockChain {
 
     @Override
     public byte[] getBlockHashByHeight(long height) {
+        //TODO
+        //这个高度不能超过最新的顶端 防止攻击
+
+
         return null;
     }
 

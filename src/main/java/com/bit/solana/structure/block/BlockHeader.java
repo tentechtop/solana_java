@@ -1,6 +1,7 @@
 package com.bit.solana.structure.block;
 
 import com.bit.solana.common.*;
+import com.google.common.hash.BloomFilter;
 import lombok.Data;
 
 /**
@@ -95,6 +96,20 @@ public class BlockHeader {
      * 作用：交易费用计算规则的哈希，确保全网按统一规则计算交易费用
      */
     private FeeCalculatorHash feeCalculatorHash;
+
+
+    /**
+     * 在区块链中，为单个区块的 5000 笔交易构建布隆过滤器并嵌入区块头是常见设计（如以太坊的区块布隆过滤器）。其大小可通过布隆过滤器的数学公式精确计算，结果约为 15~20KB
+     * 要用于快速判断 “某笔交易是否在区块中”，查询对象是交易哈希（32 字节固定长度）
+     */
+    BloomFilter<byte[]> txBloomFilter;//交易过滤
+
+    /**
+     * 主要用于快速定位 “某合约的某事件是否在区块中”，查询对象是合约地址、事件主题（Topic）
+     * 等（如 ERC20 转账事件的Transfer主题）。
+     */
+    BloomFilter<byte[]> logBloomFilter;//交易过滤
+
 
     public long getHeaderSize() {
         return 0;

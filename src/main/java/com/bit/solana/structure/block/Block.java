@@ -1,6 +1,7 @@
 package com.bit.solana.structure.block;
 
 import com.bit.solana.common.BlockHash;
+import com.google.common.hash.BloomFilter;
 import lombok.Data;
 
 import java.util.List;
@@ -141,4 +142,6 @@ public class Block {
      * 作用：节点内存不足时，优先回收非热点区块（如已归档的旧区块），保留热点区块（如当前slot附近的区块）
      */
     private boolean isHotBlock;
+
+
 }
