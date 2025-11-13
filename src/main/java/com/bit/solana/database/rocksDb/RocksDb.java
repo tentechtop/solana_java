@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -39,11 +41,17 @@ public class RocksDb implements DataBase {
             List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
 
             // 添加默认列族
+            cfDescriptors.add(new ColumnFamilyDescriptor(
+                    RocksDB.DEFAULT_COLUMN_FAMILY,
+                    new ColumnFamilyOptions()
+            ));
 
 
             // 添加自定义表（列族）
             for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
-
+                String cfName = cf.actualName;
+                ColumnFamilyOptions options = cf.options;
+                cfDescriptors.add(new ColumnFamilyDescriptor(cfName.getBytes(), options));
             }
 
             // 打开数据库
@@ -100,56 +108,404 @@ public class RocksDb implements DataBase {
 
     @Override
     public void insert(String table, byte[] key, byte[] value) {
-
+        rwLock.writeLock().lock();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                throw new IllegalArgumentException("表不存在: " + table);
+            }
+            db.put(cfHandle, key, value);
+        } catch (RocksDBException e) {
+            log.error("插入数据失败, table={}", table, e);
+            throw new RuntimeException("插入数据失败", e);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
     }
 
     @Override
     public void delete(String table, byte[] key) {
-
+        rwLock.writeLock().lock();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                throw new IllegalArgumentException("表不存在: " + table);
+            }
+            db.delete(cfHandle, key);
+        } catch (RocksDBException e) {
+            log.error("删除数据失败, table={}", table, e);
+            throw new RuntimeException("删除数据失败", e);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
     }
 
     @Override
     public void update(String table, byte[] key, byte[] value) {
-
+        // RocksDB的更新就是覆盖写入
+        insert(table, key, value);
     }
+
 
     @Override
     public byte[] get(String table, byte[] key) {
-        return new byte[0];
+        rwLock.readLock().lock();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) return null;
+            return db.get(cfHandle, key);
+        } catch (RocksDBException e) {
+            log.error("获取数据失败, table={}", table, e);
+            throw new RuntimeException("获取数据失败", e);
+        } finally {
+            rwLock.readLock().unlock();
+        }
     }
 
     @Override
     public int count(String table) {
-        return 0;
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) return 0;
+
+            iterator = db.newIterator(cfHandle);
+            iterator.seekToFirst();
+            int count = 0;
+            while (iterator.isValid()) {
+                count++;
+                iterator.next();
+            }
+            return count;
+        } finally {
+            if (iterator != null) iterator.close();
+            rwLock.readLock().unlock();
+        }
     }
 
     @Override
     public void batchInsert(String table, byte[][] keys, byte[][] values) {
+        if (keys.length != values.length) {
+            throw new IllegalArgumentException("键值数组长度不匹配");
+        }
 
+        rwLock.writeLock().lock();
+        WriteBatch writeBatch = new WriteBatch();
+        WriteOptions writeOptions = new WriteOptions();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                throw new IllegalArgumentException("表不存在: " + table);
+            }
+
+            for (int i = 0; i < keys.length; i++) {
+                writeBatch.put(cfHandle, keys[i], values[i]);
+            }
+            db.write(writeOptions, writeBatch);
+        } catch (RocksDBException e) {
+            log.error("批量插入失败, table={}", table, e);
+            throw new RuntimeException("批量插入失败", e);
+        } finally {
+            writeBatch.close();
+            writeOptions.close();
+            rwLock.writeLock().unlock();
+        }
     }
+
 
     @Override
     public void batchDelete(String table, byte[][] keys) {
+        rwLock.writeLock().lock();
+        WriteBatch writeBatch = new WriteBatch();
+        WriteOptions writeOptions = new WriteOptions();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                throw new IllegalArgumentException("表不存在: " + table);
+            }
 
+            for (byte[] key : keys) {
+                writeBatch.delete(cfHandle, key);
+            }
+            db.write(writeOptions, writeBatch);
+        } catch (RocksDBException e) {
+            log.error("批量删除失败, table={}", table, e);
+            throw new RuntimeException("批量删除失败", e);
+        } finally {
+            writeBatch.close();
+            writeOptions.close();
+            rwLock.writeLock().unlock();
+        }
     }
 
     @Override
     public void batchUpdate(String table, byte[][] keys, byte[][] values) {
-
+        // 批量更新等同于批量插入（覆盖写入）
+        batchInsert(table, keys, values);
     }
+
 
     @Override
     public byte[][] batchGet(String table, byte[][] keys) {
-        return new byte[0][];
+        rwLock.readLock().lock();
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                return new byte[0][];
+            }
+
+            List<byte[]> results = new ArrayList<>(keys.length);
+            for (byte[] key : keys) {
+                results.add(db.get(cfHandle, key));
+            }
+            return results.toArray(new byte[0][]);
+        } catch (RocksDBException e) {
+            log.error("批量获取失败, table={}", table, e);
+            throw new RuntimeException("批量获取失败", e);
+        } finally {
+            rwLock.readLock().unlock();
+        }
     }
 
     @Override
     public void close() {
+        if (db != null) {
+            // 关闭列族句柄
+            for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
+                if (cf.getHandle() != null) {
+                    cf.getHandle().close();
+                }
+            }
+            db.close();
+            db = null;
+        }
+    }
+
+    /**
+     * 这段这段代码是 RocksDB 数据库中手动触发范围压缩（Compaction） 的实现方法。RocksDB
+     * 作为 LSM-Tree（日志结构合并树）架构的嵌入式数据库，写入数据时会先缓存到内存，达到阈值后刷盘为 SST 文件，
+     * 随着数据量增长，SST 文件会越来越多，查
+     * 询性能会下降。Compaction（压缩） 是 RocksDB 的核心机制，用于合并小文件、清除过期 / 删除数据、优化查询效率。
+     * @param start
+     * @param limit
+     */
+    @Override
+    public void compact(byte[] start, byte[] limit) {
+        rwLock.writeLock().lock();
+        try {
+            if (db == null) return;
+            db.compactRange(start, limit);
+        } catch (RocksDBException e) {
+            throw new RuntimeException(e);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * 分页查询
+     *
+     * @param pageSize
+     * @param lastKey
+     * @return
+     */
+    /**
+     * 实现泛型分页查询
+     * 注意：实际使用时需根据 T 的类型进行反序列化（这里以 byte[] 为例，如需其他类型需扩展）
+     */
+    @Override
+    public <T> PageResult<T> page(String table, int pageSize, byte[] lastKey) {
+        // 校验参数
+        if (pageSize <= 0 || pageSize > 1000) {
+            throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
+        }
+        if (table == null || table.isEmpty()) {
+            throw new IllegalArgumentException("表名不能为空");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                // 返回空结果（泛型为 T，这里用 Collections.emptyList() 兼容）
+                return new PageResult<>(Collections.emptyList(), null, true);
+            }
+
+            iterator = db.newIterator(cfHandle);
+            List<T> dataList = new ArrayList<>(pageSize);
+            byte[] currentLastKey = null;
+
+            // 定位迭代器起始位置
+            if (lastKey != null && lastKey.length > 0) {
+                iterator.seek(lastKey);
+                if (iterator.isValid() && Arrays.equals(iterator.key(), lastKey)) {
+                    iterator.next(); // 跳过上一页最后一个键
+                }
+            } else {
+                iterator.seekToFirst(); // 第一页从开头开始
+            }
+
+            // 读取 pageSize 条数据
+            int count = 0;
+            while (iterator.isValid() && count < pageSize) {
+                byte[] key = iterator.key();
+                byte[] value = iterator.value();
+
+                // 关键：根据 T 的类型处理 value（这里以 byte[] 为例，如需其他类型需反序列化）
+                // 若 T 是自定义对象（如 UTXO），需用 SerializeUtils.deSerialize(value) 转换
+                T data = (T) value; // 类型转换（实际使用时需根据 T 调整，避免强转异常）
+                dataList.add(data);
+
+                currentLastKey = key.clone(); // 保存当前页最后一个键
+                iterator.next();
+                count++;
+            }
+
+            // 判断是否为最后一页
+            boolean isLastPage = !iterator.isValid();
+            return new PageResult<>(dataList, currentLastKey, isLastPage);
+        } finally {
+            if (iterator != null) {
+                iterator.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+
+
+    /**
+     * 执行跨列族事务（原子操作）
+     * @param operations 事务操作列表（包含多个表的增删改）
+     * @return 事务是否成功
+     */
+    public boolean dataTransaction(List<DbOperation> operations) {
+        if (operations == null || operations.isEmpty()) {
+            log.warn("事务操作列表为空，无需执行");
+            return true;
+        }
+
+        rwLock.writeLock().lock();
+        WriteBatch writeBatch = null;
+        WriteOptions writeOptions = null;
+        try {
+            writeBatch = new WriteBatch();
+            writeOptions = new WriteOptions();
+            writeOptions.setSync(false); // 非同步写入（性能优先，若需强一致性可设为 true）
+
+            // 1. 校验所有操作的表（列族）是否存在，并添加到事务批次
+            for (DbOperation op : operations) {
+                ColumnFamilyHandle cfHandle = getColumnFamilyHandle(op.table);
+                if (cfHandle == null) {
+                    throw new IllegalArgumentException("事务中存在不存在的表: " + op.table);
+                }
+
+                switch (op.type) {
+                    case INSERT:
+                    case UPDATE:
+                        writeBatch.put(cfHandle, op.key, op.value);
+                        break;
+                    case DELETE:
+                        writeBatch.delete(cfHandle, op.key);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("不支持的操作类型: " + op.type);
+                }
+            }
+
+            // 2. 执行事务（原子提交）
+            db.write(writeOptions, writeBatch);
+            log.info("事务执行成功，操作数: {}", operations.size());
+            return true;
+
+        } catch (RocksDBException e) {
+            log.error("事务执行失败", e);
+            return false; // 失败时，RocksDB 会自动回滚（WriteBatch 要么全成功，要么全失败）
+        } finally {
+            // 释放资源
+            if (writeBatch != null) {
+                writeBatch.close();
+            }
+            if (writeOptions != null) {
+                writeOptions.close();
+            }
+            rwLock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public <T> List<KeyValue<T>> rangeQuery(String table, byte[] startKey, byte[] endKey) {
+        return List.of();
+    }
+
+    @Override
+    public <T> List<KeyValue<T>> rangeQueryWithLimit(String table, byte[] startKey, byte[] endKey, int limit) {
+        return List.of();
+    }
+
+    @Override
+    public void clearCache(String table) {
 
     }
 
     @Override
-    public void compact(byte[] start, byte[] limit) {
+    public void setCachePolicy(String table, long ttl, int maxSize) {
+
+    }
+
+    @Override
+    public void refreshCache(String table, byte[] key) {
+
+    }
+
+    @Override
+    public String beginTransaction() {
+        return "";
+    }
+
+    @Override
+    public boolean commitTransaction(String transactionId) {
+        return false;
+    }
+
+    @Override
+    public boolean rollbackTransaction(String transactionId) {
+        return false;
+    }
+
+    @Override
+    public void addToTransaction(String transactionId, DbOperation operation) {
+
+    }
+
+    @Override
+    public long getTableSize(String table) {
+        return 0;
+    }
+
+    @Override
+    public List<String> listAllTables() {
+        return List.of();
+    }
+
+    @Override
+    public boolean checkHealth() {
+        return false;
+    }
+
+    @Override
+    public void iterate(String table, KeyValueHandler handler) {
+
+    }
+
+    @Override
+    public void batchDeleteRange(String table, byte[] startKey, byte[] endKey) {
+
+    }
+
+    @Override
+    public void enableWAL(boolean enable) {
 
     }
 
@@ -159,5 +515,22 @@ public class RocksDb implements DataBase {
      */
     private ColumnFamilyHandle getColumnFamilyHandle(String table) {
         return RTable.getColumnFamilyHandleByTable(table);
+    }
+
+    // 内部静态类：封装事务中的单个操作
+    public static class DbOperation {
+        public enum OpType { INSERT, UPDATE, DELETE }
+
+        public final String table; // 表名（列族）
+        public final byte[] key;   // 键
+        public final byte[] value; // 值（DELETE 操作可为 null）
+        public final OpType type;  // 操作类型
+
+        public DbOperation(String table, byte[] key, byte[] value, OpType type) {
+            this.table = table;
+            this.key = key;
+            this.value = value;
+            this.type = type;
+        }
     }
 }

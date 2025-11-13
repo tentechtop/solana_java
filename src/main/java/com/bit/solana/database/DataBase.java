@@ -1,5 +1,10 @@
 package com.bit.solana.database;
 
+import com.bit.solana.database.rocksDb.PageResult;
+import com.bit.solana.database.rocksDb.RocksDb;
+
+import java.util.List;
+
 //KV数据库操作 自带内存缓存 自定义缓存大小
 public interface DataBase {
     //Table 是表约束数据类型
@@ -74,8 +79,145 @@ public interface DataBase {
     void close();
     void compact(byte[] start, byte[] limit);
 
-    //提交一堆操作 在一个事务内完成  保障原子性
+    /**
+     * 泛型分页查询方法
+     * @param table 表名
+     * @param pageSize 每页条数
+     * @param lastKey 上一页最后一个键（用于分页定位，首次查询传 null）
+     * @param <T> 分页数据的类型（如 byte[]、UTXO、Block 等）
+     * @return 分页结果（包含当前页数据、最后一个键、是否为最后一页）
+     */
+    <T> PageResult<T> page(String table, int pageSize, byte[] lastKey);
 
 
+    /**
+     * 事务完成
+     */
+    boolean dataTransaction(List<RocksDb.DbOperation> operations);
 
+
+    /**
+     * 按键范围查询数据（[startKey, endKey)）
+     * @param table 表名
+     * @param startKey 起始键（包含，null 表示最小键）
+     * @param endKey 结束键（不包含，null 表示最大键）
+     * @param <T> 数据类型
+     * @return 范围内的所有数据（键值对列表）
+     */
+    <T> List<KeyValue<T>> rangeQuery(String table, byte[] startKey, byte[] endKey);
+
+    /**
+     * 按键范围查询并限制条数（避免一次性返回过多数据）
+     * @param table 表名
+     * @param startKey 起始键
+     * @param endKey 结束键
+     * @param limit 最大返回条数
+     * @param <T> 数据类型
+     * @return 范围内的有限数据
+     */
+    <T> List<KeyValue<T>> rangeQueryWithLimit(String table, byte[] startKey, byte[] endKey, int limit);
+
+    // 辅助类：封装键值对（用于范围查询返回结果）
+    class KeyValue<T> {
+        private byte[] key;
+        private T value;
+        // 构造器、getter、setter
+    }
+
+    /**
+     * 清理指定表的本地缓存（如Caffeine缓存）
+     * @param table 表名（null 表示清理所有表缓存）
+     */
+    void clearCache(String table);
+
+    /**
+     * 设置表的缓存策略（如过期时间、最大容量）
+     * @param table 表名
+     * @param ttl 缓存存活时间（毫秒，0 表示永不过期）
+     * @param maxSize 最大缓存条数
+     */
+    void setCachePolicy(String table, long ttl, int maxSize);
+
+    /**
+     * 强制刷新缓存（从数据库同步最新数据到缓存）
+     * @param table 表名
+     * @param key 键（null 表示刷新表内所有缓存键）
+     */
+    void refreshCache(String table, byte[] key);
+
+
+    /**
+     * 开启事务（手动提交模式）
+     * @return 事务ID（用于标识当前事务）
+     */
+    String beginTransaction();
+
+    /**
+     * 提交事务（通过事务ID指定）
+     * @param transactionId 事务ID（beginTransaction 返回的值）
+     * @return 是否提交成功
+     */
+    boolean commitTransaction(String transactionId);
+
+    /**
+     * 回滚事务（放弃未提交的操作）
+     * @param transactionId 事务ID
+     * @return 是否回滚成功
+     */
+    boolean rollbackTransaction(String transactionId);
+
+    /**
+     * 添加操作到指定事务（替代原 dataTransaction 的批量操作）
+     * @param transactionId 事务ID
+     * @param operation 单个操作（插入/删除/更新）
+     */
+    void addToTransaction(String transactionId, RocksDb.DbOperation operation);
+
+    /**
+     * 获取指定表的磁盘占用大小（字节）
+     * @param table 表名
+     * @return 大小（-1 表示表不存在）
+     */
+    long getTableSize(String table);
+
+    /**
+     * 获取数据库所有表名（列族名）
+     * @return 表名列表
+     */
+    List<String> listAllTables();
+
+    /**
+     * 检查数据库健康状态（如文件完整性、是否可读写）
+     * @return 健康状态（true 表示正常）
+     */
+    boolean checkHealth();
+
+
+    /**
+     * 迭代器遍历（支持自定义处理逻辑，避免一次性加载所有数据到内存）
+     * @param table 表名
+     * @param handler 迭代器处理器（处理每条键值对）
+     */
+    void iterate(String table, KeyValueHandler handler);
+
+    // 迭代器处理器接口（回调方式处理数据）
+    @FunctionalInterface
+    interface KeyValueHandler {
+        // 返回 false 表示停止迭代
+        boolean handle(byte[] key, byte[] value);
+    }
+
+    /**
+     * 批量删除指定范围的键（比逐条删除更高效）
+     * @param table 表名
+     * @param startKey 起始键（包含）
+     * @param endKey 结束键（不包含）
+     */
+    void batchDeleteRange(String table, byte[] startKey, byte[] endKey);
+
+    /**
+     * 开启数据库 WAL（Write-Ahead Log）日志（提升崩溃恢复能力）
+     * @param enable 是否开启
+     */
+    void enableWAL(boolean enable);
 }
