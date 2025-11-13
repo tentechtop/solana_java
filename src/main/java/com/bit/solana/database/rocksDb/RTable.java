@@ -26,7 +26,6 @@ public class RTable {
                         .setBlockCacheSize(128 * 1024 * 1024)
                         .setCacheIndexAndFilterBlocks(true))),
 
-
         ;
         final String logicalName;
         final String actualName;

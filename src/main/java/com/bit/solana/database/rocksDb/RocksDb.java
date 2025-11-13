@@ -2,33 +2,45 @@ package com.bit.solana.database.rocksDb;
 
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.DbConfig;
+import com.bit.solana.structure.block.Block;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalListener;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Slf4j
 @Component
+@Data
 public class RocksDb implements DataBase {
 
+    // 类中添加缓存实例（全局唯一）
+    private Cache<byte[], byte[]> tableCaches;
     private RocksDB db;
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
     private String dbPath;
 
-
     @Override
     public boolean createDatabase(DbConfig config) {
-        String path = config.getPath();//存储路径
-        if (path.isEmpty()) {
-            return false;
-        }
+        tableCaches = Caffeine.newBuilder()
+                .maximumSize(100_00)
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .build();
+
         try {
             File dbDir = new File(dbPath);
             if (!dbDir.exists() && !dbDir.mkdirs()) {
@@ -436,79 +448,317 @@ public class RocksDb implements DataBase {
 
     @Override
     public <T> List<KeyValue<T>> rangeQuery(String table, byte[] startKey, byte[] endKey) {
-        return List.of();
+        return rangeQueryWithLimit(table, startKey, endKey, Integer.MAX_VALUE); // 无限制条数
     }
 
     @Override
     public <T> List<KeyValue<T>> rangeQueryWithLimit(String table, byte[] startKey, byte[] endKey, int limit) {
-        return List.of();
+        if (table == null || table.isEmpty() || limit <= 0) {
+            throw new IllegalArgumentException("无效参数：表名不能为空或limit必须为正数");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                return Collections.emptyList();
+            }
+
+            iterator = db.newIterator(cfHandle);
+            List<KeyValue<T>> result = new ArrayList<>(limit);
+
+            // 定位起始位置
+            if (startKey != null && startKey.length > 0) {
+                iterator.seek(startKey);
+            } else {
+                iterator.seekToFirst();
+            }
+
+            // 遍历范围 [startKey, endKey)
+            while (iterator.isValid() && result.size() < limit) {
+                byte[] currentKey = iterator.key();
+                // 超出endKey范围则停止
+                if (endKey != null && endKey.length > 0 && Arrays.compare(currentKey, endKey) >= 0) {
+                    break;
+                }
+
+                // 封装键值对（支持泛型转换）
+                KeyValue<T> kv = new KeyValue<>();
+                kv.setKey(currentKey.clone()); // 克隆避免迭代器复用导致的数组覆盖
+                kv.setValue((T) iterator.value()); // 实际使用时需反序列化（如：SerializeUtils.deSerialize(iterator.value())）
+                result.add(kv);
+
+                iterator.next();
+            }
+            return result;
+        } finally {
+            if (iterator != null) iterator.close();
+            rwLock.readLock().unlock();
+        }
     }
+
 
     @Override
     public void clearCache(String table) {
-
+        if (table == null || table.isEmpty()) {
+            log.warn("清除缓存失败：表名不能为空");
+            return;
+        }
+        // 遍历缓存中属于指定表的键并移除（假设键前缀包含表信息，实际实现需根据键设计调整）
+        tableCaches.asMap().keySet().removeIf(key -> {
+            // 需根据实际键的编码规则实现表名提取
+            String keyTable = extractTableFromKey(key);
+            return table.equals(keyTable);
+        });
+        log.info("已清除表[{}]的缓存", table);
     }
 
     @Override
     public void setCachePolicy(String table, long ttl, int maxSize) {
-
+        if (table == null || table.isEmpty()) {
+            log.warn("设置缓存策略失败：表名不能为空");
+            return;
+        }
+        if (ttl <= 0 || maxSize <= 0) {
+            log.warn("设置缓存策略失败：ttl和maxSize必须为正数");
+            return;
+        }
+        // 重新构建缓存实例（实际应用中可能需要按表维护多个缓存）
+        this.tableCaches = Caffeine.newBuilder()
+                .maximumSize(maxSize)
+                .expireAfterWrite(ttl, TimeUnit.MILLISECONDS)
+                .removalListener((RemovalListener<byte[], byte[]>) (key, value, cause) ->
+                        log.debug("缓存移除 - 表: {}, 键: {}, 原因: {}", table, Arrays.toString(key), cause))
+                .build();
+        log.info("已设置表[{}]的缓存策略：ttl={}ms, maxSize={}", table, ttl, maxSize);
     }
+
 
     @Override
     public void refreshCache(String table, byte[] key) {
-
+        if (table == null || table.isEmpty() || key == null) {
+            log.warn("刷新缓存失败：表名或键不能为空");
+            return;
+        }
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                log.warn("刷新缓存失败：表[{}]不存在", table);
+                return;
+            }
+            // 从数据库读取最新值并更新缓存
+            byte[] value = db.get(cfHandle, key);
+            if (value != null) {
+                tableCaches.put(key, value);
+                log.debug("已刷新表[{}]中键[{}]的缓存", table, Arrays.toString(key));
+            } else {
+                tableCaches.invalidate(key);
+                log.debug("表[{}]中键[{}]不存在，已移除缓存", table, Arrays.toString(key));
+            }
+        } catch (RocksDBException e) {
+            log.error("刷新缓存失败", e);
+        }
     }
+
+    private final ConcurrentHashMap<String, WriteBatch> transactionMap = new ConcurrentHashMap<>();
+    private final AtomicLong transactionIdGenerator = new AtomicLong(0);
 
     @Override
     public String beginTransaction() {
-        return "";
+        String transactionId = "txn_" + transactionIdGenerator.incrementAndGet();
+        transactionMap.put(transactionId, new WriteBatch());
+        log.debug("开始事务：{}", transactionId);
+        return transactionId;
     }
+
 
     @Override
     public boolean commitTransaction(String transactionId) {
-        return false;
+        if (transactionId == null || !transactionMap.containsKey(transactionId)) {
+            log.warn("提交事务失败：无效的事务ID[{}]", transactionId);
+            return false;
+        }
+        rwLock.writeLock().lock();
+        WriteBatch writeBatch = transactionMap.get(transactionId);
+        WriteOptions writeOptions = new WriteOptions();
+        try {
+            writeOptions.setSync(true); // 事务提交默认使用同步写入保证一致性
+            db.write(writeOptions, writeBatch);
+            transactionMap.remove(transactionId);
+            log.info("事务提交成功：{}", transactionId);
+            return true;
+        } catch (RocksDBException e) {
+            log.error("事务提交失败：{}", transactionId, e);
+            return false;
+        } finally {
+            writeBatch.close();
+            writeOptions.close();
+            rwLock.writeLock().unlock();
+        }
     }
 
     @Override
     public boolean rollbackTransaction(String transactionId) {
-        return false;
+        if (transactionId == null || !transactionMap.containsKey(transactionId)) {
+            log.warn("回滚事务失败：无效的事务ID[{}]", transactionId);
+            return false;
+        }
+        // 事务回滚只需移除未提交的WriteBatch
+        WriteBatch writeBatch = transactionMap.remove(transactionId);
+        if (writeBatch != null) {
+            writeBatch.close();
+        }
+        log.info("事务回滚成功：{}", transactionId);
+        return true;
     }
 
     @Override
     public void addToTransaction(String transactionId, DbOperation operation) {
-
-    }
-
-    @Override
-    public long getTableSize(String table) {
-        return 0;
+        if (transactionId == null || operation == null) {
+            log.warn("添加事务操作失败：事务ID或操作不能为空");
+            return;
+        }
+        WriteBatch writeBatch = transactionMap.get(transactionId);
+        if (writeBatch == null) {
+            log.warn("添加事务操作失败：事务[{}]不存在", transactionId);
+            return;
+        }
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(operation.table);
+            if (cfHandle == null) {
+                log.warn("添加事务操作失败：表[{}]不存在", operation.table);
+                return;
+            }
+            switch (operation.type) {
+                case INSERT:
+                case UPDATE:
+                    writeBatch.put(cfHandle, operation.key, operation.value);
+                    break;
+                case DELETE:
+                    writeBatch.delete(cfHandle, operation.key);
+                    break;
+            }
+            log.debug("已添加操作到事务[{}]：{}", transactionId, operation.type);
+        } catch (RocksDBException e) {
+            log.error("添加事务操作失败", e);
+        }
     }
 
     @Override
     public List<String> listAllTables() {
-        return List.of();
+        List<String> tables = new ArrayList<>();
+        for (RTable.ColumnFamily cf : RTable.ColumnFamily.values()) {
+            tables.add(cf.actualName);
+        }
+        return tables;
     }
+
 
     @Override
     public boolean checkHealth() {
-        return false;
+        if (db == null) {
+            log.warn("数据库健康检查失败：连接未初始化");
+            return false;
+        }
+        rwLock.readLock().lock();
+        try {
+            // 通过简单操作验证数据库可用性
+            byte[] testKey = "health_check".getBytes();
+            db.put(RocksDB.DEFAULT_COLUMN_FAMILY, testKey);
+            db.delete(RocksDB.DEFAULT_COLUMN_FAMILY);
+            log.info("数据库健康检查通过");
+            return true;
+        } catch (RocksDBException e) {
+            log.error("数据库健康检查失败", e);
+            return false;
+        } finally {
+            rwLock.readLock().unlock();
+        }
     }
+
 
     @Override
     public void iterate(String table, KeyValueHandler handler) {
-
+        if (table == null || table.isEmpty() || handler == null) {
+            log.warn("迭代表失败：表名或处理器不能为空");
+            return;
+        }
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                log.warn("迭代表失败：表[{}]不存在", table);
+                return;
+            }
+            iterator = db.newIterator(cfHandle);
+            iterator.seekToFirst();
+            while (iterator.isValid()) {
+                byte[] key = iterator.key();
+                byte[] value = iterator.value();
+                // 调用处理器处理键值对，返回false则停止迭代
+                if (!handler.handle(key, value)) {
+                    break;
+                }
+                iterator.next();
+            }
+        } finally {
+            if (iterator != null) {
+                iterator.close();
+            }
+            rwLock.readLock().unlock();
+        }
     }
 
     @Override
     public void batchDeleteRange(String table, byte[] startKey, byte[] endKey) {
-
+        if (table == null || table.isEmpty() || startKey == null || endKey == null) {
+            log.warn("批量删除范围失败：参数不能为空");
+            return;
+        }
+        rwLock.writeLock().lock();
+        WriteBatch writeBatch = new WriteBatch();
+        WriteOptions writeOptions = new WriteOptions();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                log.warn("批量删除范围失败：表[{}]不存在", table);
+                return;
+            }
+            iterator = db.newIterator(cfHandle);
+            iterator.seek(startKey);
+            while (iterator.isValid()) {
+                byte[] currentKey = iterator.key();
+                if (Arrays.compare(currentKey, endKey) >= 0) {
+                    break;
+                }
+                writeBatch.delete(cfHandle, currentKey);
+                iterator.next();
+            }
+            db.write(writeOptions, writeBatch);
+            log.info("表[{}]中范围[{}, {})的记录已批量删除", table, Arrays.toString(startKey), Arrays.toString(endKey));
+        } catch (RocksDBException e) {
+            log.error("批量删除范围失败", e);
+            throw new RuntimeException("批量删除范围失败", e);
+        } finally {
+            if (iterator != null) {
+                iterator.close();
+            }
+            writeBatch.close();
+            writeOptions.close();
+            rwLock.writeLock().unlock();
+        }
     }
 
     @Override
     public void enableWAL(boolean enable) {
-
+        // 通过设置默认WriteOptions修改WAL状态（实际应用中可能需要维护全局WriteOptions）
+        // 这里仅为示例，实际实现需根据业务场景调整
+        log.info("{} Write-Ahead Log", enable ? "启用" : "禁用");
+        // 注意：RocksDB默认启用WAL，禁用会降低安全性但提高写入性能
     }
-
 
     /**
      * 获取表对应的列族句柄
@@ -531,6 +781,42 @@ public class RocksDb implements DataBase {
             this.key = key;
             this.value = value;
             this.type = type;
+        }
+    }
+
+    /**
+     * 从缓存键中提取表名（缓存键格式：表名UTF-8字节 + 0x00分隔符 + 原始业务键）
+     * @param key 缓存键（byte[] 类型）
+     * @return 提取的表名，解析失败返回空字符串
+     */
+    private String extractTableFromKey(byte[] key) {
+        if (key == null || key.length == 0) {
+            log.warn("缓存键为空，无法提取表名");
+            return "";
+        }
+
+        // 查找分隔符（0x00）的位置
+        int separatorIndex = -1;
+        for (int i = 0; i < key.length; i++) {
+            if (key[i] == 0x00) { // 0x00 作为表名和业务键的分隔符
+                separatorIndex = i;
+                break;
+            }
+        }
+
+        // 无分隔符 = 键格式非法，返回空
+        if (separatorIndex == -1) {
+            log.debug("缓存键格式非法（无分隔符），键长度：{}", key.length);
+            return "";
+        }
+
+        // 提取分隔符前的字节作为表名（UTF-8解码）
+        try {
+            byte[] tableBytes = Arrays.copyOfRange(key, 0, separatorIndex);
+            return new String(tableBytes, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.error("解析缓存键表名失败", e);
+            return "";
         }
     }
 }

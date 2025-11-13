@@ -2,6 +2,7 @@ package com.bit.solana.database;
 
 import com.bit.solana.database.rocksDb.PageResult;
 import com.bit.solana.database.rocksDb.RocksDb;
+import lombok.Data;
 
 import java.util.List;
 
@@ -122,6 +123,10 @@ public interface DataBase {
         private byte[] key;
         private T value;
         // 构造器、getter、setter
+        public byte[] getKey() { return key; }
+        public void setKey(byte[] key) { this.key = key; }
+        public T getValue() { return value; }
+        public void setValue(T value) { this.value = value; }
     }
 
     /**
@@ -173,12 +178,6 @@ public interface DataBase {
      */
     void addToTransaction(String transactionId, RocksDb.DbOperation operation);
 
-    /**
-     * 获取指定表的磁盘占用大小（字节）
-     * @param table 表名
-     * @return 大小（-1 表示表不存在）
-     */
-    long getTableSize(String table);
 
     /**
      * 获取数据库所有表名（列族名）
