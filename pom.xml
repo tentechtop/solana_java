@@ -215,12 +215,6 @@
             <version>1.8.6</version>
         </dependency>
 
-        <!-- libsodium-jna 依赖 -->
-        <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
-            <version>5.13.0</version> <!-- 最新稳定版 -->
-        </dependency>
     </dependencies>
 
 

@@ -7,7 +7,6 @@ import com.bit.solana.account.AccountService;
 import com.bit.solana.structure.account.Account;
 import com.bit.solana.structure.account.AccountMeta;
 import com.bit.solana.structure.account.json.AccountDTO;
-import com.bit.solana.structure.block.Block;
 import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
 import com.bit.solana.structure.key.KeyInfo;
 import com.bit.solana.structure.tx.Instruction;
@@ -16,7 +15,7 @@ import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.structure.tx.json.TransferTx;
 import com.bit.solana.txpool.TxPool;
 import com.bit.solana.util.ByteUtils;
-import com.bit.solana.util.Ed25519Signer;
+import com.bit.solana.util.SolanaEd25519Signer;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -117,7 +116,7 @@ public class AccountServiceImpl implements AccountService {
     private Transaction convertToSolanaTx(TransferTx transferTx) {
         Transaction tx = new Transaction();
         byte[] privateKeyBytes = ByteUtils.hexToBytes(transferTx.getPrivateKey());
-        PrivateKey privateKey = Ed25519Signer.recoverPrivateKeyFromCore(privateKeyBytes);
+        PrivateKey privateKey = SolanaEd25519Signer.recoverPrivateKeyFromCore(privateKeyBytes);
         AccountMeta sender = new AccountMeta(
                 PubkeyHash.fromBytes(ByteUtils.hexToBytes(transferTx.getFromAddress())),
                 true,
@@ -153,7 +152,7 @@ public class AccountServiceImpl implements AccountService {
         tx.setRecentBlockhash(new BlockHash(
                 ByteUtils.hexToBytes(transferTx.getRecentBlockhash())
         ));
-        byte[] signatureBytes = Ed25519Signer.applySignature(privateKey, tx.buildSignData());
+        byte[] signatureBytes = SolanaEd25519Signer.applySignature(privateKey, tx.buildSignData());
         // 4. 设置签名列表
         tx.setSignatures(List.of(new Signature(signatureBytes)));
         // 5. 生成交易ID（Solana交易ID为第一个签名的前32字节）

@@ -1,6 +1,6 @@
 package com.bit.solana;
 
-import com.bit.solana.util.Ed25519Signer;
+import com.bit.solana.util.SolanaEd25519Signer;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import java.security.KeyPair;
@@ -22,7 +22,7 @@ public class Ed25519SignerTest {
         try {
             // 1. 生成原始密钥对
             log.info("1. 测试密钥对生成...");
-            KeyPair originalKeyPair = Ed25519Signer.generateKeyPair();
+            KeyPair originalKeyPair = SolanaEd25519Signer.generateKeyPair();
             PublicKey originalPubKey = originalKeyPair.getPublic();
             PrivateKey originalPrivKey = originalKeyPair.getPrivate();
 
@@ -62,7 +62,7 @@ public class Ed25519SignerTest {
 
             if (pubKeyBytes != null && pubKeyBytes.length > 0) {
                 try {
-                    recoveredPubKey = Ed25519Signer.bytesToPublicKey(pubKeyBytes);
+                    recoveredPubKey = SolanaEd25519Signer.bytesToPublicKey(pubKeyBytes);
                     log.info("✅ 公钥从字节数组恢复成功");
                 } catch (Exception e) {
                     log.error("❌ 公钥恢复失败：{}", e.getMessage());
@@ -73,7 +73,7 @@ public class Ed25519SignerTest {
 
             if (privKeyBytes != null && privKeyBytes.length > 0) {
                 try {
-                    recoveredPrivKey = Ed25519Signer.bytesToPrivateKey(privKeyBytes);
+                    recoveredPrivKey = SolanaEd25519Signer.bytesToPrivateKey(privKeyBytes);
                     log.info("✅ 私钥从字节数组恢复成功");
                 } catch (Exception e) {
                     log.error("❌ 私钥恢复失败：{}", e.getMessage());
@@ -115,7 +115,7 @@ public class Ed25519SignerTest {
 
             if (originalPrivKey != null) {
                 try {
-                    signature = Ed25519Signer.applySignature(originalPrivKey, testData);
+                    signature = SolanaEd25519Signer.applySignature(originalPrivKey, testData);
                     if (signature != null && signature.length == 64) {
                         log.info("✅ 签名成功（长度：64字节，符合Ed25519标准）");
                     } else {
@@ -130,7 +130,7 @@ public class Ed25519SignerTest {
 
             // 验证原始公钥验签
             if (originalPubKey != null && signature != null && testData != null) {
-                boolean verifyOriginal = Ed25519Signer.verifySignature(originalPubKey, testData, signature);
+                boolean verifyOriginal = SolanaEd25519Signer.verifySignature(originalPubKey, testData, signature);
                 if (verifyOriginal) {
                     log.info("✅ 原始公钥验签成功：签名有效");
                 } else {
@@ -142,7 +142,7 @@ public class Ed25519SignerTest {
 
             // 验证恢复公钥验签
             if (recoveredPubKey != null && signature != null && testData != null) {
-                boolean verifyRecovered = Ed25519Signer.verifySignature(recoveredPubKey, testData, signature);
+                boolean verifyRecovered = SolanaEd25519Signer.verifySignature(recoveredPubKey, testData, signature);
                 if (verifyRecovered) {
                     log.info("✅ 恢复公钥验签成功：签名有效");
                 } else {
@@ -155,7 +155,7 @@ public class Ed25519SignerTest {
             // 验证篡改数据验签
             byte[] tamperedData = "篡改后的测试数据".getBytes(StandardCharsets.UTF_8);
             if (originalPubKey != null && signature != null && tamperedData != null) {
-                boolean verifyTampered = Ed25519Signer.verifySignature(originalPubKey, tamperedData, signature);
+                boolean verifyTampered = SolanaEd25519Signer.verifySignature(originalPubKey, tamperedData, signature);
                 if (!verifyTampered) {
                     log.info("✅ 篡改数据验签通过：正确识别无效数据（预期失败，实际失败）");
                 } else {
@@ -169,7 +169,7 @@ public class Ed25519SignerTest {
             byte[] wrongSignature = new byte[64];
             new SecureRandom().nextBytes(wrongSignature);
             if (originalPubKey != null && wrongSignature != null && testData != null) {
-                boolean verifyWrong = Ed25519Signer.verifySignature(originalPubKey, testData, wrongSignature);
+                boolean verifyWrong = SolanaEd25519Signer.verifySignature(originalPubKey, testData, wrongSignature);
                 if (!verifyWrong) {
                     log.info("✅ 错误签名验签通过：正确识别无效签名（预期失败，实际失败）");
                 } else {

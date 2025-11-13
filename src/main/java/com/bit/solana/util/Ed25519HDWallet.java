@@ -79,7 +79,7 @@ public class Ed25519HDWallet {
         }
 
         // 1. 生成父公钥
-        byte[] publicKey = Ed25519Signer.derivePublicKeyFromPrivateKey(parentPrivateKey);
+        byte[] publicKey = SolanaEd25519Signer.derivePublicKeyFromPrivateKey(parentPrivateKey);
         byte[] indexBytes = intToBytes(index);
 
         // 2. 构建 HMAC 输入（区分强化/非强化派生）
@@ -133,7 +133,7 @@ public class Ed25519HDWallet {
         childKey = deriveChildPrivateKey(childKey, 0); // 0（非强化）
         childKey = deriveChildPrivateKey(childKey, addressIndex); // addressIndex（非强化）
 
-        byte[] publicKey = Ed25519Signer.derivePublicKeyFromPrivateKey(childKey);
+        byte[] publicKey = SolanaEd25519Signer.derivePublicKeyFromPrivateKey(childKey);
         String address = getSolanaAddress(publicKey);
         String path = String.format("m/44'/%d'/%d'/0/%d", SOLANA_COIN_TYPE, accountIndex, addressIndex);
 
@@ -173,10 +173,10 @@ public class Ed25519HDWallet {
 
         // 验证签名
         byte[] data = "测试Solana签名".getBytes(StandardCharsets.UTF_8);
-        PrivateKey privateKey = Ed25519Signer.recoverPrivateKeyFromCore(keyInfo.getPrivateKey());
-        byte[] signature = Ed25519Signer.applySignature(privateKey, data);
-        PublicKey publicKey = Ed25519Signer.recoverPublicKeyFromCore(keyInfo.getPublicKey());
-        boolean verifyResult = Ed25519Signer.verifySignature(publicKey, data, signature);
+        PrivateKey privateKey = SolanaEd25519Signer.recoverPrivateKeyFromCore(keyInfo.getPrivateKey());
+        byte[] signature = SolanaEd25519Signer.applySignature(privateKey, data);
+        PublicKey publicKey = SolanaEd25519Signer.recoverPublicKeyFromCore(keyInfo.getPublicKey());
+        boolean verifyResult = SolanaEd25519Signer.verifySignature(publicKey, data, signature);
         System.out.println("签名验证结果: " + verifyResult); // true
     }
 }

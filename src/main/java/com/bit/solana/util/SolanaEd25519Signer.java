@@ -7,24 +7,57 @@ import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.bouncycastle.crypto.signers.Ed25519Signer;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Hex;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 
+/**
+ * 用线程池并行签名 和 验证  现在是1毫秒一个验证 0.8毫秒一个签名 无法满足 每秒1万个签名和验证
+ */
 
 @Slf4j
-public class Ed25519Signer {
+public class SolanaEd25519Signer {
+    // 线程局部缓存签名器和验证器（底层API无状态，可复用）
+    private static final ThreadLocal<Ed25519Signer> SIGNER_THREAD_LOCAL = ThreadLocal.withInitial(Ed25519Signer::new);
+    private static final ThreadLocal<Ed25519Signer> VERIFIER_THREAD_LOCAL = ThreadLocal.withInitial(Ed25519Signer::new);
+
+    // CPU核心数（Ed25519是CPU密集型操作，线程数与核心数匹配）
+    private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
+    // 线程池（固定大小，避免线程创建销毁开销）
+    private static final ExecutorService EXECUTOR = new ThreadPoolExecutor(
+            CPU_CORES,
+            CPU_CORES,
+            0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(100000), // 大缓冲队列
+            new ThreadFactory() {
+                private final AtomicInteger seq = new AtomicInteger(0);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "ed25519-worker-" + seq.getAndIncrement());
+                    t.setDaemon(true);
+                    t.setPriority(Thread.NORM_PRIORITY + 1); // 提高优先级
+                    return t;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // 队列满时调用方执行，避免任务丢失
+    );
+
+
     // 静态代码块：注册BouncyCastle Provider（优先于系统默认）
     // 签名缓存：key=公钥哈希+数据哈希（合并为字符串），value=签名结果（64字节）
     private static final com.github.benmanes.caffeine.cache.Cache<String, byte[]> SIGNATURE_CACHE;
@@ -75,7 +108,19 @@ public class Ed25519Signer {
         }
     });
 
-
+    private static final ThreadLocal<KeyFactory> ED25519_KEY_FACTORY = ThreadLocal.withInitial(() -> {
+        try {
+            // 优先尝试JDK原生实现
+            return KeyFactory.getInstance("Ed25519");
+        } catch (NoSuchAlgorithmException e) {
+            // 降级使用BouncyCastle实现
+            try {
+                return KeyFactory.getInstance("Ed25519", "BC");
+            } catch (NoSuchAlgorithmException | NoSuchProviderException ex) {
+                throw new RuntimeException("初始化Ed25519 KeyFactory失败", ex);
+            }
+        }
+    });
 
 
     static {
@@ -119,92 +164,37 @@ public class Ed25519Signer {
         }
     }
 
-    /**
-     * Ed25519 签名：用私钥对原始数据签名（返回 64 字节签名）
-     * @param privateKey Ed25519 私钥
-     * @param data 待签名原始数据（如交易哈希）
-     * @return 签名结果（64字节）
-     */
-/*    public static byte[] applySignature(PrivateKey privateKey, byte[] data) {
-        try {
-            Signature signer;
-            // 优先 JDK 原生，降级 BouncyCastle
-            try {
-                signer = Signature.getInstance("Ed25519");
-            } catch (NoSuchAlgorithmException e) {
-                signer = Signature.getInstance("Ed25519", "BC");
-            }
-            signer.initSign(privateKey);
-            signer.update(data); // Ed25519 内部自动处理哈希（SHA-512），无需手动哈希
-            return signer.sign();
-        } catch (Exception e) {
-            throw new RuntimeException("Ed25519 签名失败", e);
-        }
-    }*/
 
     /**
-     * Ed25519 签名：使用线程局部缓存的Signature实例，避免重复创建
-     * @param privateKey Ed25519 私钥
+     * 优化后的Ed25519签名：复用fastSign的高性能实现，保持对PrivateKey对象的兼容
+     * @param privateKey Ed25519 私钥对象（内部提取32字节核心私钥）
      * @param data 待签名原始数据
      * @return 签名结果（64字节）
      */
     public static byte[] applySignature(PrivateKey privateKey, byte[] data) {
         try {
-            // 1. 获取线程局部缓存的Signature实例（避免重复创建）
-            Signature signer = JDK_SIGNER_THREAD_LOCAL.get();
-            if (signer == null) {
-                signer = BC_SIGNER_THREAD_LOCAL.get();
-            }
-            // 2. 重新初始化=状态重置（关键：替代reset()，清理上一次复用的状态）
-            signer.initSign(privateKey);
-            // 3. 执行签名流程
-            signer.update(data);
-            return signer.sign();
+            // 提取32字节核心私钥（跳过JCA对象的冗余信息）
+            byte[] corePrivateKey = extractPrivateKeyCore(privateKey);
+            // 直接调用高性能签名实现
+            return fastSign(corePrivateKey, data);
         } catch (Exception e) {
             throw new RuntimeException("Ed25519 签名失败", e);
         }
     }
 
-
     /**
-     * Ed25519 验签：用公钥验证签名有效性
-     * @param publicKey Ed25519 公钥
+     * 优化后的Ed25519验签：复用fastVerify的高性能实现，保持对PublicKey对象的兼容
+     * @param publicKey Ed25519 公钥对象（内部提取32字节核心公钥）
      * @param data 原始数据（需与签名时一致）
      * @param signature 签名结果（64字节）
      * @return true=验签成功，false=验签失败
      */
-/*    public static boolean verifySignature(PublicKey publicKey, byte[] data, byte[] signature) {
-        try {
-            Signature verifier;
-            // 优先 JDK 原生，降级 BouncyCastle
-            try {
-                verifier = Signature.getInstance("Ed25519");
-            } catch (NoSuchAlgorithmException e) {
-                verifier = Signature.getInstance("Ed25519", "BC");
-            }
-            verifier.initVerify(publicKey);
-            verifier.update(data);
-            return verifier.verify(signature);
-        } catch (Exception e) {
-            log.error("Ed25519 验签异常", e);
-            return false;
-        }
-    }*/
-
     public static boolean verifySignature(PublicKey publicKey, byte[] data, byte[] signature) {
         try {
-            // 1. 获取线程局部缓存的Signature实例
-            Signature verifier = JDK_VERIFIER_THREAD_LOCAL.get();
-            if (verifier == null) {
-                verifier = BC_VERIFIER_THREAD_LOCAL.get();
-            }
-
-            // 2. 重新初始化=状态重置
-            verifier.initVerify(publicKey);
-
-            // 3. 执行验签流程
-            verifier.update(data);
-            return verifier.verify(signature);
+            // 提取32字节核心公钥（跳过JCA对象的冗余信息）
+            byte[] corePublicKey = extractPublicKeyCore(publicKey);
+            // 直接调用高性能验签实现
+            return fastVerify(corePublicKey, data, signature);
         } catch (Exception e) {
             log.error("Ed25519 验签异常", e);
             return false;
@@ -213,28 +203,22 @@ public class Ed25519Signer {
 
 
     /**
-     * 字节数组转 Ed25519 公钥（X.509 编码，与 secp256k1 公钥编码格式一致）
+     * 字节数组转 Ed25519 公钥（使用ThreadLocal缓存KeyFactory提升性能）
      * @param publicKeyBytes X.509 编码的公钥字节（32字节核心+编码头）
      * @return Ed25519 公钥对象
      */
     public static PublicKey bytesToPublicKey(byte[] publicKeyBytes) {
         try {
-            KeyFactory keyFactory;
-            try {
-                keyFactory = KeyFactory.getInstance("Ed25519");
-            } catch (NoSuchAlgorithmException e) {
-                keyFactory = KeyFactory.getInstance("Ed25519", "BC");
-            }
+            // 从ThreadLocal获取缓存的KeyFactory（避免重复创建）
+            KeyFactory keyFactory = ED25519_KEY_FACTORY.get();
+
             // 处理32字节原始公钥：补全X.509固定头（12字节）
             byte[] x509Bytes;
             if (publicKeyBytes.length == 32) {
-                // X.509固定头（十六进制转字节：302a300506032b6570032100）
-                byte[] header = new byte[]{
-                        0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
-                };
-                x509Bytes = new byte[header.length + publicKeyBytes.length];
-                System.arraycopy(header, 0, x509Bytes, 0, header.length);
-                System.arraycopy(publicKeyBytes, 0, x509Bytes, header.length, publicKeyBytes.length);
+                // 复用类中已定义的X509_PUBLIC_HEADER常量，避免重复创建数组
+                x509Bytes = new byte[X509_PUBLIC_HEADER.length + publicKeyBytes.length];
+                System.arraycopy(X509_PUBLIC_HEADER, 0, x509Bytes, 0, X509_PUBLIC_HEADER.length);
+                System.arraycopy(publicKeyBytes, 0, x509Bytes, X509_PUBLIC_HEADER.length, publicKeyBytes.length);
             } else {
                 // 已为X.509编码（44字节），直接使用
                 x509Bytes = publicKeyBytes;
@@ -248,27 +232,21 @@ public class Ed25519Signer {
     }
 
 
-
     /**
-     * 字节数组转 Ed25519 私钥（PKCS#8 编码，与 secp256k1 私钥编码格式一致）
+     * 字节数组转 Ed25519 私钥（复用ThreadLocal缓存的KeyFactory）
      * @param privateKeyBytes PKCS#8 编码的私钥字节（32字节核心+编码头）
      * @return Ed25519 私钥对象
      */
     public static PrivateKey bytesToPrivateKey(byte[] privateKeyBytes) {
         try {
-            KeyFactory keyFactory;
-            try {
-                keyFactory = KeyFactory.getInstance("Ed25519");
-            } catch (NoSuchAlgorithmException e) {
-                keyFactory = KeyFactory.getInstance("Ed25519", "BC");
-            }
+            // 复用同一个KeyFactory缓存（Ed25519算法通用）
+            KeyFactory keyFactory = ED25519_KEY_FACTORY.get();
             PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
             return keyFactory.generatePrivate(keySpec);
         } catch (Exception e) {
             throw new RuntimeException("Ed25519 私钥转换失败", e);
         }
     }
-
 
     // ------------------------------ 公钥核心字节处理 ------------------------------
 
@@ -380,22 +358,6 @@ public class Ed25519Signer {
      * @param data 待签名原始数据
      * @return 签名结果（64字节）
      */
-/*    public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
-        // 1. 生成缓存键：公钥（从私钥派生）+ 数据哈希
-        byte[] publicKeyBytes = derivePublicKeyFromPrivateKey(extractPrivateKeyCore(privateKey));
-        String cacheKey = generateCacheKey(publicKeyBytes, data);
-
-        // 2. 尝试从缓存获取
-        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
-        if (cachedSignature != null) {
-            return cachedSignature; // 缓存命中
-        }
-
-        // 3. 缓存未命中，执行签名并缓存结果
-        byte[] signature = applySignature(privateKey, data);
-        SIGNATURE_CACHE.put(cacheKey, signature);
-        return signature;
-    }*/
     public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
         byte[] publicKeyBytes = derivePublicKeyFromPrivateKey(extractPrivateKeyCore(privateKey));
         String cacheKey = generateCacheKey(publicKeyBytes, data);
@@ -419,21 +381,6 @@ public class Ed25519Signer {
      * @param signature 签名结果（64字节）
      * @return true=验签成功，false=验签失败
      */
-/*    public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
-        // 1. 生成缓存键：公钥 + 数据哈希
-        byte[] publicKeyBytes = extractPublicKeyCore(publicKey); // 提取32字节核心公钥
-        String cacheKey = generateCacheKey(publicKeyBytes, data);
-
-        // 2. 检查缓存中是否存在匹配的签名
-        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
-        if (cachedSignature != null) {
-            // 缓存中存在签名，直接对比签名是否一致（无需重新验签）
-            return Arrays.equals(cachedSignature, signature);
-        }
-
-        // 3. 缓存未命中，执行验签（不缓存验签结果，仅缓存签名）
-        return verifySignature(publicKey, data, signature);
-    }*/
     public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
         byte[] publicKeyBytes = extractPublicKeyCore(publicKey);
         String cacheKey = generateCacheKey(publicKeyBytes, data);
@@ -454,23 +401,8 @@ public class Ed25519Signer {
      * 生成缓存键：公钥哈希（前16字节） + 数据哈希（SHA-256前16字节），用冒号分隔
      * 注：哈希压缩是为了减少键的长度，避免内存占用过大
      */
-    private static String generateCacheKey(byte[] publicKeyBytes, byte[] data) {
-        try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-
-            // 公钥哈希（取前16字节）
-            byte[] pubHash = sha256.digest(publicKeyBytes);
-            byte[] pubHashShort = Arrays.copyOfRange(pubHash, 0, 16);
-
-            // 数据哈希（取前16字节）
-            byte[] dataHash = sha256.digest(data);
-            byte[] dataHashShort = Arrays.copyOfRange(dataHash, 0, 16);
-
-            // 转换为十六进制字符串，用冒号分隔
-            return Hex.toHexString(pubHashShort) + ":" + Hex.toHexString(dataHashShort);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("生成缓存键失败", e);
-        }
+    private static String generateCacheKey(byte[] publicKey, byte[] data) {
+        return Hex.toHexString(publicKey) + ":" + Hex.toHexString(data);
     }
 
     /**
@@ -510,62 +442,121 @@ public class Ed25519Signer {
         log.info("签名缓存已清空");
     }
 
+
+    /**
+     * 高性能签名：直接调用BouncyCastle底层Ed25519实现
+     */
+    public static byte[] fastSign(byte[] privateKey, byte[] data) {
+        Ed25519Signer signer = SIGNER_THREAD_LOCAL.get();
+        Ed25519PrivateKeyParameters keyParams = new Ed25519PrivateKeyParameters(privateKey, 0);
+        signer.init(true, keyParams);
+        signer.update(data, 0, data.length);
+        return signer.generateSignature();
+    }
+
+    /**
+     * 高性能签名（支持ByteBuffer输入）：直接操作缓冲区数据，减少字节数组转换开销
+     * @param privateKey 32字节Ed25519私钥
+     * @param data 待签名数据的ByteBuffer（支持Heap/Direct ByteBuffer）
+     * @return 64字节签名结果
+     */
+    public static byte[] fastSign(byte[] privateKey, ByteBuffer data) {
+        Ed25519Signer signer = SIGNER_THREAD_LOCAL.get();
+        Ed25519PrivateKeyParameters keyParams = new Ed25519PrivateKeyParameters(privateKey, 0);
+        signer.init(true, keyParams);
+
+        // 直接读取ByteBuffer数据，避免转换为byte[]（根据缓冲区类型优化）
+        if (data.hasArray()) {
+            // HeapByteBuffer：直接使用底层数组，减少拷贝
+            byte[] array = data.array();
+            int offset = data.arrayOffset() + data.position();
+            int length = data.remaining();
+            signer.update(array, offset, length);
+        } else {
+            // DirectByteBuffer：使用临时缓冲区批量读取（复用ThreadLocal缓存的数组减少创建）
+            ThreadLocal<byte[]> directBufferCache = ThreadLocal.withInitial(() -> new byte[4096]); // 4KB默认缓存
+            byte[] tempBuf = directBufferCache.get();
+            int remaining = data.remaining();
+
+            while (remaining > 0) {
+                int readLength = Math.min(remaining, tempBuf.length);
+                data.get(tempBuf, 0, readLength);
+                signer.update(tempBuf, 0, readLength);
+                remaining -= readLength;
+            }
+        }
+
+        return signer.generateSignature();
+    }
+
+    /**
+     * 高性能验签：直接调用BouncyCastle底层Ed25519实现
+     */
+    public static boolean fastVerify(byte[] publicKey, byte[] data, byte[] signature) {
+        Ed25519Signer verifier = VERIFIER_THREAD_LOCAL.get();
+        Ed25519PublicKeyParameters keyParams = new Ed25519PublicKeyParameters(publicKey, 0);
+        verifier.init(false, keyParams);
+        verifier.update(data, 0, data.length);
+        return verifier.verifySignature(signature);
+    }
+
+    /**
+     * 签名 / 验证的输入数据（data）若为频繁复用的对象，可改用ByteBuffer直接操作，减少System.arraycopy：
+     * @param publicKey
+     * @param data
+     * @param signature
+     * @return
+     */
+    public static boolean fastVerify(byte[] publicKey, ByteBuffer data, byte[] signature) {
+        Ed25519Signer verifier = VERIFIER_THREAD_LOCAL.get();
+        Ed25519PublicKeyParameters keyParams = new Ed25519PublicKeyParameters(publicKey, 0);
+        verifier.init(false, keyParams);
+        // 直接读取ByteBuffer，避免转换为byte[]
+        byte[] buf = new byte[data.remaining()];
+        data.get(buf); // 若data为DirectByteBuffer，可进一步优化
+        verifier.update(buf, 0, buf.length);
+        return verifier.verifySignature(signature);
+    }
+
+
+
+    // 批量签名（并行处理）
+    public static List<byte[]> batchSign(List<byte[]> privateKeys, List<byte[]> dataList) throws InterruptedException, ExecutionException {
+        int size = privateKeys.size();
+        List<Future<byte[]>> futures = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            final byte[] key = privateKeys.get(i);
+            final byte[] data = dataList.get(i);
+            futures.add(EXECUTOR.submit(() -> fastSign(key, data)));
+        }
+        // 收集结果
+        List<byte[]> signatures = new ArrayList<>(size);
+        for (Future<byte[]> future : futures) {
+            signatures.add(future.get());
+        }
+        return signatures;
+    }
+
+    // 批量验签（并行处理）
+    public static List<Boolean> batchVerify(List<byte[]> publicKeys, List<byte[]> dataList, List<byte[]> signatures) throws InterruptedException, ExecutionException {
+        int size = publicKeys.size();
+        List<Future<Boolean>> futures = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            final byte[] pubKey = publicKeys.get(i);
+            final byte[] data = dataList.get(i);
+            final byte[] sig = signatures.get(i);
+            futures.add(EXECUTOR.submit(() -> fastVerify(pubKey, data, sig)));
+        }
+        // 收集结果
+        List<Boolean> results = new ArrayList<>(size);
+        for (Future<Boolean> future : futures) {
+            results.add(future.get());
+        }
+        return results;
+    }
+
+
     // ------------------------------ 测试方法 ------------------------------
-
-/*    public static void main(String[] args) {
-
-        // 生成助记词
-        List<String> mnemonic = generateMnemonic();
-        System.out.println("助记词: " + String.join(" ", mnemonic));
-        // 生成第一个账户的第一个地址（路径：m/44'/501'/0'/0/0）
-        KeyInfo keyInfo = getSolanaKeyPair(mnemonic, 0, 0);
-
-
-        // 输出信息
-        System.out.println("派生路径: " + keyInfo.getPath());
-        System.out.println("私钥(hex): " + Hex.toHexString(keyInfo.getPrivateKey()));
-        System.out.println("公钥(hex): " + Hex.toHexString(keyInfo.getPublicKey()));
-        System.out.println("Solana地址: " + keyInfo.getAddress());
-
-        // 2. 提取核心字节
-        byte[] corePriv = keyInfo.getPrivateKey();
-        byte[] corePub = derivePublicKeyFromPrivateKey(corePriv);
-
-        log.info("公钥: {}", corePub);
-        String encode = Base58.encode(corePub);
-        log.info("公钥编码: {}", encode.length());
-        log.info("地址: {}", encode);
-
-        //从地址到公钥
-
-        byte[] decode = Base58.decode(encode);
-        log.info("是否一致，{}", Arrays.equals(decode, corePub));
-
-
-        log.info("提取的核心公钥长度: {}", corePub.length); // 32字节
-        log.info("提取的核心私钥长度: {}", corePriv.length); // 32字节
-
-        // 3. 从核心字节恢复密钥
-        PublicKey recoveredPub = recoverPublicKeyFromCore(corePub);
-        PrivateKey recoveredPriv = recoverPrivateKeyFromCore(corePriv);
-
-        // 4. 验证恢复的密钥是否可用（签名+验签）
-        byte[] data = "测试数据".getBytes(StandardCharsets.UTF_8);
-        byte[] signature = applySignature(recoveredPriv, data);
-        boolean verifyResult = verifySignature(recoveredPub, data, signature);
-        log.info("恢复的密钥验签结果: {}", verifyResult); // 应输出true
-
-
-        KeyInfo solanaKeyPair = getSolanaKeyPair(mnemonic, 1, 0);//改变账户
-        getSolanaKeyPair(mnemonic, 0, 1);//改变地址
-
-
-
-
-
-    }*/
-
-
 
     /**
      * 清理线程局部变量（在线程池任务结束时调用，避免内存泄漏）
@@ -608,7 +599,7 @@ public class Ed25519Signer {
 
         // 3. 验证公钥与地址的一致性
         byte[] corePriv = baseKey.getPrivateKey();
-        byte[] corePub = Ed25519Signer.derivePublicKeyFromPrivateKey(corePriv);
+        byte[] corePub = SolanaEd25519Signer.derivePublicKeyFromPrivateKey(corePriv);
         String addressFromPub = Base58.encode(corePub);
         System.out.println("===== 公钥与地址一致性验证 =====");
         System.out.println("公钥长度: " + corePub.length + "字节（应为32）");
@@ -619,10 +610,10 @@ public class Ed25519Signer {
 
         // 4. 验证签名功能
         byte[] testData = "Solana HD Wallet Test".getBytes(StandardCharsets.UTF_8);
-        PrivateKey privateKey = Ed25519Signer.recoverPrivateKeyFromCore(corePriv);
-        PublicKey publicKey = Ed25519Signer.recoverPublicKeyFromCore(corePub);
-        byte[] signature = Ed25519Signer.applySignature(privateKey, testData);
-        boolean verifyResult = Ed25519Signer.verifySignature(publicKey, testData, signature);
+        PrivateKey privateKey = SolanaEd25519Signer.recoverPrivateKeyFromCore(corePriv);
+        PublicKey publicKey = SolanaEd25519Signer.recoverPublicKeyFromCore(corePub);
+        byte[] signature = SolanaEd25519Signer.applySignature(privateKey, testData);
+        boolean verifyResult = SolanaEd25519Signer.verifySignature(publicKey, testData, signature);
         System.out.println("===== 签名验证 =====");
         System.out.println("签名长度: " + signature.length + "字节（应为64）");
         System.out.println("验签结果: " + verifyResult + "（应为true）");

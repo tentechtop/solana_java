@@ -5,14 +5,12 @@ import com.bit.solana.database.DbConfig;
 import com.bit.solana.database.KeyValueHandler;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
