@@ -55,3 +55,5 @@ http://localhost:18333/monitor/system
 
 保存区块是保存了 区块Hash 和 数据索引
 
+protobuf做序列化
+

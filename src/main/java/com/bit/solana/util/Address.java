@@ -13,10 +13,6 @@ import java.util.Arrays;
 
 @Slf4j
 public class Address {
-
-
-
-
     // 测试方法
     public static void main(String[] args) {
 
