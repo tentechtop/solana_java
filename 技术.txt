@@ -42,6 +42,8 @@ TPS 目标：目标支持 1 万 TPS（每秒处理 10,000 笔交易），因此�
 
 JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8
 
+-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8 --add-modules jdk.incubator.vector
+
 至少 8 核 CPU，16GB 内存，SSD 存储
 
 部署建议

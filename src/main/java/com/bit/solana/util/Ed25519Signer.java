@@ -29,6 +29,55 @@ public class Ed25519Signer {
     // 签名缓存：key=公钥哈希+数据哈希（合并为字符串），value=签名结果（64字节）
     private static final com.github.benmanes.caffeine.cache.Cache<String, byte[]> SIGNATURE_CACHE;
 
+    // ------------------------------ 线程局部变量缓存 Signature 实例 ------------------------------
+    /**
+     * 线程局部变量：缓存JDK原生Ed25519签名器（优先使用）
+     */
+    private static final ThreadLocal<Signature> JDK_SIGNER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        try {
+            return Signature.getInstance("Ed25519");
+        } catch (NoSuchAlgorithmException e) {
+            // 若JDK不支持，返回null（后续会使用BouncyCastle）
+            return null;
+        }
+    });
+
+    /**
+     * 线程局部变量：缓存BouncyCastle的Ed25519签名器（降级方案）
+     */
+    private static final ThreadLocal<Signature> BC_SIGNER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        try {
+            return Signature.getInstance("Ed25519", "BC");
+        } catch (Exception e) {
+            throw new RuntimeException("初始化BouncyCastle签名器失败", e);
+        }
+    });
+
+    /**
+     * 线程局部变量：缓存JDK原生Ed25519验证器
+     */
+    private static final ThreadLocal<Signature> JDK_VERIFIER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        try {
+            return Signature.getInstance("Ed25519");
+        } catch (NoSuchAlgorithmException e) {
+            return null;
+        }
+    });
+
+    /**
+     * 线程局部变量：缓存BouncyCastle的Ed25519验证器
+     */
+    private static final ThreadLocal<Signature> BC_VERIFIER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        try {
+            return Signature.getInstance("Ed25519", "BC");
+        } catch (Exception e) {
+            throw new RuntimeException("初始化BouncyCastle验证器失败", e);
+        }
+    });
+
+
+
+
     static {
         Security.addProvider(new BouncyCastleProvider());
         SIGNATURE_CACHE   = Caffeine.newBuilder()
@@ -76,7 +125,7 @@ public class Ed25519Signer {
      * @param data 待签名原始数据（如交易哈希）
      * @return 签名结果（64字节）
      */
-    public static byte[] applySignature(PrivateKey privateKey, byte[] data) {
+/*    public static byte[] applySignature(PrivateKey privateKey, byte[] data) {
         try {
             Signature signer;
             // 优先 JDK 原生，降级 BouncyCastle
@@ -91,7 +140,31 @@ public class Ed25519Signer {
         } catch (Exception e) {
             throw new RuntimeException("Ed25519 签名失败", e);
         }
+    }*/
+
+    /**
+     * Ed25519 签名：使用线程局部缓存的Signature实例，避免重复创建
+     * @param privateKey Ed25519 私钥
+     * @param data 待签名原始数据
+     * @return 签名结果（64字节）
+     */
+    public static byte[] applySignature(PrivateKey privateKey, byte[] data) {
+        try {
+            // 1. 获取线程局部缓存的Signature实例（避免重复创建）
+            Signature signer = JDK_SIGNER_THREAD_LOCAL.get();
+            if (signer == null) {
+                signer = BC_SIGNER_THREAD_LOCAL.get();
+            }
+            // 2. 重新初始化=状态重置（关键：替代reset()，清理上一次复用的状态）
+            signer.initSign(privateKey);
+            // 3. 执行签名流程
+            signer.update(data);
+            return signer.sign();
+        } catch (Exception e) {
+            throw new RuntimeException("Ed25519 签名失败", e);
+        }
     }
+
 
     /**
      * Ed25519 验签：用公钥验证签名有效性
@@ -100,7 +173,7 @@ public class Ed25519Signer {
      * @param signature 签名结果（64字节）
      * @return true=验签成功，false=验签失败
      */
-    public static boolean verifySignature(PublicKey publicKey, byte[] data, byte[] signature) {
+/*    public static boolean verifySignature(PublicKey publicKey, byte[] data, byte[] signature) {
         try {
             Signature verifier;
             // 优先 JDK 原生，降级 BouncyCastle
@@ -116,7 +189,28 @@ public class Ed25519Signer {
             log.error("Ed25519 验签异常", e);
             return false;
         }
+    }*/
+
+    public static boolean verifySignature(PublicKey publicKey, byte[] data, byte[] signature) {
+        try {
+            // 1. 获取线程局部缓存的Signature实例
+            Signature verifier = JDK_VERIFIER_THREAD_LOCAL.get();
+            if (verifier == null) {
+                verifier = BC_VERIFIER_THREAD_LOCAL.get();
+            }
+
+            // 2. 重新初始化=状态重置
+            verifier.initVerify(publicKey);
+
+            // 3. 执行验签流程
+            verifier.update(data);
+            return verifier.verify(signature);
+        } catch (Exception e) {
+            log.error("Ed25519 验签异常", e);
+            return false;
+        }
     }
+
 
     /**
      * 字节数组转 Ed25519 公钥（X.509 编码，与 secp256k1 公钥编码格式一致）
@@ -286,7 +380,7 @@ public class Ed25519Signer {
      * @param data 待签名原始数据
      * @return 签名结果（64字节）
      */
-    public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
+/*    public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
         // 1. 生成缓存键：公钥（从私钥派生）+ 数据哈希
         byte[] publicKeyBytes = derivePublicKeyFromPrivateKey(extractPrivateKeyCore(privateKey));
         String cacheKey = generateCacheKey(publicKeyBytes, data);
@@ -301,7 +395,22 @@ public class Ed25519Signer {
         byte[] signature = applySignature(privateKey, data);
         SIGNATURE_CACHE.put(cacheKey, signature);
         return signature;
+    }*/
+    public static byte[] applySignatureWithCache(PrivateKey privateKey, byte[] data) {
+        byte[] publicKeyBytes = derivePublicKeyFromPrivateKey(extractPrivateKeyCore(privateKey));
+        String cacheKey = generateCacheKey(publicKeyBytes, data);
+
+        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
+        if (cachedSignature != null) {
+            return cachedSignature;
+        }
+
+        // 调用修正后的签名方法
+        byte[] signature = applySignature(privateKey, data);
+        SIGNATURE_CACHE.put(cacheKey, signature);
+        return signature;
     }
+
 
     /**
      * 带缓存的Ed25519验签：优先从缓存获取签名，未命中则执行验签
@@ -310,7 +419,7 @@ public class Ed25519Signer {
      * @param signature 签名结果（64字节）
      * @return true=验签成功，false=验签失败
      */
-    public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
+/*    public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
         // 1. 生成缓存键：公钥 + 数据哈希
         byte[] publicKeyBytes = extractPublicKeyCore(publicKey); // 提取32字节核心公钥
         String cacheKey = generateCacheKey(publicKeyBytes, data);
@@ -324,7 +433,20 @@ public class Ed25519Signer {
 
         // 3. 缓存未命中，执行验签（不缓存验签结果，仅缓存签名）
         return verifySignature(publicKey, data, signature);
+    }*/
+    public static boolean verifySignatureWithCache(PublicKey publicKey, byte[] data, byte[] signature) {
+        byte[] publicKeyBytes = extractPublicKeyCore(publicKey);
+        String cacheKey = generateCacheKey(publicKeyBytes, data);
+
+        byte[] cachedSignature = SIGNATURE_CACHE.getIfPresent(cacheKey);
+        if (cachedSignature != null) {
+            return Arrays.equals(cachedSignature, signature);
+        }
+
+        // 调用修正后的验签方法
+        return verifySignature(publicKey, data, signature);
     }
+
 
     // ------------------------------ 缓存辅助方法 ------------------------------
 
@@ -443,6 +565,17 @@ public class Ed25519Signer {
 
     }*/
 
+
+
+    /**
+     * 清理线程局部变量（在线程池任务结束时调用，避免内存泄漏）
+     */
+    public static void clearThreadLocals() {
+        JDK_SIGNER_THREAD_LOCAL.remove();
+        BC_SIGNER_THREAD_LOCAL.remove();
+        JDK_VERIFIER_THREAD_LOCAL.remove();
+        BC_VERIFIER_THREAD_LOCAL.remove();
+    }
 
     public static void main(String[] args) {
         //熵长度（字节）    熵长度（位）     校验和长度（位）    总比特数    单词数量（总比特数 ÷11）
