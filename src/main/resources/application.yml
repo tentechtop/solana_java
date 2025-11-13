@@ -9,7 +9,7 @@ server:
 
 system:
   #数据存储路径 按照网络前缀分类
-  db-path: "/home/solana/db"
+  path: "/solana/db"
   #数据库缓存大小 单位MB 基于LRU策略实现的一级缓存
   db-cache-size: 500
   #节点与节点之间的通信 TCP通信 支持P2P网络

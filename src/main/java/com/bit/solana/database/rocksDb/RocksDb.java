@@ -36,6 +36,11 @@ public class RocksDb implements DataBase {
 
     @Override
     public boolean createDatabase(DbConfig config) {
+        String path = config.getPath();
+        if (path == null) {
+            return false;
+        }
+        dbPath = path;
         tableCaches = Caffeine.newBuilder()
                 .maximumSize(100_00)
                 .expireAfterWrite(10, TimeUnit.MINUTES)

@@ -14,6 +14,7 @@ import java.util.Map;
 public class RTable {
     // 核心：表名 -> 列族 映射（表名即ColumnFamily的actualName）
     private static  Map<String, ColumnFamily> tableToCfMap = new HashMap<>();
+
     // 枚举ColumnFamily：补充getActualName方法（原有字段不变）
 
     enum ColumnFamily {
@@ -21,7 +22,7 @@ public class RTable {
         CHAIN("CHAIN", "chain",new ColumnFamilyOptions()),
 
         //区块信息
-        BLOCK("BLOCK", "utxo",new ColumnFamilyOptions()
+        BLOCK("BLOCK", "block",new ColumnFamilyOptions()
                 .setTableFormatConfig(new BlockBasedTableConfig()
                         .setBlockCacheSize(128 * 1024 * 1024)
                         .setCacheIndexAndFilterBlocks(true))),
@@ -40,9 +41,15 @@ public class RTable {
         private ColumnFamilyHandle handle;
     }
 
-    /**
-     * 初始化
-     */
+    // 关键：静态代码块，类加载时自动执行，初始化映射
+    static {
+        for (ColumnFamily cf : ColumnFamily.values()) {
+            tableToCfMap.put(cf.actualName, cf);
+        }
+        log.info("RTable静态初始化完成，加载列族数量：{}", tableToCfMap.size());
+    }
+
+
     /**
      * 初始化：将所有ColumnFamily枚举值添加到tableToCfMap中
      */
