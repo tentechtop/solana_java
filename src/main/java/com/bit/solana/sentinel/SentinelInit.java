@@ -16,8 +16,12 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Sentinel 对 SPI 的依赖Sentinel 框架在启动时，会通过 SPI 机制寻找 InitFunc 接口的所有实现类，并调用它们的 init() 方法。
+ * 你的 SentinelInit 类实现了 InitFunc 接口，并重写了 init() 方法（里面包含限流 / 熔断规则的初始化逻辑）。
+ * // 实现 InitFunc 接口，在应用启动时初始化规则
+ */
 @Slf4j
-// 实现 InitFunc 接口，在应用启动时初始化规则
 public class SentinelInit implements InitFunc {
     @Override
     public void init() throws Exception {
