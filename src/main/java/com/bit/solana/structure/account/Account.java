@@ -78,4 +78,34 @@ public class Account {
     public boolean isClosed() {
         return lamports == 0 && (data == null || data.length == 0);
     }
+
+
+    public void setLamports(long lamports) {
+        if (lamports < 0) {
+            throw new IllegalArgumentException("账户余额不能为负数");
+        }
+        this.lamports = lamports;
+    }
+
+    /**
+     * 动态判断账户是否豁免租金（基于当前余额和数据长度）
+     * @param rentPerBytePerEpoch 网络当前每字节每 epoch 的租金（从集群获取）
+     * @return true=余额满足最低门槛，豁免租金
+     */
+    public boolean isRentExempt(long rentPerBytePerEpoch) {
+        int dataLength = data == null ? 0 : data.length;
+        long minRent = calculateMinimumRent(dataLength, rentPerBytePerEpoch);
+        return this.lamports >= minRent;
+    }
+
+    /**
+     * 计算账户豁免租金所需的最低余额
+     * 公式：最低余额 = 基础租金 + 数据长度 * 每字节租金
+     * （基础租金是固定值，由 Solana 协议定义）
+     */
+    private long calculateMinimumRent(int dataLength, long rentPerBytePerEpoch) {
+        final long BASE_RENT = 2039280; // 基础租金
+        return BASE_RENT + (long) dataLength * rentPerBytePerEpoch;
+    }
+
 }
