@@ -37,4 +37,8 @@ public class AccountMeta {
     public byte[] getPublicKey() {
         return pubkey.getValue();
     }
+
+    public void setPublicKey(byte[] pubKey) {
+        this.pubkey = new PubkeyHash(pubKey);
+    }
 }

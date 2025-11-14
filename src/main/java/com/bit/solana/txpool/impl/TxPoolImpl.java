@@ -38,6 +38,16 @@ import static com.bit.solana.util.ByteUtils.hexToBytes;
 @Slf4j
 @Service
 public class TxPoolImpl implements TxPool {
+    /**
+     * 超时丢弃交易池 和 缓冲池
+     */
+    //使用优先队列（大顶堆） 只需O(n log k)（k=5000），效率更高。
+    //从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
+
+    //明确筛选目标：从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
+    //数据结构选择：使用小顶堆（Min-Heap），仅维护容量为 5000 的堆。堆顶是当前已选 5000 笔中手续费最低的，当新交易手续费高于堆顶时，替换堆顶并调整堆，最终堆中即为结果。
+    //优势：时间复杂度 O (N log 5000)（远优于排序的 O (N log N)），空间复杂度 O (5000)（内存占用极低）。
+
 
     /**
      * 轻量级校验后放入交易提交池  100万笔交易 每笔500字节  最大1024M最大容量
@@ -1311,4 +1321,8 @@ public class TxPoolImpl implements TxPool {
 
         log.info("交易池已关闭");
     }
+
+
+
+
 }

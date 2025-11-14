@@ -1,9 +1,6 @@
 package com.bit.solana.common;
 
-import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.ToString;
+import lombok.*;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -14,12 +11,13 @@ import java.util.Arrays;
  */
 @EqualsAndHashCode(of = "value")
 @ToString(of = "hexValue")
+@Data
 public abstract class ByteHash32 implements Serializable {
     public static final int HASH_LENGTH = 32;
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
 
     // 存储32字节哈希数据（私有且不可变）
-    private final byte[] value;
+    private byte[] value;
     // 缓存十六进制字符串（避免重复计算）
     @Getter(AccessLevel.PROTECTED)
     private final String hexValue;
@@ -111,5 +109,12 @@ public abstract class ByteHash32 implements Serializable {
      */
     public byte[] getBytes() {
         return Arrays.copyOf(value, HASH_LENGTH);
+    }
+
+    public void setValue(byte[] hash) {
+        if (hash == null || hash.length != HASH_LENGTH) {
+            throw new IllegalArgumentException("Hash must be " + HASH_LENGTH + " bytes, got " + hash.length);
+        }
+        this.value = hash;
     }
 }

@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.Sha.applySHA256;
 
 /**
@@ -63,6 +64,10 @@ public class Transaction {
 
     private POHRecord pohRecord;
 
+    private long fee;
+
+    private long size; //字节
+
     /**
      * 生成交易ID（txId）：取第一个签名的字节数组，转换为十六进制字符串
      * Solana中交易ID本质是第一个签名的哈希标识
@@ -79,6 +84,20 @@ public class Transaction {
             txId = bytes;
         }
         return txId;
+    }
+
+    public String getTxIdStr() {
+        if (txId == null) {
+            // 校验：有效的交易必须至少有一个签名（费用支付者的签名）
+            if (signatures == null || signatures.isEmpty()) {
+                throw new IllegalStateException("交易没有签名，无法生成txId");
+            }
+            Signature signature = signatures.getFirst();
+            byte[] value = signature.getValue();
+            byte[] bytes = applySHA256(value);
+            txId = bytes;
+        }
+        return bytesToHex(txId);
     }
 
     /**
@@ -235,4 +254,51 @@ public class Transaction {
     }
 
 
+
+    @Override
+    public int hashCode() {
+        // 优先使用txId计算哈希（唯一标识）
+        if (txId != null) {
+            return calculateHashCodeFromBytes(txId);
+        }
+
+        // 若txId未生成（未签名），使用核心字段组合计算
+        int result = 17; // 初始质数
+        // 签名列表哈希
+        result = 31 * result + (signatures != null ? signatures.hashCode() : 0);
+        // 账户列表哈希
+        result = 31 * result + (accounts != null ? accounts.hashCode() : 0);
+        // 指令列表哈希
+        result = 31 * result + (instructions != null ? instructions.hashCode() : 0);
+        // 最近区块哈希
+        result = 31 * result + (recentBlockhash != null ? recentBlockhash.hashCode() : 0);
+        return result;
+    }
+
+    /**
+     * 基于字节数组计算哈希值（适配txId的32字节数组）
+     */
+    private int calculateHashCodeFromBytes(byte[] bytes) {
+        int hash = 0;
+        // 取字节数组的前4个字节（32位）作为基础哈希，若不足4字节则全部参与计算
+        for (int i = 0; i < Math.min(bytes.length, 4); i++) {
+            hash = (hash << 8) | (bytes[i] & 0xFF); // 拼接字节为整数
+        }
+        // 结合数组整体长度和部分字节，增强哈希分布（避免前4字节相同的情况）
+        hash ^= bytes.length;
+        for (int i = bytes.length / 2; i < Math.min(bytes.length, bytes.length / 2 + 4); i++) {
+            hash = 31 * hash + (bytes[i] & 0xFF);
+        }
+        // 确保哈希值非负（与SEGMENT_COUNT取模时结果为非负）
+        return Math.abs(hash);
+    }
+
+    public int getSize() {
+        return 10000;
+    }
+
+    public boolean isExpired(long currentTime) {
+
+        return false;
+    }
 }

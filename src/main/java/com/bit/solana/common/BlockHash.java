@@ -1,5 +1,7 @@
 package com.bit.solana.common;
 
+import lombok.Data;
+
 /**
  * 区块哈希（32字节），标识一个区块的唯一ID
  */

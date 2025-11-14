@@ -1,0 +1,219 @@
+package com.bit.solana.txpool.impl;
+
+import com.bit.solana.structure.tx.Transaction;
+import com.bit.solana.txpool.SubmitPool;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
+
+@Slf4j
+@Component
+public class SubmitPoolImpl implements SubmitPool {
+    // 配置参数
+    private static final int MAX_CAPACITY = 2 << 19; // 总容量 1048576 笔
+    private static final int MAX_SIZE = 2 << 29;      // 总容量 1G 字节
+    private static final int SELECTION_SIZE = 5_000;  // 每次筛选最大数量
+    private static final int SHARD_COUNT  = 16;      // 分段数量（2的幂次，便于哈希）
+    private static final int SEGMENT_CAPACITY = MAX_CAPACITY / SHARD_COUNT ; // 每段容量 65536 笔
+    private static final int SEGMENT_SIZE = MAX_SIZE / SHARD_COUNT ;         // 每段容量 64M 字节
+
+    // 缓冲池总交易笔数量 (精确)
+    private final AtomicInteger totalTx = new AtomicInteger(0);
+    // 总字节数（原子计数，精确）
+    private final AtomicLong totalBytes = new AtomicLong(0);
+
+    // 分片数组：每个分片包含一个优先级队列和锁
+    private final Shard[] shards = new Shard[SHARD_COUNT];
+    // 分片内部结构
+    private static class Shard {
+        final PriorityQueue<Transaction> txQueue; // 按优先级排序
+        final ReentrantLock lock = new ReentrantLock(); // 分片级锁
+        final AtomicInteger count = new AtomicInteger(0); // 交易数
+        final AtomicLong bytes = new AtomicLong(0); // 总字节数
+        Shard(Comparator<Transaction> comparator) {
+            this.txQueue = new PriorityQueue<>(comparator);
+        }
+    }
+
+
+    @PostConstruct
+    public void init() {
+        // 初始化所有分片，按交易费用（fee）降序排序（高优先级优先）
+        for (int i = 0; i < SHARD_COUNT; i++) {
+            shards[i] = new Shard(Comparator.comparingLong(Transaction::getFee).reversed());
+        }
+        log.info("SubmitPool initialized with {} shards, max capacity: {} txs, max size: {} bytes",
+                SHARD_COUNT, MAX_CAPACITY, MAX_SIZE);
+    }
+
+
+    // 计算交易所属分片
+    private int getShardIndex(Transaction tx) {
+        String firstWritableAccount = tx.getTxIdStr();
+        return Math.abs(firstWritableAccount.hashCode() % SHARD_COUNT);
+    }
+
+    /**
+     * 提取并删除优先级最高的交易
+     * @return 筛选出的交易列表
+     */
+    @Override
+    public List<Transaction> selectAndRemoveTopTransactions() {
+        List<Transaction> result = new ArrayList<>();
+        int remaining = SELECTION_SIZE;
+
+        // 轮询所有分片提取高优先级交易
+        for (Shard shard : shards) {
+            if (remaining <= 0) break;
+
+            shard.lock.lock();
+            try {
+                // 从当前分片提取最多remaining笔交易
+                while (remaining > 0 && !shard.txQueue.isEmpty()) {
+                    Transaction tx = shard.txQueue.poll();
+                    if (tx == null) break;
+
+                    // 更新分片和全局统计
+                    int txSize = tx.calculateSize();
+                    shard.count.decrementAndGet();
+                    shard.bytes.addAndGet(-txSize);
+                    totalTx.decrementAndGet();
+                    totalBytes.addAndGet(-txSize);
+
+                    result.add(tx);
+                    remaining--;
+                }
+            } finally {
+                shard.lock.unlock();
+            }
+        }
+
+        log.debug("Selected {} top transactions from pool", result.size());
+        return result;
+    }
+
+    /**
+     * 添加一笔交易到池中
+     * @param transaction 待添加的交易
+     * @return 是否添加成功
+     */
+    @Override
+    public boolean addTransaction(Transaction transaction) {
+        if (transaction == null) {
+            log.warn("Attempt to add null transaction");
+            return false;
+        }
+
+        int txSize = transaction.calculateSize();
+        int shardIndex = getShardIndex(transaction);
+        Shard shard = shards[shardIndex];
+
+        // 先检查全局容量
+        if (totalTx.get() >= MAX_CAPACITY || totalBytes.get() + txSize > MAX_SIZE) {
+            log.debug("Global capacity exceeded, cannot add transaction {}", transaction.getTxIdStr());
+            return false;
+        }
+
+        shard.lock.lock();
+        try {
+            // 检查分片容量
+            if (shard.count.get() >= SEGMENT_CAPACITY || shard.bytes.get() + txSize > SEGMENT_SIZE) {
+                log.debug("Shard {} capacity exceeded, cannot add transaction {}", shardIndex, transaction.getTxIdStr());
+                return false;
+            }
+
+            // 检查是否已存在相同交易（避免重复提交）
+            if (shard.txQueue.contains(transaction)) {
+                log.debug("Duplicate transaction {} found in shard {}", transaction.getTxIdStr(), shardIndex);
+                return false;
+            }
+
+            // 添加交易并更新统计
+            shard.txQueue.add(transaction);
+            shard.count.incrementAndGet();
+            shard.bytes.addAndGet(txSize);
+            totalTx.incrementAndGet();
+            totalBytes.addAndGet(txSize);
+
+            log.trace("Added transaction {} to shard {}, current shard count: {}",
+                    transaction.getTxIdStr(), shardIndex, shard.count.get());
+            return true;
+        } finally {
+            shard.lock.unlock();
+        }
+    }
+
+
+    /**
+     * 清除过期交易
+     * @param currentTime 当前时间戳
+     * @return 清除的交易数量
+     */
+    @Override
+    public int cleanExpiredTransactions(long currentTime) {
+        int totalRemoved = 0;
+
+        for (int i = 0; i < SHARD_COUNT; i++) {
+            Shard shard = shards[i];
+            shard.lock.lock();
+            try {
+                Iterator<Transaction> iterator = shard.txQueue.iterator();
+                int shardRemoved = 0;
+
+                while (iterator.hasNext()) {
+                    Transaction tx = iterator.next();
+                    if (tx.isExpired(currentTime)) {
+                        int txSize = tx.calculateSize();
+                        iterator.remove();
+
+                        // 更新统计
+                        shard.count.decrementAndGet();
+                        shard.bytes.addAndGet(-txSize);
+                        totalTx.decrementAndGet();
+                        totalBytes.addAndGet(-txSize);
+
+                        shardRemoved++;
+                        totalRemoved++;
+                        log.trace("Removed expired transaction {} from shard {}", tx.getTxIdStr(), i);
+                    }
+                }
+
+                if (shardRemoved > 0) {
+                    log.debug("Shard {} removed {} expired transactions", i, shardRemoved);
+                }
+            } finally {
+                shard.lock.unlock();
+            }
+        }
+
+        log.info("Total expired transactions removed: {}", totalRemoved);
+        return totalRemoved;
+    }
+
+    /**
+     * 获取总交易字节大小
+     * @return 总字节数
+     */
+    @Override
+    public long getTotalTransactionSize() {
+        return totalBytes.get();
+    }
+
+    /**
+     * 获取总交易数量
+     * @return 交易总数
+     */
+    @Override
+    public int getTotalTransactionCount() {
+        return totalTx.get();
+    }
+
+
+}
