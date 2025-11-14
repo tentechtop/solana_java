@@ -8,6 +8,27 @@ import com.bit.solana.structure.tx.json.TransferTx;
 
 public interface AccountService {
 
+    /**
+     * 该账户下的交易 分页查询
+     */
+
+    /**
+     * 账户是否豁免租金
+     */
+
+    /**
+     * 账户到期时间  如果金额充足就不到期
+     */
+
+    /**
+     * 账户是否存在
+     */
+
+
+
+
+
+
     Account getAccountByHash(byte[] hash);
 
     Result createMnemonic();

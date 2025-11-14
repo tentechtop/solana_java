@@ -324,8 +324,18 @@ public class Transaction {
         return 10000;
     }
 
-    public boolean isExpired(long currentTime) {
 
-        return false;
+
+    /**
+     * 判断交易是否过期
+     * 规则：当前时间与交易提交时间的差值超过400ms，则认为过期
+     * @param currentTime 当前时间（毫秒级时间戳，建议使用System.currentTimeMillis()）
+     * @return 过期返回true，否则返回false
+     */
+    public boolean isExpired(long currentTime) {
+        if (submitTime <= 0) {
+            return true;
+        }
+        return (currentTime - submitTime) > 400;
     }
 }

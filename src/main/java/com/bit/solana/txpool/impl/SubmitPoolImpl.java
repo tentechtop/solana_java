@@ -1,10 +1,13 @@
 package com.bit.solana.txpool.impl;
 
 import com.bit.solana.structure.tx.Transaction;
+import com.bit.solana.structure.tx.TransactionStatusResolver;
 import com.bit.solana.txpool.SubmitPool;
 import com.google.common.hash.Hashing;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -20,12 +23,14 @@ import java.util.stream.Collectors;
 @Component
 public class SubmitPoolImpl implements SubmitPool {
     // 配置参数（根据实际压测调整）
-    private static final int MAX_CAPACITY = 2 << 19; // 1048576 笔
-    private static final int MAX_SIZE = 2 << 29;      // 1G 字节
-    private static final int SELECTION_SIZE = 5_000;  // 每次筛选最大数量
+    private static final int MAX_CAPACITY = 1 << 20; // 1048576 笔
+    private static final int MAX_SIZE = 1 << 30;      // 1G 字节
+    private static final int SELECTION_SIZE = 1<<12;  // 每次筛选最大数量
     private static final int SHARD_COUNT = 32;        // 分片数（2的幂次，增加分片减少竞争）
     private static final int SEGMENT_CAPACITY = MAX_CAPACITY / SHARD_COUNT; // 每分片容量
     private static final int SEGMENT_SIZE = MAX_SIZE / SHARD_COUNT;         // 每分片字节限制
+    // 交易过期时间（ms）
+    private static final long TX_EXPIRE_SECONDS = 400;
 
     // 全局统计（原子操作确保精确性）
     private final AtomicInteger totalTx = new AtomicInteger(0);
@@ -34,16 +39,8 @@ public class SubmitPoolImpl implements SubmitPool {
     // 分片数组：使用ConcurrentSkipListSet实现无锁排序，StampedLock优化读写
     private final Shard[] shards = new Shard[SHARD_COUNT];
 
-
-
-    // 超时检查定时器
-    private ScheduledExecutorService timeoutChecker;
     // 清理过期交易定时器
-    private ScheduledExecutorService cleanupScheduler;
-    // TPS统计定时器
-    private ScheduledExecutorService tpsStatScheduler;
-
-
+    private ThreadPoolTaskScheduler cleanupScheduler;
 
     // 分片内部结构
     private static class Shard {
@@ -70,6 +67,40 @@ public class SubmitPoolImpl implements SubmitPool {
         }
         log.info("SubmitPool initialized with {} shards, max capacity: {} txs, max size: {} bytes",
                 SHARD_COUNT, MAX_CAPACITY, MAX_SIZE);
+        // 初始化定时清理调度器
+        initCleanupScheduler();
+    }
+
+    /**
+     * 初始化定时清理任务调度器，每400ms执行一次过期交易清理
+     */
+    private void initCleanupScheduler() {
+        cleanupScheduler = new ThreadPoolTaskScheduler();
+        cleanupScheduler.setThreadNamePrefix("tx-cleanup-"); // 线程名前缀，便于日志跟踪
+        cleanupScheduler.setPoolSize(1); // 清理任务单线程即可，避免并发冲突
+        cleanupScheduler.initialize();
+
+        // 提交定时任务：每400ms执行一次
+        cleanupScheduler.scheduleAtFixedRate(
+                this::cleanExpiredTask, // 执行的任务
+                400 // 间隔时间（ms）
+        );
+        log.info("Expired transaction cleanup scheduler initialized, interval: 400ms");
+    }
+
+    /**
+     * 定时清理任务的具体逻辑
+     */
+    private void cleanExpiredTask() {
+        try {
+            long currentTime = System.currentTimeMillis();
+            int removedCount = cleanExpiredTransactions(currentTime);
+            if (removedCount > 0) {
+                log.debug("Cleanup task removed {} expired transactions", removedCount);
+            }
+        } catch (Exception e) {
+            log.error("Error occurred during expired transaction cleanup", e);
+        }
     }
 
     /**
@@ -158,9 +189,8 @@ public class SubmitPoolImpl implements SubmitPool {
             return false;
         }
         //轻度校验快速失败 TODO
-
-
-        // 缓存交易大小（避免重复计算）
+        TransactionStatusResolver.addStatus(transaction, TransactionStatusResolver.UNSUBMITTED);
+        transaction.setSubmitTime(System.currentTimeMillis());
         int txSize = transaction.getSize();
         int shardIndex = getShardIndex(transaction);
         Shard shard = shards[shardIndex];
@@ -188,12 +218,14 @@ public class SubmitPoolImpl implements SubmitPool {
             totalTx.incrementAndGet();
             log.trace("Added transaction {} to shard {}, current shard count: {}",
                     transaction.getTxIdStr(), shardIndex, shard.count.get());
+            TransactionStatusResolver.addStatus(transaction, TransactionStatusResolver.SUBMITTED);
             return true;
         } else {
             // 添加失败（重复）：回滚容量计数
             shard.bytes.addAndGet(-txSize);
             totalBytes.addAndGet(-txSize);
             log.debug("Duplicate transaction {} found in shard {}", transaction.getTxIdStr(), shardIndex);
+            TransactionStatusResolver.addStatus(transaction, TransactionStatusResolver.DROPPED);
             return false;
         }
     }
@@ -273,4 +305,138 @@ public class SubmitPoolImpl implements SubmitPool {
     public int getTotalTransactionCount() {
         return totalTx.get();
     }
+
+
+    /**
+     * 根据交易ID查找交易
+     * @param txId 交易ID字符串
+     * @return 找到的交易，未找到则返回null
+     */
+    @Override
+    public Transaction findTransactionByTxId(String txId) {
+        if (txId == null || txId.isEmpty()) {
+            log.warn("查找交易失败：交易ID为空");
+            return null;
+        }
+
+        // 计算目标分片索引（复用哈希算法）
+        int shardIndex = getShardIndexByTxId(txId);
+        Shard shard = shards[shardIndex];
+
+        long stamp = shard.lock.tryOptimisticRead();
+        try {
+            // 遍历分片内交易，匹配txId
+            for (Transaction tx : shard.txSet) {
+                if (txId.equals(tx.getTxIdStr())) {
+                    return tx;
+                }
+            }
+            // 验证乐观读有效性，无效则升级为悲观读
+            if (!shard.lock.validate(stamp)) {
+                stamp = shard.lock.readLock();
+                try {
+                    for (Transaction tx : shard.txSet) {
+                        if (txId.equals(tx.getTxIdStr())) {
+                            return tx;
+                        }
+                    }
+                } finally {
+                    shard.lock.unlockRead(stamp);
+                }
+            }
+        } catch (Exception e) {
+            log.error("查找交易ID[{}]失败", txId, e);
+        }
+        return null;
+    }
+
+    /**
+     * 根据交易ID删除交易
+     * @param txId 交易ID字符串
+     * @return 成功删除返回true，否则返回false
+     */
+    @Override
+    public boolean removeTransactionByTxId(String txId) {
+        if (txId == null || txId.isEmpty()) {
+            log.warn("删除交易失败：交易ID为空");
+            return false;
+        }
+
+        // 计算目标分片索引（复用哈希算法）
+        int shardIndex = getShardIndexByTxId(txId);
+        Shard shard = shards[shardIndex];
+
+        // 先尝试乐观读定位交易
+        long stamp = shard.lock.tryOptimisticRead();
+        Transaction targetTx = null;
+        try {
+            for (Transaction tx : shard.txSet) {
+                if (txId.equals(tx.getTxIdStr())) {
+                    targetTx = tx;
+                    break;
+                }
+            }
+            // 验证乐观读有效性，无效则升级为悲观读重新查找
+            if (!shard.lock.validate(stamp)) {
+                stamp = shard.lock.readLock();
+                try {
+                    for (Transaction tx : shard.txSet) {
+                        if (txId.equals(tx.getTxIdStr())) {
+                            targetTx = tx;
+                            break;
+                        }
+                    }
+                } finally {
+                    shard.lock.unlockRead(stamp);
+                }
+            }
+        } catch (Exception e) {
+            log.error("查找待删除交易ID[{}]失败", txId, e);
+            return false;
+        }
+
+        // 若找到交易，执行删除（需悲观写锁）
+        if (targetTx != null) {
+            stamp = shard.lock.writeLock();
+            try {
+                // 再次检查交易是否存在（防止并发删除）
+                if (shard.txSet.remove(targetTx)) {
+                    int txSize = targetTx.getSize();
+                    // 更新分片和全局统计
+                    shard.count.decrementAndGet();
+                    shard.bytes.addAndGet(-txSize);
+                    totalTx.decrementAndGet();
+                    totalBytes.addAndGet(-txSize);
+                    log.debug("删除交易成功，ID:{}，分片:{}", txId, shardIndex);
+                    return true;
+                }
+            } finally {
+                shard.lock.unlockWrite(stamp);
+            }
+        }
+
+        log.debug("未找到交易或已被删除，ID:{}，分片:{}", txId, shardIndex);
+        return false;
+    }
+
+    /**
+     * 根据交易ID字符串计算分片索引（复用MurmurHash算法）
+     */
+    private int getShardIndexByTxId(String txId) {
+        int hash = Hashing.murmur3_32_fixed().hashString(txId, StandardCharsets.UTF_8).asInt();
+        return Math.abs(hash) % SHARD_COUNT;
+    }
+
+    /**
+     * 销毁Bean时关闭调度器，释放资源
+     */
+    @PreDestroy
+    public void destroy() {
+        if (cleanupScheduler != null) {
+            cleanupScheduler.shutdown();
+            log.info("Expired transaction cleanup scheduler shutdown");
+        }
+        // 若有其他调度器（如tpsStatScheduler），也在此处关闭
+    }
+
 }

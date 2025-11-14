@@ -5,6 +5,7 @@ import com.bit.solana.structure.account.AccountMeta;
 import com.bit.solana.structure.tx.Instruction;
 import com.bit.solana.structure.tx.Signature;
 import com.bit.solana.structure.tx.Transaction;
+import com.bit.solana.structure.tx.TransactionStatusResolver;
 import com.bit.solana.txpool.impl.SubmitPoolImpl;
 import com.bit.solana.util.Sha;
 import org.springframework.util.Assert;
@@ -27,16 +28,30 @@ public class SubmitPoolMainTest {
 
     public static void main(String[] args) throws InterruptedException {
         // 初始化资源
-        setup();
+/*        setup();*/
 
-        // 启动生产者和消费者
+/*        // 启动生产者和消费者
         startWorkers();
 
         // 运行测试（持续30秒，可根据需要调整）
         Thread.sleep(30000 * 100);
 
         // 清理资源
-        teardown();
+        teardown();*/
+
+        submitPool = new SubmitPoolImpl();
+        submitPool.init();
+
+        Transaction tx = createRandomTransaction();
+        submitPool.addTransaction(tx);
+        String txIdStr = tx.getTxIdStr();
+        Transaction transactionByTxId = submitPool.findTransactionByTxId(txIdStr);
+        String statusString = TransactionStatusResolver.getStatusString(transactionByTxId);
+        System.out.println("交易状态"+ statusString);
+
+        System.out.println("查询到的叫i有"+transactionByTxId.toString());
+
+
     }
 
     // 初始化提交池并填充10万笔初始交易

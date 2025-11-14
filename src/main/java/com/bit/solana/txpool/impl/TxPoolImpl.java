@@ -8,6 +8,7 @@ import com.bit.solana.result.Result;
 import com.bit.solana.structure.account.AccountMeta;
 import com.bit.solana.structure.bloom.AccountConflictBloom;
 import com.bit.solana.structure.tx.*;
+import com.bit.solana.txpool.SubmitPool;
 import com.bit.solana.txpool.TxPool;
 import com.bit.solana.util.ByteUtils;
 import com.google.common.cache.CacheBuilder;
@@ -38,22 +39,34 @@ import static com.bit.solana.util.ByteUtils.hexToBytes;
 @Slf4j
 @Service
 public class TxPoolImpl implements TxPool {
+    /**
+     * 从缓冲池提取交易 并重度校验 将校验好的交易 按照POH 和 交易手续费用 排序 等待打包到区块
+     */
     // ==================== 核心配置参数 ====================
-    // 单个交易处理超时时间（200ms）
-    private static final long TIMEOUT_MILLIS = 200;
+    private static final int TARGET_POOL_SIZE = 1<< 17; // 65536 * 2 笔交易
+    // 从缓冲池拉取交易的批次大小
+    private static final int BATCH_FETCH_SIZE = 1<<12; // 1024 * 4
+
+    // 定时拉取缓冲池交易的间隔（毫秒）
+    private static final long FETCH_INTERVAL_MS = 100;
+
+    // 单个交易处理超时时间（400ms）
+    private static final long TIMEOUT_MILLIS = 400;
     // 超时检查间隔（100ms）
     private static final long CHECK_TIMEOUT_INTERVAL = 100;
     // 最大交易池大小，防止内存溢出
     private static final int MAX_POOL_SIZE = 1_000_000;
     // 清理过期交易的间隔时间
     private static final long CLEANUP_INTERVAL = 5_000;
-    // 交易过期时间（秒）- 基于recentBlockhash的有效性
-    private static final long TX_EXPIRE_SECONDS = 120;
+    // 交易过期时间（ms）- 基于recentBlockhash的有效性
+    private static final long TX_EXPIRE_SECONDS = 400;
 
 
     // ==================== 核心组件 ====================
     @Autowired
     private POHService pohService;
+    @Autowired
+    private SubmitPool submitPool;
 
     // 处理线程池（工作窃取算法）
     private ForkJoinPool processPool;
@@ -69,7 +82,6 @@ public class TxPoolImpl implements TxPool {
     private final ConcurrentMap<byte[], TransactionGroup> txGroups = new ConcurrentHashMap<>();
 
     // ==================== 数据存储 ====================
-
     // 处理中交易追踪（原子操作，线程安全）
     private final ConcurrentHashMap<String, Transaction> processingTxs = new ConcurrentHashMap<>();
     // 交易池分片（每个分片独立锁）
@@ -82,7 +94,6 @@ public class TxPoolImpl implements TxPool {
     private final AccountConflictBloom accountConflictBloom = AccountConflictBloom.createEmpty();
     // 交易池大小计数器
     private final AtomicInteger poolSize = new AtomicInteger(0);
-
 
     // 并行处理线程池（工作窃取算法，适合大量小任务）
     private final ExecutorService processingPool = new ForkJoinPool(
@@ -111,7 +122,6 @@ public class TxPoolImpl implements TxPool {
 
 
 
-
     @PostConstruct
     public void init(){
         // 初始化分片
@@ -120,8 +130,22 @@ public class TxPoolImpl implements TxPool {
         initExecutors();
         // 启动定时器任务
         startScheduledTasks();
-
     }
+
+
+    /**
+     * 提取最优质的 不超过 BATCH_FETCH_SIZE 笔交易 不删除 等区块上链后删除
+     */
+
+
+    /**
+     * 根据交易ID 删除
+     */
+
+    /**
+     * 根据交易ID 批量删除
+     */
+
 
 
     /**

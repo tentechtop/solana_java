@@ -13,6 +13,14 @@ import org.rocksdb.ColumnFamilyOptions;
  * 表枚举（集中管理所有表的元信息，作为唯一数据源）
  */
 public enum TableEnum {
+    ACCOUNT(
+            (short) 1,
+            "account",  // 列族实际存储名称
+            new ColumnFamilyOptions(),  // 列族配置
+            100,  //MB
+            60 * 60 * 60  //单位
+    ),
+
     // 链信息表：定义表标识、列族名称、列族配置
     CHAIN(
             (short) 1,

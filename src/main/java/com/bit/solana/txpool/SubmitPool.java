@@ -11,5 +11,6 @@ public interface SubmitPool {
     int cleanExpiredTransactions(long currentTime);
     long getTotalTransactionSize();
     int getTotalTransactionCount();
-
+    boolean removeTransactionByTxId(String txId);
+    Transaction findTransactionByTxId(String txId);
 }
