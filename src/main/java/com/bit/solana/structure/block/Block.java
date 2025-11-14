@@ -94,9 +94,9 @@ public class Block {
      * - 共识模块达成超2/3投票后设为CONFIRMED；
      * - 区块被写入持久化存储后设为ARCHIVED（内存中可标记为待回收）
      * 区块状态（用byte表示，1字节，节省内存）
-     * 详见 {@link com.bit.solana.structure.block.BlockStatus}
+     * 详见 {@link com.bit.solana.structure.block.BlockStatusResolver}
      */
-    private BlockStatus blockStatus;
+    private short blockStatus;
 
     /**
      * 是否为候选区块（分叉场景）

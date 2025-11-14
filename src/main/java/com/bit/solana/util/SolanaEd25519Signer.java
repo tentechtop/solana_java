@@ -126,8 +126,8 @@ public class SolanaEd25519Signer {
     static {
         Security.addProvider(new BouncyCastleProvider());
         SIGNATURE_CACHE   = Caffeine.newBuilder()
-                .maximumSize(100_000) // 最大缓存10万条签名
-                .expireAfterWrite(5, TimeUnit.MINUTES) // 5分钟未访问则淘汰
+                .maximumSize(100_000_0) // 最大缓存10万条签名
+                .expireAfterWrite(10, TimeUnit.MINUTES) // 5秒
                 .recordStats() // 启用统计（便于监控命中率）
                 .build();
     }

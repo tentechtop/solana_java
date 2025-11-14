@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
@@ -32,6 +33,17 @@ public class SubmitPoolImpl implements SubmitPool {
 
     // 分片数组：使用ConcurrentSkipListSet实现无锁排序，StampedLock优化读写
     private final Shard[] shards = new Shard[SHARD_COUNT];
+
+
+
+    // 超时检查定时器
+    private ScheduledExecutorService timeoutChecker;
+    // 清理过期交易定时器
+    private ScheduledExecutorService cleanupScheduler;
+    // TPS统计定时器
+    private ScheduledExecutorService tpsStatScheduler;
+
+
 
     // 分片内部结构
     private static class Shard {
@@ -145,6 +157,8 @@ public class SubmitPoolImpl implements SubmitPool {
             log.warn("Attempt to add null transaction");
             return false;
         }
+        //轻度校验快速失败 TODO
+
 
         // 缓存交易大小（避免重复计算）
         int txSize = transaction.getSize();

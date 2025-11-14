@@ -38,84 +38,15 @@ import static com.bit.solana.util.ByteUtils.hexToBytes;
 @Slf4j
 @Service
 public class TxPoolImpl implements TxPool {
-    /**
-     * 超时丢弃交易池 和 缓冲池
-     */
-    //使用优先队列（大顶堆） 只需O(n log k)（k=5000），效率更高。
-    //从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
-
-    //明确筛选目标：从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
-    //数据结构选择：使用小顶堆（Min-Heap），仅维护容量为 5000 的堆。堆顶是当前已选 5000 笔中手续费最低的，当新交易手续费高于堆顶时，替换堆顶并调整堆，最终堆中即为结果。
-    //优势：时间复杂度 O (N log 5000)（远优于排序的 O (N log N)），空间复杂度 O (5000)（内存占用极低）。
-
-
-    /**
-     * 轻量级校验后放入交易提交池  100万笔交易 每笔500字节  最大1024M最大容量
-     * 接收、轻量校验、削峰填谷
-     * 轻量级（格式校验、队列入队）
-     * 临时存储待验证交易
-     * 高吞吐（抗突发流量）
-     */
-
-    /**
-     * 交易池 10万笔交易 或者 500M最大容量  同时维护当前每字节手续费  交易池保持满载 有空位就去拉取
-     * 存储、排序、冲突检测、等待打包
-     * 重量级（余额校验、冲突检测、TPS 排序）
-     * 低延迟（快速筛选可打包交易）
-     */
-
-
-
-    /**
-     * 布隆过滤器 快速判断 是否不存在
-     */
-
-    /**
-     * . 窃取机制的核心原理
-     * （1）线程本地队列（非完全共享）
-     * 每个工作线程（Worker Thread）拥有一个本地任务队列（通常是双端队列，Deque），用于存储分配给它的任务。
-     * 线程优先处理自己本地队列中的任务（从队尾取任务，LIFO 顺序），此时无需与其他线程竞争，几乎无锁开销。
-     *
-     * （2）任务窃取逻辑
-     * 当线程 A 的本地队列空了，它会随机选择另一个线程 B，尝试从 B 的队列头部（FIFO 顺序）“窃取” 一个任务执行。
-     * 这种 “本地队尾执行，窃取队头” 的设计，可减少线程 A 和线程 B 的操作冲突（A 从 B 的头部取，B 从自己的尾部取，除非队列只剩一个任务，否则不会竞争）。
-     */
-
-    /**
-     * 堆内存分配 40GB+（避免频繁 GC），使用 ZGC 或 Shenandoah 低延迟 GC，设置-XX:MaxGCPauseMillis=10；
-     */
-    /**
-     * 挑战：ForkJoinPool的任务窃取机制虽高效，但频繁的任务拆分和窃取可能带来调度开销，尤其在任务粒度太小（如单笔交易作为一个任务）时。
-     * 优化：
-     * 批量处理任务（如每批 100 笔交易），减少任务调度次数；
-     * 调整ForkJoinPool的并行度（parallelism参数）与 CPU 核心数匹配（避免超线程过度使用导致的性能下降）；
-     * 对耗时差异大的交易（如简单转账 vs 复杂合约调用）分类处理，避免长任务阻塞短任务。
-     */
-
-
     // ==================== 核心配置参数 ====================
-    // Disruptor环形缓冲区大小（2^20=1,048,576，支撑10万TPS缓冲）
-    private static final int RING_BUFFER_SIZE = 1 << 20;
-    // 处理线程数（按1万TPS估算）
-    private static final int PROCESS_THREAD_COUNT = Runtime.getRuntime().availableProcessors() * 4;
-    // 分片数量（建议为2的幂，哈希分布更均匀）
-    private static final int SHARD_COUNT = 32;
-    // 等待队列容量（背压机制）
-    private static final int QUEUE_CAPACITY = 200_000;
-    // 失败重试次数
-    private static final int MAX_RETRY = 3;
-    // 单个交易处理超时时间（500ms）
-    private static final long TIMEOUT_MILLIS = 500;
+    // 单个交易处理超时时间（200ms）
+    private static final long TIMEOUT_MILLIS = 200;
     // 超时检查间隔（100ms）
     private static final long CHECK_TIMEOUT_INTERVAL = 100;
     // 最大交易池大小，防止内存溢出
     private static final int MAX_POOL_SIZE = 1_000_000;
     // 清理过期交易的间隔时间
     private static final long CLEANUP_INTERVAL = 5_000;
-    // 签名验证缓存大小
-    private static final int SIGNATURE_CACHE_SIZE = 100_000;
-    // 签名验证缓存过期时间（分钟）
-    private static final long SIGNATURE_CACHE_EXPIRE_MINUTES = 10;
     // 交易过期时间（秒）- 基于recentBlockhash的有效性
     private static final long TX_EXPIRE_SECONDS = 120;
 
@@ -123,40 +54,24 @@ public class TxPoolImpl implements TxPool {
     // ==================== 核心组件 ====================
     @Autowired
     private POHService pohService;
-    // 高并发接收队列（Disruptor无锁环形缓冲区）
-    private Disruptor<TransactionEvent> disruptor;
-    private RingBuffer<TransactionEvent> ringBuffer;
+
     // 处理线程池（工作窃取算法）
     private ForkJoinPool processPool;
-    // 提交线程池（独立线程池隔离）
-    private ThreadPoolExecutor submitPool;
     // 超时检查定时器
     private ScheduledExecutorService timeoutChecker;
     // 清理过期交易定时器
     private ScheduledExecutorService cleanupScheduler;
     // TPS统计定时器
     private ScheduledExecutorService tpsStatScheduler;
-    // 分片定位（根据byte[]的哈希值）
-    private int getShardIndex(byte[] key) {
-        return Math.abs(Arrays.hashCode(key) % SHARD_COUNT);
-    }
-    // 交易池（主缓存）
-    private final Map<byte[], Transaction> txMap  = new ConcurrentHashMap<>();
+
+
     // 交易分组（groupId -> 交易组，groupId通常为sender账户）
     private final ConcurrentMap<byte[], TransactionGroup> txGroups = new ConcurrentHashMap<>();
-    // 并行处理线程池（核心线程数=CPU核心数）
-    private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-    // 消息摘要器（线程局部变量避免竞争）
-    private ThreadLocal<MessageDigest> sha256Digester;
-    // 签名验证缓存（LRU策略）
-    private LoadingCache<String, Boolean> signatureCache;
-
 
     // ==================== 数据存储 ====================
-    // 交易状态追踪（原子操作保证线程安全）
-    private final ConcurrentMap<byte[], TransactionStatus> txStatusMap = new ConcurrentHashMap<>();
+
     // 处理中交易追踪（原子操作，线程安全）
-    private final ConcurrentHashMap<String, TransactionContext> processingTxs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Transaction> processingTxs = new ConcurrentHashMap<>();
     // 交易池分片（每个分片独立锁）
     private final List<Map<byte[], Transaction>> txShards = new ArrayList<>();
     // 交易组分片（按groupId哈希分片）
@@ -169,8 +84,6 @@ public class TxPoolImpl implements TxPool {
     private final AtomicInteger poolSize = new AtomicInteger(0);
 
 
-    // 阻塞队列用于削峰填谷（防止突发流量击垮系统）
-    private final BlockingQueue<Transaction> submitQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
     // 并行处理线程池（工作窃取算法，适合大量小任务）
     private final ExecutorService processingPool = new ForkJoinPool(
             Runtime.getRuntime().availableProcessors() * 2,
@@ -196,147 +109,18 @@ public class TxPoolImpl implements TxPool {
     private volatile long lastProcessedCount = 0;
 
 
-    /**
-     * Disruptor事件对象，用于无锁传递交易
-     */
-    private static class TransactionEvent {
-        private Transaction transaction;
-        private CompletableFuture<Result<String>> future;
-
-        public Transaction getTransaction() {
-            return transaction;
-        }
-
-        public void setTransaction(Transaction transaction) {
-            this.transaction = transaction;
-        }
-
-        public CompletableFuture<Result<String>> getFuture() {
-            return future;
-        }
-
-        public void setFuture(CompletableFuture<Result<String>> future) {
-            this.future = future;
-        }
-
-        // 重置事件对象，用于Disruptor的对象重用
-        public void clear() {
-            this.transaction = null;
-            this.future = null;
-        }
-    }
-
-    /**
-     * 交易上下文，用于追踪处理状态和超时
-     */
-    private static class TransactionContext {
-        private final Transaction transaction;
-        private final long submitTime;
-        private final CompletableFuture<Result<String>> future;
-        private final AtomicInteger retryCount = new AtomicInteger(0);
-        // POH记录，用于时序验证
-        private POHRecord pohRecord;
-
-        public TransactionContext(Transaction transaction, CompletableFuture<Result<String>> future) {
-            this.transaction = transaction;
-            this.future = future;
-            this.submitTime = System.currentTimeMillis();
-        }
-
-        public boolean isTimeout() {
-            return System.currentTimeMillis() - submitTime > TIMEOUT_MILLIS;
-        }
-
-        public boolean canRetry() {
-            return retryCount.incrementAndGet() <= MAX_RETRY;
-        }
-
-        public POHRecord getPohRecord() {
-            return pohRecord;
-        }
-
-        public void setPohRecord(POHRecord pohRecord) {
-            this.pohRecord = pohRecord;
-        }
-    }
 
 
 
     @PostConstruct
     public void init(){
         // 初始化分片
-        for (int i = 0; i < SHARD_COUNT; i++) {
-            txShards.add(new ConcurrentHashMap<>());
-            groupShards.add(new ConcurrentHashMap<>());
-        }
-        // 初始化SHA-256消息摘要器（线程局部变量）
-        sha256Digester = ThreadLocal.withInitial(() -> {
-            try {
-                return MessageDigest.getInstance("SHA-256");
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException("初始化SHA-256失败", e);
-            }
-        });
-        // 初始化签名验证缓存（LRU策略，带过期时间）
-        signatureCache = CacheBuilder.newBuilder()
-                .maximumSize(SIGNATURE_CACHE_SIZE)
-                .expireAfterWrite(SIGNATURE_CACHE_EXPIRE_MINUTES, TimeUnit.MINUTES)
-                .concurrencyLevel(Runtime.getRuntime().availableProcessors())
-                .recordStats()
-                .build(new CacheLoader<>() {
-                    @Override
-                    public Boolean load(String key) {
-                        // 实际签名验证逻辑，这里仅做示例
-                        return verifySignatureInternal(key);
-                    }
-                });
-        // 初始化Disruptor
-        initDisruptor();
 
         // 初始化线程池
         initExecutors();
-
         // 启动定时器任务
         startScheduledTasks();
 
-        log.info("交易池初始化完成，配置: 分片数={}, 缓冲区大小={}, 最大池大小={}",
-                SHARD_COUNT, RING_BUFFER_SIZE, MAX_POOL_SIZE);
-    }
-
-    /**
-     * 初始化Disruptor无锁环形缓冲区
-     */
-    private void initDisruptor() {
-        // 事件工厂
-        EventFactory<TransactionEvent> factory = TransactionEvent::new;
-
-        // 等待策略：高吞吐量场景使用YieldingWaitStrategy
-        WaitStrategy waitStrategy = new YieldingWaitStrategy();
-
-        // 创建Disruptor
-        disruptor = new Disruptor<>(factory, RING_BUFFER_SIZE,
-                new ThreadFactory() {
-                    private final AtomicInteger counter = new AtomicInteger(0);
-                    @Override
-                    public Thread newThread(Runnable r) {
-                        Thread thread = new Thread(r, "tx-disruptor-" + counter.incrementAndGet());
-                        thread.setDaemon(true);
-                        return thread;
-                    }
-                },
-                ProducerType.MULTI,
-                waitStrategy);
-
-        // 设置事件处理器
-        EventHandler<TransactionEvent> handler = (event, sequence, endOfBatch) -> {
-            processTransactionEvent(event);
-            event.clear(); // 重置事件，便于重用
-        };
-
-        disruptor.handleEventsWith(handler);
-
-        // 启动Disruptor
-        ringBuffer = disruptor.start();
     }
 
 
@@ -376,158 +160,30 @@ public class TxPoolImpl implements TxPool {
      * 检查超时交易
      */
     private void checkTimeoutTransactions() {
-        long currentTime = System.currentTimeMillis();
-        List<String> timeoutTxIds = new ArrayList<>();
 
-        // 收集超时交易
-        processingTxs.forEach((txId, context) -> {
-            if (context.isTimeout()) {
-                timeoutTxIds.add(txId);
-            }
-        });
-
-        // 处理超时交易
-        for (String txId : timeoutTxIds) {
-            TransactionContext context = processingTxs.remove(txId);
-            if (context != null) {
-                timeoutCount.increment();
-                log.warn("交易处理超时: {}", txId);
-
-                // 如果可以重试，重新加入处理队列
-                if (context.canRetry()) {
-                    log.info("交易将重试处理: {}, 重试次数: {}", txId, context.retryCount.get());
-                    retryTransaction(context);
-                } else {
-                    // 重试次数耗尽，标记为失败
-                    byte[] txIdBytes = hexToBytes(txId);
-                    txStatusMap.put(txIdBytes, TransactionStatus.INVALID);
-                    context.future.complete(Result.error("交易处理超时，已达到最大重试次数"));
-
-                    // 从交易池中移除
-                    removeTransaction(txIdBytes);
-                }
-            }
-        }
     }
 
-    /**
-     * 重试处理交易
-     */
-    private void retryTransaction(TransactionContext context) {
-        try {
-            // 将交易重新加入Disruptor队列
-            long sequence = ringBuffer.next();
-            try {
-                TransactionEvent event = ringBuffer.get(sequence);
-                event.setTransaction(context.transaction);
-                event.setFuture(context.future);
-            } finally {
-                ringBuffer.publish(sequence);
-            }
-        } catch (Exception e) {
-            log.error("交易重试失败", e);
-            context.future.complete(Result.error("交易重试失败: " + e.getMessage()));
-        }
-    }
+
 
     /**
      * 检查超时交易
      */
     private void checkTimeouts() {
-        List<String> timeoutTxIds = new ArrayList<>();
 
-        // 遍历处理中的交易，检查超时
-        processingTxs.forEach((txId, context) -> {
-            if (context.isTimeout()) {
-                timeoutTxIds.add(txId);
-                if (context.canRetry()) {
-                    // 重试处理
-                    log.warn("交易{}处理超时，进行第{}次重试", txId, context.retryCount.get());
-                    processSingleTransaction(context.transaction);
-                } else {
-                    // 超过最大重试次数，标记为失败
-                    log.error("交易{}处理超时，已达最大重试次数", txId);
-                    timeoutCount.increment();
-                    txStatusMap.put(context.transaction.getTxId(), TransactionStatus.INVALID);
-                    context.future.complete(Result.error("交易处理超时"));
-                }
-            }
-        });
-
-        // 移除超时且不再重试的交易
-        timeoutTxIds.forEach(processingTxs::remove);
     }
 
     /**
      * 处理单笔交易
      */
     private void processSingleTransaction(Transaction tx) {
-        processingPool.execute(() -> {
-            String txIdHex = ByteUtils.bytesToHex(tx.getTxId());
-            try {
-                // 标记为处理中
-                txStatusMap.put(tx.getTxId(), TransactionStatus.PROCESSING);
 
-                // 生成POH时间戳
-                Transaction txWithTimestamp = pohService.generateTimestamp(tx);
-
-                // 模拟交易处理（实际中应执行交易逻辑）
-                Thread.sleep(1); // 模拟处理耗时
-
-                // 处理成功
-                processedCount.increment();
-                txStatusMap.put(tx.getTxId(), TransactionStatus.CONFIRMED);
-                processedTxIds.add(tx.getTxId());
-
-                // 从交易池中移除
-                removeProcessedTransactions(Collections.singletonList(txIdHex));
-
-                log.debug("交易{}处理成功", txIdHex);
-            } catch (Exception e) {
-                log.error("交易{}处理失败", txIdHex, e);
-                failedCount.increment();
-                txStatusMap.put(tx.getTxId(), TransactionStatus.INVALID);
-            } finally {
-                processingTxs.remove(txIdHex);
-            }
-        });
     }
 
     /**
      * 清理过期交易
      */
     private void cleanupExpiredTransactions() {
-        long currentTime = System.currentTimeMillis() / 1000; // 秒级时间
-        int removedCount = 0;
 
-        // 遍历所有分片清理过期交易
-        for (Map<byte[], Transaction> shard : txShards) {
-            List<byte[]> toRemove = new ArrayList<>();
-
-            shard.forEach((txId, tx) -> {
-                // 检查交易是否过期（基于最近区块哈希的有效期）
-                //TODO
-
-
-                toRemove.add(txId);
-            });
-
-            // 批量移除过期交易
-            for (byte[] txId : toRemove) {
-                if (shard.remove(txId) != null) {
-                    removedCount++;
-                    poolSize.decrementAndGet();
-                    txStatusMap.remove(txId);
-                    processedTxIds.remove(txId);
-                    // 同时从交易组中移除
-
-                }
-            }
-        }
-
-        if (removedCount > 0) {
-            log.info("清理过期交易完成，共移除 {} 笔交易", removedCount);
-        }
     }
 
     /**
@@ -568,31 +224,9 @@ public class TxPoolImpl implements TxPool {
      * 初始化线程池
      */
     private void initExecutors() {
-        // 提交线程池：处理交易提交的轻量任务
-        submitPool = new ThreadPoolExecutor(
-                PROCESS_THREAD_COUNT,
-                PROCESS_THREAD_COUNT,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(QUEUE_CAPACITY / 2),
-                new ThreadFactory() {
-                    private final AtomicInteger counter = new AtomicInteger(0);
-                    @Override
-                    public Thread newThread(Runnable r) {
-                        Thread thread = new Thread(r, "tx-submit-" + counter.incrementAndGet());
-                        thread.setDaemon(true);
-                        return thread;
-                    }
-                },
-                new ThreadPoolExecutor.CallerRunsPolicy() // 背压策略：让提交者等待
-        );
 
-        // 处理线程池：处理交易验证和执行的重量级任务
-        processPool = new ForkJoinPool(
-                PROCESS_THREAD_COUNT,
-                ForkJoinPool.defaultForkJoinWorkerThreadFactory,
-                (t, e) -> log.error("交易处理线程异常", e),
-                true
-        );
+
+
 
         // 超时检查定时器
         timeoutChecker = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -665,36 +299,19 @@ public class TxPoolImpl implements TxPool {
         Map<String, Object> poolInfo = new HashMap<>();
         poolInfo.put("totalSize", poolSize.get());
         poolInfo.put("maxSize", MAX_POOL_SIZE);
-        poolInfo.put("shards", SHARD_COUNT);
         poolInfo.put("currentTps", currentTps.get());
-        poolInfo.put("queuedTransactions", submitQueue.size());
         poolInfo.put("processingTransactions", processingTxs.size());
 
-        // 添加各状态交易数量
-        Map<TransactionStatus, Integer> statusCount = new EnumMap<>(TransactionStatus.class);
-        for (TransactionStatus status : TransactionStatus.values()) {
-            statusCount.put(status, 0);
-        }
 
-        txStatusMap.values().forEach(status ->
-                statusCount.put(status, statusCount.get(status) + 1)
-        );
-        poolInfo.put("statusCount", statusCount);
+
 
         return Result.OK(poolInfo);
     }
 
     @Override
-    public TransactionStatus getStatus(byte[] txId) {
-        if (txId == null) {
-            return null;
-        }
-        try {
-            return txStatusMap.get(txId);
-        } catch (Exception e) {
-            log.error("获取交易状态失败, txId: {}", txId, e);
-            return null;
-        }
+    public short getStatus(byte[] txId) {
+
+        return 0;
     }
 
     @Override
@@ -704,29 +321,15 @@ public class TxPoolImpl implements TxPool {
         status.append("  当前大小: ").append(poolSize.get()).append("/").append(MAX_POOL_SIZE).append("\n");
         status.append("  当前TPS: ").append(currentTps.get()).append("\n");
         status.append("  处理中交易: ").append(processingTxs.size()).append("\n");
-        status.append("  等待队列: ").append(submitQueue.size()).append("\n");
         status.append("  统计信息: \n");
         status.append("    总提交: ").append(submittedCount.sum()).append("\n");
         status.append("    总处理成功: ").append(processedCount.sum()).append("\n");
         status.append("    总失败: ").append(failedCount.sum()).append("\n");
         status.append("    总超时: ").append(timeoutCount.sum()).append("\n");
-        status.append("  缓存统计: \n");
-        status.append("    签名缓存命中率: ").append(String.format("%.2f%%",
-                calculateCacheHitRate())).append("\n");
         return Result.OK(status.toString());
     }
 
-    /**
-     * 计算签名缓存命中率
-     */
-    private double calculateCacheHitRate() {
-        CacheStats stats = signatureCache.stats();
-        long requests = stats.requestCount();
-        if (requests == 0) {
-            return 0.0;
-        }
-        return (double) stats.hitCount() / requests * 100;
-    }
+
 
     /**
      * 异步验证 + 预验证
@@ -743,52 +346,16 @@ public class TxPoolImpl implements TxPool {
         // 2. 异步执行重量级验证
         CompletableFuture<Result<String>> future = new CompletableFuture<>();
         try {
-            // 提交到Disruptor进行异步处理
-            long sequence = ringBuffer.next();
-            try {
-                TransactionEvent event = ringBuffer.get(sequence);
-                event.setTransaction(tx);
-                event.setFuture(future);
-            } finally {
-                ringBuffer.publish(sequence);
-            }
+
+
+
+
             // 等待验证结果，但设置超时
             return future.get(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             return Result.error("交易验证超时");
         } catch (Exception e) {
             return Result.error("交易验证失败: " + e.getMessage());
-        }
-    }
-
-
-    /**
-     * 处理Disruptor中的交易事件
-     */
-    private void processTransactionEvent(TransactionEvent event) {
-        Transaction tx = event.getTransaction();
-        CompletableFuture<Result<String>> future = event.getFuture();
-
-        if (tx == null || future == null) {
-            return;
-        }
-
-        try {
-            // 执行重量级验证
-            Result<String> heavyCheck = fullVerify(tx);
-            if (!heavyCheck.isSuccess()) {
-                future.complete(heavyCheck);
-                failedCount.increment();
-                return;
-            }
-
-            // 验证通过，添加到交易池
-            Result<String> addResult = addTransactionToPool(tx);
-            future.complete(addResult);
-        } catch (Exception e) {
-            log.error("处理交易事件失败", e);
-            future.complete(Result.error("交易处理异常: " + e.getMessage()));
-            failedCount.increment();
         }
     }
 
@@ -804,57 +371,23 @@ public class TxPoolImpl implements TxPool {
         if (!preCheck.isSuccess()) {
             return preCheck;
         }
-
         try {
-            // 2. 尝试加入提交队列（带超时）
-            boolean added = submitQueue.offer(tx, 100, TimeUnit.MILLISECONDS);
-            if (!added) {
-                return Result.error("交易提交队列已满，请稍后再试");
-            }
+
+
 
             // 3. 提交计数器增加
             submittedCount.increment();
 
-            // 4. 异步处理队列中的交易
-            submitPool.execute(this::processSubmitQueue);
+
 
             return Result.OK("交易已接受，等待处理");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Result.error("交易提交被中断");
         } catch (Exception e) {
             log.error("添加交易失败", e);
             return Result.error("添加交易失败: " + e.getMessage());
         }
     }
 
-    /**
-     * 处理提交队列中的交易
-     */
-    private void processSubmitQueue() {
-        try {
-            Transaction tx;
-            // 循环处理队列中的交易，直到队列为空
-            while ((tx = submitQueue.poll()) != null) {
-                // 执行重量级验证
-                Result<String> verifyResult = fullVerify(tx);
-                if (!verifyResult.isSuccess()) {
-                    log.warn("交易验证失败: {}", verifyResult.getMessage());
-                    failedCount.increment();
-                    continue;
-                }
 
-                // 验证通过，添加到交易池
-                Result<String> addResult = addTransactionToPool(tx);
-                if (!addResult.isSuccess()) {
-                    log.warn("添加交易到池失败: {}", addResult.getMessage());
-                    failedCount.increment();
-                }
-            }
-        } catch (Exception e) {
-            log.error("处理提交队列异常", e);
-        }
-    }
 
     /**
      * 将交易添加到交易池
@@ -870,9 +403,7 @@ public class TxPoolImpl implements TxPool {
             String txIdHex = bytesToHex(txId);
 
             // 检查是否已存在相同交易
-            if (processedTxIds.contains(txId) || txMap.containsKey(txId)) {
-                return Result.error("交易已存在，可能是双花尝试");
-            }
+
 
             // 获取发送者账户（费用支付者）
             byte[] sender = tx.getSender();
@@ -880,27 +411,14 @@ public class TxPoolImpl implements TxPool {
                 return Result.error("无法确定交易发送者");
             }
 
-            // 确定分片索引
-            int shardIndex = getShardIndex(txId);
-            Map<byte[], Transaction> txShard = txShards.get(shardIndex);
-            int groupShardIndex = getShardIndex(sender);
-            ConcurrentMap<byte[], TransactionGroup> groupShard = groupShards.get(groupShardIndex);
 
-            // 添加到交易分片
-            txShard.put(txId, tx);
-            txMap.put(txId, tx);
+
 
             // 添加到交易组
-            groupShard.compute(sender, (key, group) -> {
-                if (group == null) {
-                    group = new TransactionGroup(sender);
-                }
-                group.getTransactions().add(tx);
-                return group;
-            });
+
 
             // 更新交易状态
-            txStatusMap.put(txId, TransactionStatus.PENDING);
+
 
             // 增加交易池计数
             poolSize.incrementAndGet();
@@ -921,30 +439,6 @@ public class TxPoolImpl implements TxPool {
      * 从交易池中移除交易
      */
     private boolean removeTransaction(byte[] txId) {
-        if (txId == null) {
-            return false;
-        }
-
-        // 从主映射中移除
-        Transaction tx = txMap.remove(txId);
-        if (tx == null) {
-            return false;
-        }
-
-        // 从分片中移除
-        int shardIndex = getShardIndex(txId);
-        txShards.get(shardIndex).remove(txId);
-
-        // 从状态映射中移除
-        txStatusMap.remove(txId);
-
-        // 减少计数器
-        poolSize.decrementAndGet();
-
-        // 从交易组中移除
-        if (tx.getSender() != null) {
-            removeTransactionFromGroup(tx.getSender(), txId);
-        }
 
         return true;
     }
@@ -953,16 +447,7 @@ public class TxPoolImpl implements TxPool {
      * 从交易组中移除交易
      */
     private void removeTransactionFromGroup(byte[] groupId, byte[] txId) {
-        int groupShardIndex = getShardIndex(groupId);
-        ConcurrentMap<byte[], TransactionGroup> groupShard = groupShards.get(groupShardIndex);
 
-        groupShard.computeIfPresent(groupId, (key, group) -> {
-            List<Transaction> txs = group.getTransactions();
-            txs.removeIf(tx -> Arrays.equals(tx.getTxId(), txId));
-
-            // 如果交易组为空，移除该组
-            return txs.isEmpty() ? null : group;
-        });
     }
 
 
@@ -970,14 +455,7 @@ public class TxPoolImpl implements TxPool {
      * 更新账户冲突布隆过滤器
      */
     private void updateAccountConflictBloom(Transaction tx) {
-        if (tx.getAccounts() != null) {
-            for (AccountMeta account : tx.getAccounts()) {
-                if (account.isWritable()) {
-                    // 对可写账户添加到布隆过滤器，用于快速检测潜在冲突
-                    accountConflictBloom.add(account.getPublicKey());
-                }
-            }
-        }
+
     }
 
     /**
@@ -1064,13 +542,9 @@ public class TxPoolImpl implements TxPool {
         log.debug("开始处理交易组，共 {} 个组", groups.size());
         // 2. 并行处理无冲突的交易组
         groups.parallelStream().forEach(group -> {
-            // 检查组是否仍存在（可能已被清理）
-            int groupShardIndex = getShardIndex(group.getGroupId());
-            ConcurrentMap<byte[], TransactionGroup> groupShard = groupShards.get(groupShardIndex);
 
-            if (groupShard.containsKey(group.getGroupId())) {
-                processGroup(group);
-            }
+
+
         });
     }
 
@@ -1203,16 +677,9 @@ public class TxPoolImpl implements TxPool {
      */
     private boolean verifySignatures(Transaction tx) {
         try {
-            // 对每个签名进行验证
-            for (Signature sig : tx.getSignatures()) {
-                // 生成签名缓存键
-                String sigKey = Base64.getEncoder().encodeToString(sig.getValue());
-                // 从缓存获取验证结果，缓存没有则会调用load方法进行验证
-                Boolean isValid = signatureCache.get(sigKey);
-                if (!isValid) {
-                    return false;
-                }
-            }
+
+
+
             return true;
         } catch (Exception e) {
             log.error("验证签名失败", e);
@@ -1289,20 +756,10 @@ public class TxPoolImpl implements TxPool {
     public void destroy() {
         log.info("开始关闭交易池...");
 
-        // 关闭Disruptor
-        if (disruptor != null) {
-            disruptor.shutdown();
-        }
-
         // 关闭线程池
         if (processPool != null) {
             processPool.shutdown();
         }
-
-        if (submitPool != null) {
-            submitPool.shutdown();
-        }
-
         // 关闭定时器
         if (timeoutChecker != null) {
             timeoutChecker.shutdown();

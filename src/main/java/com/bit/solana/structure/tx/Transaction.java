@@ -2,9 +2,12 @@ package com.bit.solana.structure.tx;
 
 import com.bit.solana.common.BlockHash;
 import com.bit.solana.common.TransactionHash;
+import com.bit.solana.result.Result;
 import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.structure.account.AccountMeta;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -12,6 +15,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.Sha.applySHA256;
@@ -23,6 +27,8 @@ import static com.bit.solana.util.Sha.applySHA256;
  * 签名的本质是证明交易发起者（私钥持有者）认可该交易的全部内容，防止交易被篡改或伪造。
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class Transaction {
     //单笔交易最大大小为 1232字节 12*12*10  = 12.kb
 
@@ -62,11 +68,32 @@ public class Transaction {
      * 规则：accounts中第一个"isSigner=true且isWritable=true"的账户即为费用支付者
      */
 
+    /**
+     * POH时序
+     */
     private POHRecord pohRecord;
 
+    /**
+     * 每字节手续费
+     */
     private long fee;
 
+    /**
+     * 字节
+     */
     private long size; //字节
+
+    /**
+     * 提交时间
+     */
+    private long submitTime;
+
+
+    private short status;
+
+
+    private CompletableFuture<Result<String>> future;
+
 
     /**
      * 生成交易ID（txId）：取第一个签名的字节数组，转换为十六进制字符串

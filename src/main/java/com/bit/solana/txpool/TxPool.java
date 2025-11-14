@@ -3,12 +3,66 @@ package com.bit.solana.txpool;
 import com.bit.solana.common.TransactionHash;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.tx.Transaction;
-import com.bit.solana.structure.tx.TransactionStatus;
+
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface TxPool {
+    /**
+     * 超时丢弃交易池 和 缓冲池
+     */
+    //使用优先队列（大顶堆） 只需O(n log k)（k=5000），效率更高。
+    //从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
+
+    //明确筛选目标：从 N 笔交易（N≤100 万）中选出手续费最高的前 5000 笔（若 N<5000 则全选）。
+    //数据结构选择：使用小顶堆（Min-Heap），仅维护容量为 5000 的堆。堆顶是当前已选 5000 笔中手续费最低的，当新交易手续费高于堆顶时，替换堆顶并调整堆，最终堆中即为结果。
+    //优势：时间复杂度 O (N log 5000)（远优于排序的 O (N log N)），空间复杂度 O (5000)（内存占用极低）。
+
+
+    /**
+     * 轻量级校验后放入交易提交池  100万笔交易 每笔500字节  最大1024M最大容量
+     * 接收、轻量校验、削峰填谷
+     * 轻量级（格式校验、队列入队）
+     * 临时存储待验证交易
+     * 高吞吐（抗突发流量）
+     */
+
+    /**
+     * 交易池 10万笔交易 或者 500M最大容量  同时维护当前每字节手续费  交易池保持满载 有空位就去拉取
+     * 存储、排序、冲突检测、等待打包
+     * 重量级（余额校验、冲突检测、TPS 排序）
+     * 低延迟（快速筛选可打包交易）
+     */
+
+
+
+    /**
+     * 布隆过滤器 快速判断 是否不存在
+     */
+
+    /**
+     * . 窃取机制的核心原理
+     * （1）线程本地队列（非完全共享）
+     * 每个工作线程（Worker Thread）拥有一个本地任务队列（通常是双端队列，Deque），用于存储分配给它的任务。
+     * 线程优先处理自己本地队列中的任务（从队尾取任务，LIFO 顺序），此时无需与其他线程竞争，几乎无锁开销。
+     *
+     * （2）任务窃取逻辑
+     * 当线程 A 的本地队列空了，它会随机选择另一个线程 B，尝试从 B 的队列头部（FIFO 顺序）“窃取” 一个任务执行。
+     * 这种 “本地队尾执行，窃取队头” 的设计，可减少线程 A 和线程 B 的操作冲突（A 从 B 的头部取，B 从自己的尾部取，除非队列只剩一个任务，否则不会竞争）。
+     */
+
+    /**
+     * 堆内存分配 40GB+（避免频繁 GC），使用 ZGC 或 Shenandoah 低延迟 GC，设置-XX:MaxGCPauseMillis=10；
+     */
+    /**
+     * 挑战：ForkJoinPool的任务窃取机制虽高效，但频繁的任务拆分和窃取可能带来调度开销，尤其在任务粒度太小（如单笔交易作为一个任务）时。
+     * 优化：
+     * 批量处理任务（如每批 100 笔交易），减少任务调度次数；
+     * 调整ForkJoinPool的并行度（parallelism参数）与 CPU 核心数匹配（避免超线程过度使用导致的性能下降）；
+     * 对耗时差异大的交易（如简单转账 vs 复杂合约调用）分类处理，避免长任务阻塞短任务。
+     */
+
     /**
      * 高性能共识机制（PoH + Tower BFT） 和基于 “优先级费用” 的交易排序逻辑
      */
@@ -82,7 +136,7 @@ public interface TxPool {
     Result getTxPool();
 
     // 获取交易状态
-    TransactionStatus getStatus(byte[] txId);
+    short getStatus(byte[] txId);
 
     Result<String> getTxPoolStatus();
 
