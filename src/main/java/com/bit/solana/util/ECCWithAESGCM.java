@@ -19,6 +19,8 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.util.Base64;
 
+import static com.bit.solana.util.ByteUtils.bytesToHex;
+
 /**
  * 基于Curve25519密钥交换和AES-GCM对称加密的实现（线程优化版）
  */
@@ -164,7 +166,7 @@ public class ECCWithAESGCM {
 
     // 测试示例
     public static void main(String[] args) throws Exception {
-        // 1. 生成双方的Curve25519密钥对
+        // 1. 预生成密钥对（只生成一次，避免影响性能统计）
         byte[][] aliceKeys = generateCurve25519KeyPair();
         byte[] alicePrivateKey = aliceKeys[0];
         byte[] alicePublicKey = aliceKeys[1];
@@ -173,26 +175,53 @@ public class ECCWithAESGCM {
         byte[] bobPrivateKey = bobKeys[0];
         byte[] bobPublicKey = bobKeys[1];
 
-        // 2. 双方计算共享密钥（理论上应完全一致）
+        // 2. 计算共享密钥
         byte[] aliceShared = generateSharedSecret(alicePrivateKey, bobPublicKey);
         byte[] bobShared = generateSharedSecret(bobPrivateKey, alicePublicKey);
-
-        // 验证共享密钥是否一致
         System.out.println("共享密钥是否一致: " + Arrays.areEqual(aliceShared, bobShared));
+        System.out.println("共享密钥:{}"+bytesToHex(aliceShared));
 
-        // 3. 从共享密钥派生AES会话密钥
+        // 3. 派生AES密钥（只派生一次，复用密钥）
         SecretKey aliceAesKey = deriveAesKey(aliceShared);
         SecretKey bobAesKey = deriveAesKey(bobShared);
 
-        // 4. 加密示例（Alice加密消息）
+        // 待加密的消息（固定内容，避免内容变化影响性能）
         String originalMessage = "这是一条使用Curve25519和AES-GCM加密的消息11";
-        byte[] encrypted = aesGcmEncrypt(aliceAesKey, originalMessage.getBytes(StandardCharsets.UTF_8));
-        System.out.println("加密后的数据 (Base64): " + Base64.getEncoder().encodeToString(encrypted));
+        byte[] messageBytes = originalMessage.getBytes(StandardCharsets.UTF_8);
 
-        // 5. 解密示例（Bob解密消息）
-        byte[] decryptedBytes = aesGcmDecrypt(bobAesKey, encrypted);
-        String decryptedMessage = new String(decryptedBytes, StandardCharsets.UTF_8);
-        System.out.println("解密后的数据: " + decryptedMessage);
+        // 4. 循环测试10000次加密解密
+        int loopCount = 10000;
+        long totalTimeNanos = 0;
+
+        for (int i = 0; i < loopCount; i++) {
+            // 记录开始时间
+            long start = System.nanoTime();
+
+            // 加密
+            byte[] encrypted = aesGcmEncrypt(aliceAesKey, messageBytes);
+            // 解密
+            byte[] decryptedBytes = aesGcmDecrypt(bobAesKey, encrypted);
+
+            // 验证解密结果（确保正确性，可选）
+            if (!Arrays.areEqual(decryptedBytes, messageBytes)) {
+                throw new RuntimeException("第" + i + "次加密解密结果不一致");
+            }
+
+            // 累计耗时（纳秒）
+            totalTimeNanos += System.nanoTime() - start;
+        }
+
+        // 计算平均时间
+        double avgNanos = (double) totalTimeNanos / loopCount;
+        double avgMicros = avgNanos / 1000;  // 转换为微秒
+        double avgMillis = avgMicros / 1000;  // 转换为毫秒
+
+        // 输出统计结果
+        System.out.println("\n===== 性能统计 =====");
+        System.out.println("循环次数: " + loopCount + "次");
+        System.out.println("总耗时: " + (totalTimeNanos / 1_000_000) + "毫秒");
+        System.out.println("单次加密解密平均耗时:");
+        System.out.println("  - " + String.format("%.2f", avgMillis) + " 毫秒");
+        System.out.println("  - " + String.format("%.2f", avgMicros) + " 微秒");
     }
-
 }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.List;
+import java.util.Random;
 
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
@@ -72,9 +73,14 @@ public class MockApi {
         PublicKey recoveredPub = recoverPublicKeyFromCore(corePub);
         PrivateKey recoveredPriv = recoverPrivateKeyFromCore(corePriv);
 
+        Random random = new Random();
+
         // 测试数据
-        byte[] data = "测试数据".getBytes(StandardCharsets.UTF_8);
-        int loopCount = 10000; // 循环次数
+        byte[] data = ("测试数据" + random.nextInt(1000)).getBytes(StandardCharsets.UTF_8);
+        int loopCount = 100000; // 循环次数
+
+
+
 
         // 累计耗时（纳秒）
         long totalSignTime = 0;
@@ -108,8 +114,31 @@ public class MockApi {
         double avgVerifyTimeMillis = avgVerifyTimeNanos / 1_000_000.0;
 
         // 输出结果
-        log.info("\n===== 10000次循环平均耗时 =====");
+        log.info("\n===== {}次循环平均耗时 =====", loopCount);
         log.info("平均签名时间: {} 纳秒 ({} 毫秒)", avgSignTimeNanos, avgSignTimeMillis);
         log.info("平均验签时间: {} 纳秒 ({} 毫秒)", avgVerifyTimeNanos, avgVerifyTimeMillis);
+
+
+        // ---------------------- 新增：单次签名和验证时间测试 ----------------------
+        // 单次签名
+        long singleSignStart = System.nanoTime();
+        byte[] singleSignature = applySignature(recoveredPriv, data);
+        long singleSignEnd = System.nanoTime();
+        long singleSignNanos = singleSignEnd - singleSignStart;
+        double singleSignMillis = singleSignNanos / 1_000_000.0;
+        // 单次验签
+        long singleVerifyStart = System.nanoTime();
+        boolean singleVerifyResult = verifySignature(recoveredPub, data, singleSignature);
+        long singleVerifyEnd = System.nanoTime();
+        long singleVerifyNanos = singleVerifyEnd - singleVerifyStart;
+        double singleVerifyMillis = singleVerifyNanos / 1_000_000.0;
+
+        log.info("\n===== 单次签名和验证时间 =====");
+        log.info("单次签名时间: {} 纳秒 ({} 毫秒)", singleSignNanos, singleSignMillis);
+        log.info("单次验签结果: {}", singleVerifyResult ? "成功" : "失败");
+        log.info("单次验签时间: {} 纳秒 ({} 毫秒)", singleVerifyNanos, singleVerifyMillis);
+        // -------------------------------------------------------------------------
+
+
     }
 }

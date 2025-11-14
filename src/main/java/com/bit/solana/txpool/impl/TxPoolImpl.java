@@ -38,6 +38,24 @@ import static com.bit.solana.util.ByteUtils.hexToBytes;
 @Slf4j
 @Service
 public class TxPoolImpl implements TxPool {
+
+    /**
+     * 轻量级校验后放入交易提交池  100万笔交易 每笔500字节  最大1024M最大容量
+     * 接收、轻量校验、削峰填谷
+     * 轻量级（格式校验、队列入队）
+     * 临时存储待验证交易
+     * 高吞吐（抗突发流量）
+     */
+
+    /**
+     * 交易池 10万笔交易 或者 500M最大容量  同时维护当前每字节手续费  交易池保持满载 有空位就去拉取
+     * 存储、排序、冲突检测、等待打包
+     * 重量级（余额校验、冲突检测、TPS 排序）
+     * 低延迟（快速筛选可打包交易）
+     */
+
+
+
     /**
      * 布隆过滤器 快速判断 是否不存在
      */
@@ -168,9 +186,6 @@ public class TxPoolImpl implements TxPool {
     private volatile long lastProcessedCount = 0;
 
 
-    /**
-     * Disruptor事件对象，用于无锁传递交易
-     */
     /**
      * Disruptor事件对象，用于无锁传递交易
      */
@@ -591,6 +606,12 @@ public class TxPoolImpl implements TxPool {
         });
     }
 
+
+    /**
+     *
+     * @param transaction 待提交交易
+     * @return
+     */
 
     @Override
     public CompletableFuture<Boolean> submitTransaction(Transaction transaction) {

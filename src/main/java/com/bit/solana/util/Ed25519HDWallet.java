@@ -167,16 +167,31 @@ public class Ed25519HDWallet {
         KeyInfo keyInfo2 = getSolanaKeyPair(mnemonic, 0, 0);
         System.out.println("地址一致性验证: " + keyInfo.getAddress().equals(keyInfo2.getAddress())); // true
 
-        getSolanaKeyPair(mnemonic, 1, 0);//改变账户
-        getSolanaKeyPair(mnemonic, 0, 1);//改变地址
+        getSolanaKeyPair(mnemonic, 1, 0); // 改变账户
+        getSolanaKeyPair(mnemonic, 0, 1); // 改变地址
 
 
-        // 验证签名
+        // 验证签名并计算耗时
         byte[] data = "测试Solana签名".getBytes(StandardCharsets.UTF_8);
         PrivateKey privateKey = SolanaEd25519Signer.recoverPrivateKeyFromCore(keyInfo.getPrivateKey());
-        byte[] signature = SolanaEd25519Signer.applySignature(privateKey, data);
         PublicKey publicKey = SolanaEd25519Signer.recoverPublicKeyFromCore(keyInfo.getPublicKey());
+
+        // 计算签名耗时
+        long signStartTime = System.nanoTime();
+        byte[] signature = SolanaEd25519Signer.applySignature(privateKey, data);
+        long signEndTime = System.nanoTime();
+        long signDurationNanos = signEndTime - signStartTime;
+        double signDurationMillis = signDurationNanos / 1_000_000.0; // 转换为毫秒
+
+        // 计算验证耗时
+        long verifyStartTime = System.nanoTime();
         boolean verifyResult = SolanaEd25519Signer.verifySignature(publicKey, data, signature);
+        long verifyEndTime = System.nanoTime();
+        long verifyDurationNanos = verifyEndTime - verifyStartTime;
+        double verifyDurationMillis = verifyDurationNanos / 1_000_000.0; // 转换为毫秒
+
+        System.out.println("签名耗时: " + signDurationMillis + " 毫秒 (" + signDurationNanos + " 纳秒)");
+        System.out.println("验证耗时: " + verifyDurationMillis + " 毫秒 (" + verifyDurationNanos + " 纳秒)");
         System.out.println("签名验证结果: " + verifyResult); // true
     }
 }
