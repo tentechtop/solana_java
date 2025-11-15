@@ -232,14 +232,14 @@
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
-            <version>3.24.4</version> <!-- 版本号可根据需要调整，建议使用 3.x 最新稳定版 -->
+            <version>4.31.1</version> <!-- 版本号可根据需要调整，建议使用 3.x 最新稳定版 -->
         </dependency>
 
         <!--  proto 与 Json 互转会用到-->
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java-util</artifactId>
-            <version>3.24.4</version>
+            <version>4.31.1</version>
         </dependency>
     </dependencies>
 
