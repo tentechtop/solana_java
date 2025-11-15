@@ -117,4 +117,12 @@ public abstract class ByteHash32 implements Serializable {
         }
         this.value = hash;
     }
+
+    /**
+     * 转换为原始字节数组（返回拷贝，确保不可变性）
+     * 与getValue()、getBytes()方法功能一致，提供多样化的接口选择
+     */
+    public byte[] toBytes() {
+        return Arrays.copyOf(value, HASH_LENGTH);
+    }
 }

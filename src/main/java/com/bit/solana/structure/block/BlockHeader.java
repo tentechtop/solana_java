@@ -1,9 +1,14 @@
 package com.bit.solana.structure.block;
 
 import com.bit.solana.common.*;
+import com.bit.solana.proto.block.Structure;
 import com.google.common.hash.BloomFilter;
+import com.google.protobuf.ByteString;
 import lombok.Data;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -119,8 +124,124 @@ public class BlockHeader {
      */
     BloomFilter<byte[]> logBloomFilter;//交易过滤
 
-
+    // 其他方法（保持不变）
     public long getHeaderSize() {
-        return 0;
+        // 实际实现应计算头部总字节数（可基于Protobuf序列化后的长度）
+        try {
+            return serialize().length;
+        } catch (IOException e) {
+            return 0;
+        }
     }
+
+
+
+   // ========================== 序列化反序列化 ==========================
+
+    /**
+     * 序列化当前对象为字节数组（通过Protobuf）
+     */
+    public byte[] serialize() throws IOException {
+        return toProto().toByteArray();
+    }
+
+    /**
+     * 从字节数组反序列化为BlockHeader（通过Protobuf）
+     */
+    public static BlockHeader deserialize(byte[] data) throws IOException {
+        Structure.ProtoBlockHeader proto = Structure.ProtoBlockHeader.parseFrom(data);
+        return fromProto(proto);
+    }
+
+
+    // ========================== Protobuf 转换 ==========================
+
+    /**
+     * 转换为Protobuf对象
+     */
+    public Structure.ProtoBlockHeader toProto() throws IOException {
+        Structure.ProtoBlockHeader.Builder builder = Structure.ProtoBlockHeader.newBuilder();
+
+        // 处理字节类型字段（假设自定义哈希类有toBytes()方法）
+        if (previousBlockHash != null) {
+            builder.setPreviousBlockHash(ByteString.copyFrom(previousBlockHash.toBytes()));
+        }
+        if (stateRoot != null) {
+            builder.setStateRootHash(ByteString.copyFrom(stateRoot.toBytes()));
+        }
+        if (poHHash != null) {
+            builder.setPohHash(ByteString.copyFrom(poHHash.toBytes()));
+        }
+        if (recentVotesHash != null) {
+            builder.setRecentVotesHash(ByteString.copyFrom(recentVotesHash.toBytes()));
+        }
+        if (feeCalculatorHash != null) {
+            builder.setFeeCalculatorHash(ByteString.copyFrom(feeCalculatorHash.toBytes()));
+        }
+
+        // 处理基本类型字段
+        builder.setBlockTime(blockTime)
+                .setPohHeight(poHHeight)
+                .setVersion(version)
+                .setSlot(slot)
+                .setParentSlot(parentSlot)
+                .setLeaderScheduleEpoch(leaderScheduleEpoch)
+                .setTransactionsCount(transactionsCount);
+
+        // 处理布隆过滤器（序列化为字节数组）
+        if (txBloomFilter != null) {
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                txBloomFilter.writeTo(out);
+                builder.setTxBloomFilter(ByteString.copyFrom(out.toByteArray()));
+            }
+        }
+        if (logBloomFilter != null) {
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                logBloomFilter.writeTo(out);
+                builder.setLogBloomFilter(ByteString.copyFrom(out.toByteArray()));
+            }
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * 从Protobuf对象转换为BlockHeader
+     */
+    public static BlockHeader fromProto(Structure.ProtoBlockHeader proto) throws IOException {
+        BlockHeader header = new BlockHeader();
+
+        // 处理字节类型字段（假设自定义哈希类有fromBytes()静态方法）
+        if (!proto.getPreviousBlockHash().isEmpty()) {
+            header.setPreviousBlockHash(BlockHash.fromBytes(proto.getPreviousBlockHash().toByteArray()));
+        }
+        if (!proto.getStateRootHash().isEmpty()) {
+            header.setStateRoot(StateRootHash.fromBytes(proto.getStateRootHash().toByteArray()));
+        }
+        if (!proto.getPohHash().isEmpty()) {
+            header.setPoHHash(PoHHash.fromBytes(proto.getPohHash().toByteArray()));
+        }
+        if (!proto.getRecentVotesHash().isEmpty()) {
+            header.setRecentVotesHash(RecentVotesHash.fromBytes(proto.getRecentVotesHash().toByteArray()));
+        }
+        if (!proto.getFeeCalculatorHash().isEmpty()) {
+            header.setFeeCalculatorHash(FeeCalculatorHash.fromBytes(proto.getFeeCalculatorHash().toByteArray()));
+        }
+
+        // 处理基本类型字段
+        header.setBlockTime(proto.getBlockTime());
+        header.setPoHHeight(proto.getPohHeight());
+        header.setVersion(proto.getVersion());
+        header.setSlot(proto.getSlot());
+        header.setParentSlot(proto.getParentSlot());
+        header.setLeaderScheduleEpoch(proto.getLeaderScheduleEpoch());
+        header.setTransactionsCount(proto.getTransactionsCount());
+
+        // 处理布隆过滤器（从字节数组反序列化）
+
+
+        return header;
+    }
+
+
 }

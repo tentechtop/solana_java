@@ -3,10 +3,20 @@ syntax = "proto3";
 
 //protoc --proto_path=. --java_out=. structure.proto
 message ProtoBlockHeader {
-  bytes previous_block_hash = 1;
-  bytes state_root_hash = 2;
-
-
+  bytes previous_block_hash = 1;      // 前序区块哈希（32字节）
+  bytes state_root_hash = 2;          // 状态根哈希（32字节）
+  uint64 block_time = 3;              // 区块提议时间戳（毫秒级）
+  bytes poh_hash = 4;                 // PoH哈希（32字节）
+  uint64 poh_height = 5;              // PoH高度
+  uint64 version = 6;                 // 协议版本号
+  uint64 slot = 7;                    // 插槽号
+  uint64 parent_slot = 8;             // 父插槽号
+  bytes recent_votes_hash = 9;        // 最近投票哈希（32字节）
+  uint64 leader_schedule_epoch = 10;  // 领导者调度周期
+  uint64 transactions_count = 11;     // 交易数量
+  bytes fee_calculator_hash = 12;     // 费用计算器哈希（32字节）
+  bytes tx_bloom_filter = 13;         // 交易布隆过滤器（序列化后字节）
+  bytes log_bloom_filter = 14;        // 日志布隆过滤器（序列化后字节）
 }
 
 message ProtoBlock {

@@ -1,12 +1,15 @@
 package com.bit.solana;
 
 import com.bit.solana.proto.block.Structure;
+import com.bit.solana.structure.block.BlockHeader;
 import com.google.protobuf.ByteString;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
+@Slf4j
 public class ProtoTest {
     public static void main(String[] args) {
         try {
@@ -42,6 +45,15 @@ public class ProtoTest {
             System.out.println("反序列化previousBlockHash: " + deserializedHeader.getPreviousBlockHash().toStringUtf8());
             System.out.println("原始stateRootHash: StateRootHash456");
             System.out.println("反序列化stateRootHash: " + deserializedHeader.getStateRootHash().toStringUtf8());
+
+
+            BlockHeader blockHeader = new BlockHeader();
+            blockHeader.setBlockTime(1234567890L);
+            byte[] serialize = blockHeader.serialize();
+            BlockHeader deserialize = BlockHeader.deserialize(serialize);
+            log.info("serialize: {}", serialize);
+
+            log.info("deserialize: {}", deserialize);
 
         } catch (IOException e) {
             e.printStackTrace();
