@@ -227,6 +227,20 @@
             <version>1.36</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- Protocol Buffers 核心依赖 -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>3.24.4</version> <!-- 版本号可根据需要调整，建议使用 3.x 最新稳定版 -->
+        </dependency>
+
+        <!--  proto 与 Json 互转会用到-->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java-util</artifactId>
+            <version>3.24.4</version>
+        </dependency>
     </dependencies>
 
 

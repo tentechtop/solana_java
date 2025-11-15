@@ -292,7 +292,7 @@ public class SubmitPoolImpl implements SubmitPool {
             }
         }
 
-        log.info("Total expired transactions removed: {}", totalRemoved);
+        log.debug("Total expired transactions removed: {}", totalRemoved);
         return totalRemoved;
     }
 

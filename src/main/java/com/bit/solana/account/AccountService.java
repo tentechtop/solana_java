@@ -8,6 +8,14 @@ import com.bit.solana.structure.tx.json.TransferTx;
 
 public interface AccountService {
 
+
+    /**
+     * 创建账户
+     */
+    Result createAccountByPk();
+
+
+
     /**
      * 该账户下的交易 分页查询
      */
@@ -15,14 +23,25 @@ public interface AccountService {
     /**
      * 账户是否豁免租金
      */
+    boolean isExemption(byte[] pk);
+
 
     /**
      * 账户到期时间  如果金额充足就不到期
      */
+    long expirationDate(byte[] pk);
 
     /**
      * 账户是否存在
      */
+    boolean isExist(byte[] pk);
+
+
+
+    /**
+     * 根据公钥创建账户
+     */
+    Result createAccountByPk(byte[] pk);
 
 
 

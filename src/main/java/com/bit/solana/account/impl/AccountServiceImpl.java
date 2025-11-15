@@ -59,12 +59,14 @@ public class AccountServiceImpl implements AccountService {
     }
 
 
-
     @Autowired
     private TxPool txPool;
 
+
     @Override
-    public Account getAccountByHash(byte[] hash) {
+    public Result createAccountByPk() {
+        List<String> mnemonic = generateMnemonic();
+        KeyInfo keyInfo = getSolanaKeyPair(mnemonic, 0, 0);
 
         return null;
     }
@@ -82,8 +84,68 @@ public class AccountServiceImpl implements AccountService {
         String mnemonic = req.getMnemonic();
         String[] s = mnemonic.split(" ");
         KeyInfo baseKey = getSolanaKeyPair(List.of(s), req.getAccountIndex(), req.getAddressIndex());
+        Account account = new Account();
+
+
+
+
+
         return Result.OKData(baseKey.getAddress());
     }
+
+    /**
+     * 是否豁免
+     * @param pk
+     * @return
+     */
+    @Override
+    public boolean isExemption(byte[] pk) {
+        return false;
+    }
+
+    /**
+     * 过期时间
+     * @param pk
+     * @return
+     */
+    @Override
+    public long expirationDate(byte[] pk) {
+        return 0;
+    }
+
+    /**
+     * 是否存在
+     * @param pk
+     * @return
+     */
+    @Override
+    public boolean isExist(byte[] pk) {
+        return false;
+    }
+
+    /**
+     * 创建账户
+     * @param pk
+     * @return
+     */
+    @Override
+    public Result createAccountByPk(byte[] pk) {
+        return null;
+    }
+
+
+    /**
+     * 获取账户
+     * @param hash
+     * @return
+     */
+    @Override
+    public Account getAccountByHash(byte[] hash) {
+
+        return null;
+    }
+
+
 
     @Override
     public Result<Long> getBalance(String publicKey) {

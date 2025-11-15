@@ -59,3 +59,8 @@ http://localhost:18333/monitor/system
 
 protobuf做序列化
 
+
+F:\softwareSpace\Protoc\protoc-31.1-win64\bin
+
+
+
