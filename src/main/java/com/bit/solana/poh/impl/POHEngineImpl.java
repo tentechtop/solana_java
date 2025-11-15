@@ -8,11 +8,14 @@ import com.bit.solana.structure.dto.POHVerificationResult;
 import com.bit.solana.structure.poh.PohEventType;
 import com.bit.solana.structure.tx.Transaction;
 import com.bit.solana.util.Sha;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,6 +32,16 @@ import static com.bit.solana.util.ByteUtils.*;
 @Slf4j
 @Component
 public class POHEngineImpl implements POHEngine {
+
+    /**
+     * 缓存配置：使用Caffeine实现LRU策略，缓存1<<20（1,048,576）条最新的POH记录
+     * 键：Tick序号（sequenceNumber）
+     * 值：对应的POHRecord
+     */
+    private static final int CACHE_SIZE = 1 << 20; // 1,048,576条
+    private  Cache<Long, POHRecord> pohCache;
+
+
     /**
      * 核心配置参数
      */
@@ -130,6 +143,12 @@ public class POHEngineImpl implements POHEngine {
                     GlobalState.getCurrentSlot(), GlobalState.getCurrentTick(),
                     TICKS_PER_SLOT, HASHES_PER_TICK);
 
+            pohCache = Caffeine.newBuilder()
+                    .maximumSize(CACHE_SIZE) // 最大缓存条目数
+                    .expireAfterAccess(Duration.ofMinutes(10)) // 24小时未访问自动过期（可选，防止内存泄漏）
+                    .recordStats() // 记录缓存统计信息（命中率等）
+                    .build();
+
             start();
         } catch (Exception e) {
             log.error("POH引擎初始化失败", e);
@@ -148,7 +167,9 @@ public class POHEngineImpl implements POHEngine {
             synchronized (stateLock) {
                 byte[] currentLastHash = GlobalState.getLastHash();
                 long currentTick = GlobalState.getCurrentTick();
+
                 long currentSlot = GlobalState.getCurrentSlot();
+
                 byte[] iteratedHash = currentLastHash.clone();
                 for (int i = 0; i < HASHES_PER_TICK; i++) {
                     byte[] combinedIter = combine(iteratedHash, longToBytes(i), currentTick);
@@ -161,11 +182,8 @@ public class POHEngineImpl implements POHEngine {
                 record.setEventHash(eventHash);
                 record.setCurrentHash(newHash.clone());
                 record.setSequenceNumber(currentTick);
-                record.setSlot(currentSlot);
-                record.setEventType(PohEventType.EMPTY);
-                record.setPhysicalTimestamp(Instant.now());
-                record.setNodeId(nodeId.clone());
-                record.setNonEmptyEvent(isNonEmpty);
+                pohCache.put(currentTick, record); // 写入缓存
+
                 //递增tick序号
                 GlobalState.incrementTick();
                 GlobalState.setLastHash(newHash);
@@ -175,6 +193,86 @@ public class POHEngineImpl implements POHEngine {
             log.error("追加POH事件失败", e);
             return Result.error("追加POH事件失败: " + e.getMessage());
         }
+    }
+
+
+    /**
+     * 批量追加事件到POH链，整个批量操作期间会占用状态锁，确保事件的连续性
+     * @param eventDataList 事件数据列表（单个事件数据可为null，表示空事件）
+     * @return 包含批量处理结果的POH记录列表，与输入列表顺序一致
+     */
+    @Override
+    public Result<List<POHRecord>> batchAppendEvent(List<byte[]> eventDataList) {
+        if (eventDataList == null || eventDataList.isEmpty()) {
+            return Result.OK(new ArrayList<>(0));
+        }
+        if (eventDataList.size() > BATCH_MAX_SIZE) {
+            return Result.error("批量大小超过上限: " + BATCH_MAX_SIZE);
+        }
+
+        List<POHRecord> records = new ArrayList<>(eventDataList.size());
+        Object stateLock = GlobalState.getLock();
+
+        try {
+            synchronized (stateLock) {
+                // 批量处理开始时获取当前状态快照
+                byte[] currentLastHash = GlobalState.getLastHash();
+                long baseTick = GlobalState.getCurrentTick();
+
+                // 逐个处理事件，基于同一基准状态连续计算
+                for (byte[] eventData : eventDataList) {
+                    byte[] eventHash = (eventData != null) ? Sha.applySHA256(eventData) : EMPTY_EVENT_HASH.clone();
+
+                    // 执行当前事件的哈希迭代计算
+                    byte[] iteratedHash = currentLastHash.clone();
+                    for (int i = 0; i < HASHES_PER_TICK; i++) {
+                        byte[] combinedIter = combine(iteratedHash, longToBytes(i), baseTick);
+                        iteratedHash = Sha.applySHA256(combinedIter);
+                    }
+
+                    // 计算包含事件的最终哈希
+                    byte[] combined = combine(iteratedHash, eventHash, baseTick);
+                    byte[] newHash = Sha.applySHA256(combined);
+
+                    // 创建POH记录
+                    POHRecord record = new POHRecord();
+                    record.setPreviousHash(currentLastHash.clone());
+                    record.setEventHash(eventHash);
+                    record.setCurrentHash(newHash.clone());
+                    record.setSequenceNumber(baseTick);
+                    records.add(record);
+
+                    pohCache.put(baseTick, record); // 批量写入缓存
+
+                    // 更新状态用于下一个事件
+                    currentLastHash = newHash;
+                    baseTick++;
+                }
+
+                // 批量处理完成后统一更新全局状态
+                GlobalState.setLastHash(currentLastHash);
+                // 原子更新tick（批量增加总数量）
+                GlobalState.currentTick.addAndGet(eventDataList.size());
+            }
+
+            log.debug("批量追加POH事件完成 - 数量: {}, 起始Tick: {}, 结束Tick: {}",
+                    records.size(),
+                    records.get(0).getSequenceNumber(),
+                    records.get(records.size() - 1).getSequenceNumber());
+            return Result.OK(records);
+        } catch (Exception e) {
+            log.error("批量追加POH事件失败", e);
+            return Result.error("批量追加事件失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从缓存获取POH记录（用于验证和查询）
+     * @param sequenceNumber Tick序号
+     * @return 缓存的POHRecord，若未命中返回null
+     */
+    public POHRecord getFromCache(long sequenceNumber) {
+        return pohCache.getIfPresent(sequenceNumber);
     }
 
 
@@ -209,12 +307,12 @@ public class POHEngineImpl implements POHEngine {
 
             // 4. 完善交易相关的POH记录信息
             POHRecord record = result.getData();
-            record.setEventId(txId.clone());
-            record.setEventType(PohEventType.TRANSACTION);
+            record.setEventHash(txId.clone());
+
 
             transaction.setPohRecord(record);
-            log.debug("交易[{}]已打上POH时间戳 - Slot: {}, Tick: {}",
-                    bytesToHex(txId), record.getSlot(), record.getSequenceNumber());
+            log.debug("交易[{}]已打上POH时间戳 -  Tick: {}",
+                    bytesToHex(txId), record.getSequenceNumber());
             return Result.OK(record);
         } catch (Exception e) {
             log.error("为交易生成时间戳失败", e);
@@ -250,6 +348,14 @@ public class POHEngineImpl implements POHEngine {
                 byte[] combined = combine(currentHash, longToBytes(i), currentTick);
                 currentHash = Sha.applySHA256(combined);
             }
+
+            // 创建并缓存Tick记录（空事件）
+            POHRecord tickRecord = new POHRecord();
+            tickRecord.setPreviousHash(GlobalState.getLastHash());
+            tickRecord.setEventHash(EMPTY_EVENT_HASH.clone());
+            tickRecord.setCurrentHash(currentHash.clone());
+            tickRecord.setSequenceNumber(currentTick);
+            pohCache.put(currentTick, tickRecord); // 缓存自动生成的Tick
 
             // 更新状态
             GlobalState.setLastHash(currentHash);
@@ -370,13 +476,20 @@ public class POHEngineImpl implements POHEngine {
             // 重放从 currentChainSeq 到 targetSeq-1 的哈希计算（模拟中间可能的 tick 或事件）
             // 目标：计算到 targetSeq-1 时的哈希，必须等于 record 的 previousHash
             for (long seq = currentChainSeq + 1; seq < targetSeq; seq++) {
-                // 模拟中间的 tick 计算（与 generateTick 逻辑一致）
-                byte[] iterHash = currentChainHash.clone();
-                for (int i = 0; i < HASHES_PER_TICK; i++) {
-                    byte[] combined = combine(iterHash, longToBytes(i), seq);
-                    iterHash = Sha.applySHA256(combined);
+                // 尝试从缓存获取中间Tick记录
+                POHRecord cachedRecord = getFromCache(seq);
+                if (cachedRecord != null) {
+                    // 缓存命中：直接使用缓存的当前哈希，无需重新计算
+                    currentChainHash = cachedRecord.getCurrentHash().clone();
+                } else {
+                    // 缓存未命中：才重新执行哈希计算（兜底逻辑）
+                    byte[] iterHash = currentChainHash.clone();
+                    for (int i = 0; i < HASHES_PER_TICK; i++) {
+                        byte[] combined = combine(iterHash, longToBytes(i), seq);
+                        iterHash = Sha.applySHA256(combined);
+                    }
+                    currentChainHash = iterHash;
                 }
-                currentChainHash = iterHash;
                 currentChainSeq = seq;
             }
 
@@ -396,20 +509,6 @@ public class POHEngineImpl implements POHEngine {
             currentChainHash = record.getCurrentHash().clone();
             currentChainSeq = targetSeq;
         }
-
-        // 5. 验证物理时间戳合理性（非严格递增，但不应大幅倒流）
-        Instant prevTime = sortedRecords.get(0).getPhysicalTimestamp();
-        for (int i = 1; i < sortedRecords.size(); i++) {
-            Instant currTime = sortedRecords.get(i).getPhysicalTimestamp();
-            if (currTime.isBefore(prevTime.minusMillis(1000))) { // 允许1秒内波动
-                return Result.error(String.format(
-                        "记录 %d 与 %d 时间戳异常倒流 - 上一时间: %s, 当前时间: %s",
-                        i - 1, i, prevTime, currTime
-                ));
-            }
-            prevTime = currTime;
-        }
-
         return Result.OK(true);
     }
 
@@ -486,7 +585,7 @@ public class POHEngineImpl implements POHEngine {
         sortedRecords.sort(Comparator.comparingLong(POHRecord::getSequenceNumber));
 
         // 4. 验证序号严格递增
-        long prevSeq = sortedRecords.get(0).getSequenceNumber();
+        long prevSeq = sortedRecords.getFirst().getSequenceNumber();
         for (int i = 1; i < sortedRecords.size(); i++) {
             long currSeq = sortedRecords.get(i).getSequenceNumber();
             if (currSeq <= prevSeq) {
@@ -500,7 +599,7 @@ public class POHEngineImpl implements POHEngine {
         }
 
         // 5. 验证哈希链连续性（核心：确认所有记录属于同一POH链）
-        POHRecord firstRecord = sortedRecords.get(0);
+        POHRecord firstRecord = sortedRecords.getFirst();
         byte[] currentChainHash = firstRecord.getPreviousHash().clone();
         long currentChainSeq = firstRecord.getSequenceNumber() - 1;
 
@@ -510,12 +609,20 @@ public class POHEngineImpl implements POHEngine {
 
             // 重放中间的哈希计算，验证链的连续性
             for (long seq = currentChainSeq + 1; seq < targetSeq; seq++) {
-                byte[] iterHash = currentChainHash.clone();
-                for (int i = 0; i < HASHES_PER_TICK; i++) {
-                    byte[] combined = combine(iterHash, longToBytes(i), seq);
-                    iterHash = Sha.applySHA256(combined);
+                // 尝试从缓存获取中间Tick记录
+                POHRecord cachedRecord = getFromCache(seq);
+                if (cachedRecord != null) {
+                    // 缓存命中：直接使用缓存的当前哈希，无需重新计算
+                    currentChainHash = cachedRecord.getCurrentHash().clone();
+                } else {
+                    // 缓存未命中：才重新执行哈希计算（兜底逻辑）
+                    byte[] iterHash = currentChainHash.clone();
+                    for (int i = 0; i < HASHES_PER_TICK; i++) {
+                        byte[] combined = combine(iterHash, longToBytes(i), seq);
+                        iterHash = Sha.applySHA256(combined);
+                    }
+                    currentChainHash = iterHash;
                 }
-                currentChainHash = iterHash;
                 currentChainSeq = seq;
             }
 
@@ -533,20 +640,6 @@ public class POHEngineImpl implements POHEngine {
             // 更新链状态
             currentChainHash = record.getCurrentHash().clone();
             currentChainSeq = targetSeq;
-        }
-
-        // 6. 验证物理时间戳合理性
-        Instant prevTime = sortedRecords.get(0).getPhysicalTimestamp();
-        for (int i = 1; i < sortedRecords.size(); i++) {
-            Instant currTime = sortedRecords.get(i).getPhysicalTimestamp();
-            if (currTime.isBefore(prevTime.minusMillis(1000))) {
-                String errorMsg = String.format(
-                        "记录 %d 与 %d 时间戳异常倒流 - 上一时间: %s, 当前时间: %s",
-                        i - 1, i, prevTime, currTime
-                );
-                return new POHVerificationResult(false, errorMsg, null);
-            }
-            prevTime = currTime;
         }
 
         // 所有验证通过，返回排序后的记录

@@ -197,7 +197,6 @@ public class POHEngineImplAccuracyTest {
         invalidRecord.setEventHash(validRecord2.getEventHash());
         invalidRecord.setSequenceNumber(validRecord2.getSequenceNumber());
         invalidRecord.setCurrentHash(new byte[32]); // 篡改当前哈希为全0
-        invalidRecord.setPhysicalTimestamp(validRecord2.getPhysicalTimestamp());
 
         // 3. 组合记录列表（包含1条非法记录）
         List<POHRecord> records = List.of(validRecord1, invalidRecord);
@@ -239,7 +238,7 @@ public class POHEngineImplAccuracyTest {
         }
         byte[] finalHash = Sha.applySHA256(combine(currentHash, eventHash, originalSeq));
         duplicateSeqRecord.setCurrentHash(finalHash);
-        duplicateSeqRecord.setPhysicalTimestamp(original.getPhysicalTimestamp().plusMillis(10)); // 合理的时间戳
+
 
         // 3. 组合记录列表
         List<POHRecord> records = List.of(original, duplicateSeqRecord);
@@ -277,7 +276,6 @@ public class POHEngineImplAccuracyTest {
         }
         byte[] currentHash = Sha.applySHA256(combine(iterHash, brokenRecord.getEventHash(), brokenRecord.getSequenceNumber()));
         brokenRecord.setCurrentHash(currentHash);
-        brokenRecord.setPhysicalTimestamp(record2.getPhysicalTimestamp().plusMillis(100));
 
         // 3. 组合记录列表（包含断裂记录）
         List<POHRecord> records = List.of(record1, record2, brokenRecord);

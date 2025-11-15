@@ -22,6 +22,8 @@ public interface POHEngine {
      */
     Result<POHRecord> appendEvent(byte[] eventData);
 
+    Result<List<POHRecord>> batchAppendEvent(List<byte[]> eventDataList);
+
     /**
      * 为交易生成POH时间戳
      * @param transaction 待处理交易

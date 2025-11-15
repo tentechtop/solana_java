@@ -155,13 +155,6 @@ public class Transaction {
     }
 
 
-    public boolean isValidPOHRecord() {
-        if (pohRecord == null) {
-            return false;
-        }
-        // 验证POH记录中的交易ID与当前交易ID一致
-        return Arrays.equals(pohRecord.getEventId(), this.getTxId());
-    }
 
     //签名的本质是证明交易发起者（私钥持有者）认可该交易的全部内容，防止交易被篡改或伪造。
     //需要签名的数据有

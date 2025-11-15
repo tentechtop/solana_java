@@ -144,4 +144,8 @@ public class Block {
     private boolean isHotBlock;
 
 
+    /**
+     * 高度  内存中
+     */
+    private long height;
 }

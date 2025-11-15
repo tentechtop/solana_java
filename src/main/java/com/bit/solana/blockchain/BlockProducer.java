@@ -1,6 +1,7 @@
 package com.bit.solana.blockchain;
 
 import com.bit.solana.common.BlockHash;
+import com.bit.solana.common.PoHHash;
 import com.bit.solana.common.TransactionHash;
 import com.bit.solana.structure.poh.POHRecord;
 import com.bit.solana.poh.POHService;
@@ -132,11 +133,11 @@ public class BlockProducer {
         BlockHeader header = new BlockHeader();
         // 前序区块哈希：从区块链获取最新区块的哈希
         Block latestBlock = blockChain.getLatestBlock();
-        header.setPreviousBlockhash(latestBlock != null ? latestBlock.getBlockHash() : BlockHash.EMPTY);
+        header.setPreviousBlockHash(latestBlock != null ? latestBlock.getBlockHash() : BlockHash.EMPTY);
         // POH时序信息：从POH服务获取当前哈希和高度
         POHRecord pohRecord = pohService.getCurrentPOH();
-        header.setPoHHash(pohRecord.getHash());
-        header.setPoHHeight(pohRecord.getHeight());
+        header.setPoHHash(PoHHash.fromBytes(pohRecord.getCurrentHash()));
+        header.setPoHHeight(pohRecord.getSequenceNumber());
         // 其他字段：slot、blockTime等
         header.setSlot(calculateSlot()); // 基于POH高度计算slot（约400ms/slot，可调整为500ms对应）
         header.setBlockTime(System.currentTimeMillis());

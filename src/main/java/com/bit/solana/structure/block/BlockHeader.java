@@ -4,6 +4,8 @@ import com.bit.solana.common.*;
 import com.google.common.hash.BloomFilter;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * Solana区块头结构，包含区块核心元数据，用于验证区块合法性、维护链连续性及支持共识机制
  * 参考Solana协议规范：https://docs.solana.com/developing/programming-model/transactions#block-structure
@@ -15,7 +17,14 @@ public class BlockHeader {
      * 前序区块哈希（32字节）
      * 作用：上一区块的唯一标识，通过哈希链绑定当前区块与历史区块，确保区块链不可篡改性
      */
-    private BlockHash previousBlockhash;
+    private BlockHash previousBlockHash;
+
+    /**
+     * 而 Solana 采用 Tower BFT 共识机制，结合 PoH（历史证明）实现高效的分叉处理：
+     * Slot 时序严格性：每个区块对应一个唯一的 Slot（BlockHeader.slot 字段），Slot 由 PoH 全局时钟驱动，全网统一时序（约 400-500ms/Slot）。
+     * 领导者唯一性：每个 Slot 预先指定唯一的区块生产者（领导者），只有该领导者在 Slot 内生成的区块才可能成为主链区块，其他节点在同一 Slot 生成的区块会被标记为分叉候选块（Block.isCandidateBlock=true），而非 “叔叔区块”。
+     * 快速共识确认：通过 Tower BFT，区块在生成后极短时间内（通常 1-2 个 Slot）即可获得超 2/3 验证节点的确认，分叉链会被快速抛弃，无需保留 “叔叔区块” 作为补偿或验证依据。
+     */
 
     /**
      * 状态根哈希（32字节）
