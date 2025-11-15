@@ -36,12 +36,6 @@ public class Block {
      */
     private BlockHash blockHash;
 
-    /**
-     * 父区块哈希（32字节）
-     * 直接引用：从BlockHeader的previousBlockhash字段同步而来
-     * 作用：内存中快速追溯父区块，避免每次从header中解析，提升链结构遍历效率（如分叉处理）
-     */
-    private BlockHash parentBlockHash;
 
     // ========================== 2. 区块核心数据（头+体）==========================
     /**

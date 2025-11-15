@@ -2,6 +2,15 @@ syntax = "proto3";
 
 
 //protoc --proto_path=. --java_out=. structure.proto
-message ProtoMsgBlock {
+message ProtoBlockHeader {
+  bytes previous_block_hash = 1;
+  bytes state_root_hash = 2;
+
+
+}
+
+message ProtoBlock {
+    ProtoBlockHeader header = 1;
+
 
 }
