@@ -120,6 +120,11 @@ public class TransferContract2 {
      * @return 交易详情Map
      */
     public static Map<String, Object> transferWithSignature(String from, String to, long amount, byte[] signature) {
+/*        try {
+            Thread.sleep(2000); // 休眠2秒
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }*/
         String txId = "TX" + (++transactionCount);
         long timestamp = System.currentTimeMillis();
         boolean success = false;

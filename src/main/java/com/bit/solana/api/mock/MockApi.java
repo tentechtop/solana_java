@@ -49,10 +49,6 @@ public class MockApi {
      * 18:33:54.970 [main] INFO com.bit.solana.api.mock.MockApi -- 平均验签时间: 64566.75 纳秒 (0.06456675 毫秒)
      */
 
-    /**
-     * 目前一毫秒 一个签名 和 一个验证  比较耗时 一秒只能签一千次  要实现每秒一万笔交易 验证 至少 要11个线程
-     * @param args
-     */
     public static void main(String[] args) {
         // 生成助记词和密钥对
         List<String> mnemonic = generateMnemonic();
@@ -77,10 +73,7 @@ public class MockApi {
 
         // 测试数据
         byte[] data = ("测试数据" + random.nextInt(1000)).getBytes(StandardCharsets.UTF_8);
-        int loopCount = 100000; // 循环次数
-
-
-
+        int loopCount = 10000; // 循环次数
 
         // 累计耗时（纳秒）
         long totalSignTime = 0;
