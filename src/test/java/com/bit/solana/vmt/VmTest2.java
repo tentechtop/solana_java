@@ -24,10 +24,8 @@ public class VmTest2 {
         // 初始化执行器时可以指定Gas价格
         SolanaVm.ContractExecutorGas executor = new SolanaVm.ContractExecutorGas(clazz, 1L);// 100单位/ Gas
 
-
         executor.executeWithGas("initAccount", "Alice", 20000000L);
         executor.executeWithGas("initAccount", "Bob", 10000000L);
-
 
         log.info("\n===== 查询转账后余额 =====");
         Object[] result1 = executor.executeWithGas("getBalance", "Alice");
@@ -79,7 +77,6 @@ public class VmTest2 {
 
         Object object = objects[1];
         log.info("gas计费 {}", object);
-
 
     }
 
