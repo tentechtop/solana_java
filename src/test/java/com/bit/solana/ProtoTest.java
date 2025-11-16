@@ -24,20 +24,25 @@ public class ProtoTest {
                     .setHeader(header)
                     .build();
 
-            // 3. 序列化ProtoBlock对象为字节数组
+            // 3. 序列化ProtoBlock对象为字节数组（记录时间）
             byte[] serializedData;
+            long protoSerializeStart = System.nanoTime(); // 开始时间（纳秒）
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 block.writeTo(outputStream);
                 serializedData = outputStream.toByteArray();
-                System.out.println("序列化成功，字节长度: " + serializedData.length);
             }
+            long protoSerializeEnd = System.nanoTime(); // 结束时间（纳秒）
+            System.out.println("Proto序列化成功，字节长度: " + serializedData.length
+                    + "，耗时: " + (protoSerializeEnd - protoSerializeStart)/ 1_000_000.0 + "ns");
 
-            // 4. 反序列化字节数组为ProtoBlock对象
+            // 4. 反序列化字节数组为ProtoBlock对象（记录时间）
             Structure.ProtoBlock deserializedBlock;
+            long protoDeserializeStart = System.nanoTime();
             try (ByteArrayInputStream inputStream = new ByteArrayInputStream(serializedData)) {
                 deserializedBlock = Structure.ProtoBlock.parseFrom(inputStream);
-                System.out.println("反序列化成功");
             }
+            long protoDeserializeEnd = System.nanoTime();
+            System.out.println("Proto反序列化成功，耗时: " + (protoDeserializeEnd - protoDeserializeStart)/ 1_000_000.0 + "ns");
 
             // 5. 验证反序列化结果
             Structure.ProtoBlockHeader deserializedHeader = deserializedBlock.getHeader();
@@ -47,13 +52,24 @@ public class ProtoTest {
             System.out.println("反序列化stateRootHash: " + deserializedHeader.getStateRootHash().toStringUtf8());
 
 
+            // BlockHeader的序列化和反序列化时间记录
             BlockHeader blockHeader = new BlockHeader();
             blockHeader.setBlockTime(1234567890L);
-            byte[] serialize = blockHeader.serialize();
-            BlockHeader deserialize = BlockHeader.deserialize(serialize);
-            log.info("serialize: {}", serialize);
 
-            log.info("deserialize: {}", deserialize);
+            // 序列化BlockHeader
+            long blockSerializeStart = System.nanoTime();
+            byte[] serialize = blockHeader.serialize();
+            long blockSerializeEnd = System.nanoTime();
+            log.info("BlockHeader序列化字节长度: {}, 耗时: {}ns", serialize.length,
+                    (blockSerializeEnd - blockSerializeStart)/ 1_000_000.0);
+
+            // 反序列化BlockHeader
+            long blockDeserializeStart = System.nanoTime();
+            BlockHeader deserialize = BlockHeader.deserialize(serialize);
+            long blockDeserializeEnd = System.nanoTime();
+            log.info("BlockHeader反序列化成功，耗时: {}ns",
+                    (blockDeserializeEnd - blockDeserializeStart)/ 1_000_000.0);
+            log.info("反序列化结果: {}", deserialize);
 
         } catch (IOException e) {
             e.printStackTrace();
