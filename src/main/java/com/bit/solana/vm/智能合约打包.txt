@@ -1,5 +1,14 @@
 javac -d . TransferContract.java
 
+
+javac -d . RentalContract.java
+
+javac -d . WaterDropCharityContract.java
+
+javac -d . HopeSchoolNFTContract.java
+
+javac -Xlint:unchecked  -d . PropertyMortgageLoanContract.java
+
 在区块链系统（如 Solana、Ethereum）中，Gas 费用的扣除规则是统一且明确的：Gas 费用由发起交易的外部账户（Externally Owned Account, EOA）支付，而非合约账户（Contract Account）。以下从技术设计和业务逻辑两方面详细说明：
 1. 账户类型与 Gas 付费的本质
 区块链中存在两种核心账户类型，决定了 Gas 费用的支付方：
@@ -14,6 +23,8 @@ javac -d . TransferContract.java
 合约账户的被动性：合约账户没有私钥，无法主动发起 “支付 Gas” 的操作。即使合约账户有余额，也只能通过外部账户调用合约方法来使用其余额（如转账给其他账户），但 Gas 费用仍需由发起调用的外部账户承担。
 安全性与避免循环依赖：若允许合约用自身余额支付 Gas，可能导致恶意合约通过无限循环消耗自身余额，引发链上资源滥用。而外部账户付费可通过余额限制天然防止此类问题。
 
+
+基于此合约 实现NTF合约 注意签名时时间一定要从原始交易中取 不要再生成系统时间  禁止使用出java提供类 禁止使用内部类 等等
 
 
 

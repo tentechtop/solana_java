@@ -22,8 +22,6 @@ import static com.bit.solana.util.ClassUtil.decompressClassBytes;
 @Slf4j
 public class SolanaVm {
 
-
-
     // Gas费用配置
     public static class GasConfig {
         // 基础操作Gas消耗
@@ -287,6 +285,83 @@ public class SolanaVm {
             }
         }
 
+
+        /**
+         * 异步执行（通过方法名匹配）并使用默认400ms超时
+         * @param methodName 方法名
+         * @param args 方法参数
+         * @return 包含执行结果和Gas信息的CompletableFuture
+         */
+        public CompletableFuture<Object[]> executeByNameAsync(String methodName, Object... args) {
+            return executeByNameAsyncWithTimeout(methodName, 400, args);
+        }
+
+        /**
+         * 异步执行（通过方法名匹配）并指定超时时间
+         * @param methodName 方法名
+         * @param timeoutMillis 超时时间（毫秒）
+         * @param args 方法参数
+         * @return 包含执行结果和Gas信息的CompletableFuture
+         */
+        public CompletableFuture<Object[]> executeByNameAsyncWithTimeout(String methodName, long timeoutMillis, Object... args) {
+            // 提交异步任务
+            CompletableFuture<Object[]> asyncFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    // 调用同步执行方法
+                    return executeByName(methodName, args);
+                } catch (Exception e) {
+                    // 执行异常时的Gas计算
+                    long failedGas = calculateFailedGas(methodName, args);
+                    GasResult gasResult = new GasResult(
+                            failedGas,
+                            gasPrice,
+                            false,
+                            "执行异常: " + e.getMessage()
+                    );
+                    return new Object[]{null, gasResult};
+                }
+            }, ASYNC_EXECUTOR);
+
+            // 设置超时处理
+            return asyncFuture.orTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .exceptionally(ex -> {
+                        String errorMsg = ex instanceof java.util.concurrent.TimeoutException
+                                ? "执行超时（" + timeoutMillis + "ms）"
+                                : "异步任务异常: " + ex.getMessage();
+
+                        // 超时场景下的基础Gas消耗
+                        long timeoutGas = GasConfig.BASE_GAS + GasConfig.METHOD_INVOCATION_GAS
+                                + GasConfig.getMethodSpecificGas(methodName);
+
+                        GasResult gasResult = new GasResult(
+                                timeoutGas,
+                                gasPrice,
+                                false,
+                                errorMsg
+                        );
+                        return new Object[]{null, gasResult};
+                    });
+        }
+
+        /**
+         * 异步执行（通过方法名匹配）并注册回调（默认400ms超时）
+         * @param methodName 方法名
+         * @param onSuccess 成功回调
+         * @param onFailure 失败回调
+         * @param args 方法参数
+         */
+        public void executeByNameAsyncWithCallback(
+                String methodName,
+                Consumer<Object[]> onSuccess,
+                Consumer<Throwable> onFailure,
+                Object... args) {
+            executeByNameAsync(methodName, args)
+                    .thenAccept(onSuccess)
+                    .exceptionally(ex -> {
+                        onFailure.accept(ex);
+                        return null;
+                    });
+        }
 
         /**
          * 异步执行合约方法并计算Gas消耗（非阻塞）
