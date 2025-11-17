@@ -1,8 +1,11 @@
 package com.bit.solana.vmt;
 
+import com.bit.solana.database.DataBase;
+import com.bit.solana.database.rocksDb.RocksDb;
 import com.bit.solana.vm.SolanaVm;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
@@ -23,6 +26,16 @@ public class VmTest2 {
 
         SolanaVm.BlockchainClassLoader classLoader = new SolanaVm.BlockchainClassLoader();
         Class<?> clazz = classLoader.loadClassFromCompressedBytes(compressedBytes);
+
+        // 3. 反射调用带参构造器，注入数据库实例
+        Constructor<?> constructor = clazz.getConstructor(Object.class);
+        RocksDb rocksDb = new RocksDb();
+        Object contractInstance = constructor.newInstance(rocksDb);
+
+
+
+
+
         // 初始化执行器时可以指定Gas价格
         SolanaVm.ContractExecutorGas executor = new SolanaVm.ContractExecutorGas(clazz, 1L);// 100单位/ Gas
 

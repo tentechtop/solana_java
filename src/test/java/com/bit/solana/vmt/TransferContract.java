@@ -1,5 +1,6 @@
 package com.bit.solana.vmt;
 
+import java.lang.reflect.Method;
 import java.security.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,6 +13,33 @@ import java.util.concurrent.ConcurrentHashMap;
  * 使用javac编译时 禁止使用自定类 内部类 或者其他别的类 只能使用java的类  javac -d . TransferContract.java
  */
 public class TransferContract {
+    // 保存链提供的查询接口实例（类型为Object，避免依赖具体类）
+    private Object database;
+    // 缓存反射方法
+
+    //合约要提供注入方法  注入查询和合约数据库
+
+    // 构造方法：接收链传入的查询接口实例（链会通过反射调用此构造方法）
+    public TransferContract(Object database) {
+        this.database = database;
+        // 初始化反射方法（在构造时缓存，避免每次调用都反射）
+        initReflectionMethods();
+    }
+
+
+    // 初始化反射方法：获取链查询接口的方法（如getState、getBlockTimestamp）
+    private void initReflectionMethods() {
+        try {
+            // 获取链查询接口的Class对象
+            Class<?> queryClass = database.getClass();
+            //缓存反射方法
+
+        } catch (Exception e) {
+            // 若方法不存在，抛出异常终止合约（链会处理此错误）
+            throw new RuntimeException("初始化查询方法失败", e);
+        }
+    }
+
     // 账户余额存储（地址 -> 余额）
     private static final Map<String, Long> accountBalances = new ConcurrentHashMap<>();
 
