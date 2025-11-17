@@ -15,13 +15,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TransferContract {
     // 保存链提供的查询接口实例（类型为Object，避免依赖具体类）
     private Object database;
+
+    // 保存链提供的查询接口实例（类型为Object，避免依赖具体类）
+    private Object chain;
+
     // 缓存反射方法
 
     //合约要提供注入方法  注入查询和合约数据库
 
     // 构造方法：接收链传入的查询接口实例（链会通过反射调用此构造方法）
-    public TransferContract(Object database) {
+    public TransferContract(Object database,Object chain) {
         this.database = database;
+        this.chain = chain;
         // 初始化反射方法（在构造时缓存，避免每次调用都反射）
         initReflectionMethods();
     }
@@ -32,7 +37,7 @@ public class TransferContract {
         try {
             // 获取链查询接口的Class对象
             Class<?> queryClass = database.getClass();
-            //缓存反射方法
+            //缓存数据库 和 区块链 反射方法
 
         } catch (Exception e) {
             // 若方法不存在，抛出异常终止合约（链会处理此错误）

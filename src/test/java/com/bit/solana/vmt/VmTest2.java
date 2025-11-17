@@ -1,5 +1,7 @@
 package com.bit.solana.vmt;
 
+import com.bit.solana.blockchain.BlockChain;
+import com.bit.solana.blockchain.impl.BlockChainImpl;
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.rocksDb.RocksDb;
 import com.bit.solana.vm.SolanaVm;
@@ -30,10 +32,8 @@ public class VmTest2 {
         // 3. 反射调用带参构造器，注入数据库实例
         Constructor<?> constructor = clazz.getConstructor(Object.class);
         RocksDb rocksDb = new RocksDb();
-        Object contractInstance = constructor.newInstance(rocksDb);
-
-
-
+        BlockChainImpl blockChain = new BlockChainImpl();
+        Object contract = constructor.newInstance(rocksDb,blockChain);
 
 
         // 初始化执行器时可以指定Gas价格
