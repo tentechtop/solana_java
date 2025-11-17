@@ -171,6 +171,10 @@ public class ECCWithAESGCM {
         byte[] alicePrivateKey = aliceKeys[0];
         byte[] alicePublicKey = aliceKeys[1];
 
+        //打印长度
+        System.out.println("alicePrivateKey长度:"+alicePrivateKey.length);
+        System.out.println("alicePublicKey长度:"+alicePublicKey.length);
+
         byte[][] bobKeys = generateCurve25519KeyPair();
         byte[] bobPrivateKey = bobKeys[0];
         byte[] bobPublicKey = bobKeys[1];
@@ -179,7 +183,7 @@ public class ECCWithAESGCM {
         byte[] aliceShared = generateSharedSecret(alicePrivateKey, bobPublicKey);
         byte[] bobShared = generateSharedSecret(bobPrivateKey, alicePublicKey);
         System.out.println("共享密钥是否一致: " + Arrays.areEqual(aliceShared, bobShared));
-        System.out.println("共享密钥:{}"+bytesToHex(aliceShared));
+        System.out.println("共享密钥:"+bytesToHex(aliceShared));
 
         // 3. 派生AES密钥（只派生一次，复用密钥）
         SecretKey aliceAesKey = deriveAesKey(aliceShared);

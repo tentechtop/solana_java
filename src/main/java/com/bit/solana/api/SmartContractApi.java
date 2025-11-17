@@ -1,10 +1,14 @@
 package com.bit.solana.api;
 
+import com.bit.solana.database.DataBase;
+import com.bit.solana.database.DbConfig;
 import com.bit.solana.structure.dto.SmartContractDTO;
 import com.bit.solana.vm.SolanaVm;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +17,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/smartContract")
 public class SmartContractApi {
+
+    @Autowired
+    private DbConfig config;
 
 
     @PostMapping("/test")
@@ -83,6 +90,25 @@ public class SmartContractApi {
         Object object = objects[1];
         log.info("gas计费 {}", object);
     }
+
+
+    @PostMapping("/test1")
+    public void test1(@RequestBody SmartContractDTO testVmDTO) throws Exception {
+        byte[] compressedBytes = testVmDTO.getCompressedBytes();
+        DataBase dataBase = config.getDataBase();
+
+        SolanaVm.BlockchainClassLoader classLoader = new SolanaVm.BlockchainClassLoader();
+        Class<?> contractClass = classLoader.loadClassFromCompressedBytes(compressedBytes);
+        Constructor<?> constructor = contractClass.getConstructor(Object.class);
+        Object contractInstance = constructor.newInstance(dataBase);
+        SolanaVm.ContractExecutorGas executor = new SolanaVm.ContractExecutorGas(contractInstance, 1L);
+        Object[] result = executor.executeWithGas("testInsertAndQuery"); // 调用无参方法
+
+
+
+
+    }
+
 
 
 }

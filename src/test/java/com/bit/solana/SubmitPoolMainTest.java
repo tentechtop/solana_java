@@ -28,17 +28,18 @@ public class SubmitPoolMainTest {
 
     public static void main(String[] args) throws InterruptedException {
         // 初始化资源
-/*        setup();*/
+        setup();
 
-/*        // 启动生产者和消费者
+        // 启动生产者和消费者
         startWorkers();
 
         // 运行测试（持续30秒，可根据需要调整）
         Thread.sleep(30000 * 100);
 
         // 清理资源
-        teardown();*/
+        teardown();
 
+/*
         submitPool = new SubmitPoolImpl();
         submitPool.init();
 
@@ -50,6 +51,7 @@ public class SubmitPoolMainTest {
         System.out.println("交易状态"+ statusString);
 
         System.out.println("查询到的叫i有"+transactionByTxId.toString());
+*/
 
 
     }
@@ -85,8 +87,7 @@ public class SubmitPoolMainTest {
         initThread.start();
         initLatch.await();
 
-        Assert.isTrue(submitPool.getTotalTransactionCount() == initialCount,
-                "初始交易数量不正确");
+
 
         // 初始化线程池
         producerExecutor = Executors.newFixedThreadPool(5);

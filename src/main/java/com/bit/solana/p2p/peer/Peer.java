@@ -1,9 +1,8 @@
-package com.bit.solana.structure.peer;
+package com.bit.solana.p2p.peer;
 
-import com.bit.solana.p2p.enums.NodeServerType;
+
 import lombok.*;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -23,11 +22,11 @@ public class Peer {
      * 例："7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2"
      * 节点的公钥 base58编码后的值
      */
-    private String id;
+    private byte[] id;
 
     // ==================== 网络信息（用于P2P连接） ====================
     /**
-     * 节点IP地址（IPv4/IPv6）
+     * 节点IP地址（IPv4/IPv6）  通过netty获取真实的IP地址  节点连接引导节点可以获取
      * 例："192.168.1.100" 或 "2001:db8::1"
      */
     private String host;
@@ -52,12 +51,9 @@ public class Peer {
 
     // ==================== 节点状态（反映节点当前状态） ====================
     /**
-     * 节点类型（区分功能角色）
-     * - VALIDATOR：验证者节点（参与共识）
-     * - FULL_NODE：全节点（存储完整账本，不参与共识）
-     * - LIGHT_NODE：轻节点（仅同步区块头，不存储完整数据）
+     * 节点类型
      */
-    private NodeServerType nodeType;
+    private int nodeType;
 
     /**
      * 是否在线 true在线 / false 离线
@@ -75,7 +71,7 @@ public class Peer {
      * 最后一次与当前节点成功通信的时间
      * 用于判断节点是否在线（如超过5分钟无通信则标记为离线）
      */
-    private Instant lastContactTime;
+    private long lastContactTime;
 
     // ==================== 能力与属性（描述节点功能） ====================
     /**
@@ -104,6 +100,12 @@ public class Peer {
      * 用于排查版本兼容问题（如某些功能仅高版本支持）
      */
     private String softwareVersion;
+
+
+    /**
+     * 最后访问时间
+     */
+    private long lastSeen;
 
 
 }

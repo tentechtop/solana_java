@@ -145,7 +145,10 @@ public class SolanaVm {
         @Override
         protected Class<?> findClass(String name) throws ClassNotFoundException {
             // 如果合约类是通过loadClassFromBytes加载的，defineClass会自动缓存，findLoadedClass会命中
-            // 这里处理未缓存的情况（如需要从其他来源加载）
+            Class<?> clazz = findLoadedClass(name);
+            if (clazz != null) {
+                return clazz;
+            }
             throw new ClassNotFoundException("Class not found: " + name);
         }
 
@@ -580,6 +583,19 @@ public class SolanaVm {
         public ContractExecutorGas(Class<?> contractClass, long gasPrice) throws InstantiationException, IllegalAccessException {
             this.contractClass = contractClass;
             this.contractInstance = contractClass.newInstance(); // 假设无参构造
+            this.gasPrice = gasPrice;
+            this.accumulatedGas = 0;
+        }
+
+        // 新增：接收已初始化的合约实例（已注入数据库等依赖）
+        public ContractExecutorGas(Object contractInstance) {
+            this(contractInstance, 100L); // 默认Gas价格
+        }
+
+        // 新增：接收合约实例和自定义Gas价格
+        public ContractExecutorGas(Object contractInstance, long gasPrice) {
+            this.contractInstance = contractInstance;
+            this.contractClass = contractInstance.getClass(); // 从实例获取类对象
             this.gasPrice = gasPrice;
             this.accumulatedGas = 0;
         }

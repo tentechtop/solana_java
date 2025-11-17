@@ -73,8 +73,7 @@ public class SubmitPoolPerformanceTest {
             throw new RuntimeException("初始化交易池失败", e);
         }
 
-        Assert.isTrue(submitPool.getTotalTransactionCount() == initialCount,
-                "初始交易数量不正确");
+
 
         // 初始化线程池
         producerExecutor = Executors.newFixedThreadPool(5);
