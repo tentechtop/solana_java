@@ -16,7 +16,8 @@ import java.util.concurrent.TimeUnit;
 @Component
 @ConfigurationProperties(prefix = "system")
 public class Settings {
-    private byte[] localPeerId;
+    private byte[] localPeerId;//32字节公钥
+    private byte[] prvkey;//32字节私钥
     private int bucketSize;
     private int findNodeSize;
     private int maximumLastSeenAgeToConsiderAlive;
@@ -27,6 +28,8 @@ public class Settings {
     private int scheduledExecutorPoolSize;
     private boolean enabledFirstStoreRequestForcePass;
 
+
+    //初始化配置参数
 
 
 }
