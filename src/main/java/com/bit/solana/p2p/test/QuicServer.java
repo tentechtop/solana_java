@@ -36,7 +36,7 @@ public class QuicServer {
         SelfSignedCertificate selfSignedCertificate = new SelfSignedCertificate();
         QuicSslContext context = QuicSslContextBuilder.forServer(
                         selfSignedCertificate.privateKey(), null, selfSignedCertificate.certificate())
-                .applicationProtocols("http/0.9").build();
+                .applicationProtocols("h3").build();
 
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         //创建quic服务端编码器

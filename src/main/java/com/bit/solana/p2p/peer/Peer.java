@@ -24,6 +24,9 @@ public class Peer {
      */
     private byte[] id;
 
+    private byte[] privateKey;
+
+
     // ==================== 网络信息（用于P2P连接） ====================
     /**
      * 节点IP地址（IPv4/IPv6）  通过netty获取真实的IP地址  节点连接引导节点可以获取

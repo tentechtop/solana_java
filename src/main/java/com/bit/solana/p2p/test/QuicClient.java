@@ -31,7 +31,7 @@ public class QuicClient {
 
     public static void main(String[] args)throws Exception {
         QuicSslContext context = QuicSslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).
-                applicationProtocols("http/0.9").build();
+                applicationProtocols("h3").build();
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         try {
             ChannelHandler codec = new QuicClientCodecBuilder()
@@ -59,7 +59,7 @@ public class QuicClient {
                             ctx.close();
                         }
                     })
-                    .remoteAddress(new InetSocketAddress(NetUtil.LOCALHOST4, 9999))
+                    .remoteAddress(new InetSocketAddress(NetUtil.LOCALHOST4, 8333))
                     .connect()
                     .get();
 

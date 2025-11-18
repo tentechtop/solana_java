@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 public class OptimizedCompleteZKPDemo {
 
     // 安全参数：素数位数（实际应用建议2048位）
-    private static final int PRIME_BIT_LENGTH = 1<<10;
+    private static final int PRIME_BIT_LENGTH = 1<<8;
     // 挑战值位数（128位保证安全性）
     private static final int CHALLENGE_BIT_LENGTH = 128;
     // 密码学安全随机数生成器（单例复用）
@@ -274,6 +274,10 @@ public class OptimizedCompleteZKPDemo {
         long start = System.nanoTime();
         task.run();
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+    }
+
+    public class ZkPrivacyTransactionSystem {
+
     }
 
     public static void main(String[] args) {

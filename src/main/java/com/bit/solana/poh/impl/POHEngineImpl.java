@@ -377,9 +377,9 @@ public class POHEngineImpl implements POHEngine {
                 long slotDurationNs = System.nanoTime() - slotStartTimeNs;
                 long slotDurationMs = slotDurationNs / 1_000_000;
 
-                log.info("Slot生成完成 - Slot: {}, 最终Tick: {}, 实际耗时: {}ms ({}ns), 哈希: {}",
+     /*           log.info("Slot生成完成 - Slot: {}, 最终Tick: {}, 实际耗时: {}ms ({}ns), 哈希: {}",
                         newSlot, newTick, slotDurationMs, slotDurationNs, bytesToHex(currentHash));
-
+*/
             } else {
                 // 可选：记录每个tick的耗时，用于性能分析
                 log.trace("Tick生成完成 - Tick: {}, 耗时: {}ns", newTick, tickDurationNs);
