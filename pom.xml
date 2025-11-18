@@ -52,15 +52,14 @@
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
             <version>1.78</version>
-            <!-- 可选：排除冲突依赖 -->
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcprov-jdk15on</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
+        <!-- 新增：PKIX/CMS/ECE 等证书相关功能 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+            <version>1.78</version>
+        </dependency>
 
         <!--在 Java 里读取 application.yml 文件-->
         <dependency>
@@ -241,6 +240,15 @@
             <artifactId>protobuf-java-util</artifactId>
             <version>4.31.1</version>
         </dependency>
+
+        <dependency>
+            <groupId>io.netty.incubator</groupId>
+            <artifactId>netty-incubator-codec-native-quic</artifactId>
+            <version>0.0.34.Final</version>
+            <classifier>windows-x86_64</classifier>
+        </dependency>
+
+
     </dependencies>
 
 
