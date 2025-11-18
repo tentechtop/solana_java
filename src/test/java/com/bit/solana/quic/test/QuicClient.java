@@ -1,4 +1,4 @@
-package com.bit.solana.p2p.test;
+package com.bit.solana.quic.test;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;

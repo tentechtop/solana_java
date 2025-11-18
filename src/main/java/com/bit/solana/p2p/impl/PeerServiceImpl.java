@@ -128,7 +128,7 @@ public class PeerServiceImpl implements PeerService {
     /**
      * 处理QUIC连接的处理器
      */
-    private class QuicConnectionHandler extends ChannelInboundHandlerAdapter {
+    private class QuicConnectionHandler extends ChannelInboundHandlerAdapter  {
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
             QuicChannel quicChannel = (QuicChannel) ctx.channel();
@@ -139,6 +139,8 @@ public class PeerServiceImpl implements PeerService {
 
 
         }
+
+
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
@@ -232,32 +234,6 @@ public class PeerServiceImpl implements PeerService {
         return response;
     }
 
-    /**
-     * 主动创建流并发送二进制数据（向已连接节点发数据）
-     */
-    public void sendBinaryData(InetSocketAddress targetAddress, byte[] data) {
-        QuicChannel quicChannel = peerNodes.get(targetAddress.toString());
-        if (quicChannel == null || !quicChannel.isActive()) {
-            log.error("目标节点 {} 未连接或已断开", targetAddress);
-            return;
-        }
-
-        try {
-            // 创建双向流（支持发送+接收响应）
-            QuicStreamChannel streamChannel = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                    new QuicStreamHandler()).sync().getNow();
-
-            // 发送二进制数据
-            ByteBuf sendBuf = streamChannel.alloc().buffer(data.length);
-            sendBuf.writeBytes(data);
-            streamChannel.writeAndFlush(sendBuf);
-
-            log.info("向 {} 发送二进制数据，长度: {} 字节", targetAddress, data.length);
-
-        } catch (Exception e) {
-            log.error("发送二进制数据失败", e);
-        }
-    }
 
 
 
