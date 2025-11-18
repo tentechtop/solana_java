@@ -49,7 +49,7 @@ public class QUICTestClient {
         try {
             ChannelHandler codec = new QuicClientCodecBuilder()
                     .sslContext(sslContext)
-                    .maxIdleTimeout(30, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
+                    .maxIdleTimeout(5, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
                     .initialMaxData(10 * 1024 * 1024) // 增大数据限制
                     .initialMaxStreamDataBidirectionalLocal(1 * 1024 * 1024)
                     .build();
