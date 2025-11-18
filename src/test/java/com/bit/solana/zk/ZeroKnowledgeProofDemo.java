@@ -1,4 +1,4 @@
-package com.bit.solana;
+package com.bit.solana.zk;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;

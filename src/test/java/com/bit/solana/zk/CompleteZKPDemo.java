@@ -1,14 +1,16 @@
-package com.bit.solana;
+package com.bit.solana.zk;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.Arrays;
+
+import static com.bit.solana.zk.OptimizedZKPDemo.measureTime;
 
 /**
  * 零知识证明演示：证明者在不泄露秘密的情况下，向验证者证明自己知道某个秘密
  * 基于离散对数问题（Discrete Logarithm Problem）构建
  */
 public class CompleteZKPDemo {
+
     // 安全参数：素数位数（实际应用中建议2048位以上）
     private static final int PRIME_BIT_LENGTH = 512;
     // 挑战值位数（影响安全性，通常128位以上）
@@ -178,11 +180,32 @@ public class CompleteZKPDemo {
         }
     }
 
+    // 简化蒙哥马利模幂（替代pubParams.g.modPow(secretS, pubParams.p)）
+    private static BigInteger fastModPow(BigInteger base, BigInteger exponent, BigInteger mod) {
+        BigInteger result = BigInteger.ONE;
+        base = base.mod(mod);
+        while (exponent.compareTo(BigInteger.ZERO) > 0) {
+            if (exponent.testBit(0)) { // 指数为奇数
+                result = result.multiply(base).mod(mod);
+            }
+            base = base.multiply(base).mod(mod);
+            exponent = exponent.shiftRight(1); // 指数右移（除以2）
+        }
+        return result;
+    }
+
     public static void main(String[] args) {
         System.out.println("=== 零知识证明完整流程演示 ===");
 
         // 1. 生成公共参数（p, q, g）
         System.out.println("\n1. 生成公共参数（p: 大素数, q: p-1的素因子, g: 生成元）...");
+
+        //生成耗时
+        long pubParamGenTime = measureTime(() -> {
+            PublicParameters pubParams = new PublicParameters();
+        });
+        System.out.println("生成公共参数耗时：" + pubParamGenTime + " ms");
+
         PublicParameters pubParams = new PublicParameters();
         System.out.println("   p的位数: " + pubParams.p.bitLength() + " bits");
         System.out.println("   q的位数: " + pubParams.q.bitLength() + " bits");

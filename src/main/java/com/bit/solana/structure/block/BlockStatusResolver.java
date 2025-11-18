@@ -14,6 +14,7 @@ public class BlockStatusResolver {
     public static final int CONFIRMED = 1 << 2;    // 4 (2^2)：已共识确认
     public static final int ARCHIVED = 1 << 3;     // 8 (2^3)：已归档
     public static final int INVALID = 1 << 4;      // 16 (2^4)：无效
+                                                   // 非主链
 
     // 常用状态组合
     public static final int PENDING = UNVERIFIED | VERIFIED;  // 待确认状态（未验证或已验证但未确认）
