@@ -40,6 +40,8 @@ public class PeerClient {
     private static final long RECONNECT_DELAY = 3; // 重连延迟（秒）
     private static final int MAX_RECONNECT_ATTEMPTS = 10; // 最大重连次数
     private static final int DEFAULT_TIMEOUT = 5000; // 默认请求超时（毫秒）
+    public static final long NODE_EXPIRATION_TIME = 60;//秒 节点过期时间
+
 
     // 心跳消息标识（与 PeerClient 对齐）
     public static final byte[] HEARTBEAT_SIGNAL = new byte[]{0x00, 0x01};
@@ -84,9 +86,6 @@ public class PeerClient {
                 .channel(NioDatagramChannel.class)
                 .handler(codec)
                 .bind(0).sync().channel();
-
-
-
         log.info("PeerClient初始化完成");
     }
 
