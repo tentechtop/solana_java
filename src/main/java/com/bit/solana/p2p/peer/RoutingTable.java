@@ -78,6 +78,10 @@ public class RoutingTable {
 
     }
 
+    public Peer getNode(String nodeId) {
+        return null;
+    }
+
     /**
      * 是否包含节点 参数节点ID
      */

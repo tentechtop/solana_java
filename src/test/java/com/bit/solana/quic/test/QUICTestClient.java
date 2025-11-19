@@ -1,4 +1,4 @@
-package com.bit.solana.p2p.impl;
+package com.bit.solana.quic.test;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -49,7 +49,7 @@ public class QUICTestClient {
         try {
             ChannelHandler codec = new QuicClientCodecBuilder()
                     .sslContext(sslContext)
-                    .maxIdleTimeout(5, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
+                    .maxIdleTimeout(10, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
                     .initialMaxData(10 * 1024 * 1024) // 增大数据限制
                     .initialMaxStreamDataBidirectionalLocal(1 * 1024 * 1024)
                     .build();
@@ -108,6 +108,8 @@ public class QUICTestClient {
 
             // 3. 定时任务：持续发送二进制数据
             ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+
             scheduler.scheduleAtFixedRate(() -> {
                 if (streamChannel.isActive()) {
                     // 生成随机二进制测试数据（也可替换为自定义二进制内容）

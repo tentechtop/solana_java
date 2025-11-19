@@ -3,6 +3,7 @@ package com.bit.solana.p2p.peer;
 
 import lombok.*;
 
+import java.net.InetSocketAddress;
 import java.util.List;
 
 /**
@@ -25,6 +26,9 @@ public class Peer {
     private byte[] id;
 
     private byte[] privateKey;
+
+
+    private InetSocketAddress nodeAddress;
 
 
     // ==================== 网络信息（用于P2P连接） ====================
