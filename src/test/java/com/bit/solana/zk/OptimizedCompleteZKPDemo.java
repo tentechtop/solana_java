@@ -232,7 +232,7 @@ public class OptimizedCompleteZKPDemo {
     /**
      * 优化的模幂算法：减少循环次数和中间计算量
      */
-    private static BigInteger fastModPow(BigInteger base, BigInteger exponent, BigInteger mod) {
+    static BigInteger fastModPow(BigInteger base, BigInteger exponent, BigInteger mod) {
         if (mod.equals(BigInteger.ONE)) return BigInteger.ZERO;
         BigInteger result = BigInteger.ONE;
         base = base.mod(mod); // 提前取模，缩小基数
@@ -254,7 +254,7 @@ public class OptimizedCompleteZKPDemo {
     /**
      * 高效生成[min, max]范围内的随机数
      */
-    private static BigInteger generateInRange(BigInteger min, BigInteger max) {
+    static BigInteger generateInRange(BigInteger min, BigInteger max) {
         if (min.compareTo(max) >= 0) {
             throw new IllegalArgumentException("min必须小于max");
         }

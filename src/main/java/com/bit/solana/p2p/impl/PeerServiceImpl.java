@@ -51,9 +51,18 @@ public class PeerServiceImpl implements PeerService {
     @Autowired
     private RoutingTable routingTable;
 
+    // 已连接的节点列表 节点ID
+    public  Map<byte[], QuicChannel> peerNodes = new HashMap<>();
 
-    // 已连接的节点列表
-    private  Map<String, QuicChannel> peerNodes = new HashMap<>();
+
+    /**
+     * QuicChannel - > 结构
+     */
+    public class QuicNode {
+        //出站还是入站
+        private boolean isOutbound;
+        private QuicChannel quicChannel;
+    }
 
 
     /**
