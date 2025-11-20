@@ -7,7 +7,8 @@ import java.net.InetSocketAddress;
 import java.util.List;
 
 /**
- * 节点信息
+ * 节点信息  按 8 字节对齐：180 ÷ 8 = 22.5 → 补 2 字节，最终Peer 对象本身占 182 字节（对齐后 184 字节）。
+ * 5120个节点大约占用 2-3M内存
  */
 @Data
 @AllArgsConstructor

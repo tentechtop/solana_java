@@ -9,6 +9,9 @@ import io.netty.incubator.codec.quic.QuicStreamAddress;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
 import static com.bit.solana.p2p.protocol.P2pMessageHeader.HEARTBEAT_SIGNAL;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 
@@ -47,6 +50,60 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
 
 
+        // ========== 修正：获取QUIC连接的IP/端口 ==========
+        Channel channel = ctx.channel();
+        InetSocketAddress remoteAddress = getQuicRemoteInetAddress(channel);
+        InetSocketAddress localAddress = getQuicLocalInetAddress(channel);
+
+        log.info("QUIC连接信息 | 源IP: {} | 源端口: {} | 本地IP: {} | 本地端口: {}",
+                remoteAddress != null ? remoteAddress.getAddress().getHostAddress() : "未知",
+                remoteAddress != null ? remoteAddress.getPort() : "未知",
+                localAddress != null ? localAddress.getAddress().getHostAddress() : "未知",
+                localAddress != null ? localAddress.getPort() : "未知");
+
+    }
+
+    // ========== 核心工具方法：获取QUIC连接的InetSocketAddress ==========
+    /**
+     * 获取QUIC流通道对应的远程IP和端口
+     */
+    private InetSocketAddress getQuicRemoteInetAddress(Channel channel) {
+        if (!(channel instanceof QuicStreamChannel)) {
+            return channel.remoteAddress() instanceof InetSocketAddress ?
+                    (InetSocketAddress) channel.remoteAddress() : null;
+        }
+
+        // 从QuicStreamChannel获取QuicChannel（连接层）
+        QuicStreamChannel quicStreamChannel = (QuicStreamChannel) channel;
+        QuicChannel quicChannel = quicStreamChannel.parent();
+        if (quicChannel == null) {
+            return null;
+        }
+
+        // 从QuicChannel获取真正的远程地址（InetSocketAddress）
+        SocketAddress remoteAddress = quicChannel.remoteAddress();
+        return remoteAddress instanceof InetSocketAddress ?
+                (InetSocketAddress) remoteAddress : null;
+    }
+
+    /**
+     * 获取QUIC流通道对应的本地IP和端口
+     */
+    private InetSocketAddress getQuicLocalInetAddress(Channel channel) {
+        if (!(channel instanceof QuicStreamChannel)) {
+            return channel.localAddress() instanceof InetSocketAddress ?
+                    (InetSocketAddress) channel.localAddress() : null;
+        }
+
+        QuicStreamChannel quicStreamChannel = (QuicStreamChannel) channel;
+        QuicChannel quicChannel = quicStreamChannel.parent();
+        if (quicChannel == null) {
+            return null;
+        }
+
+        SocketAddress localAddress = quicChannel.localAddress();
+        return localAddress instanceof InetSocketAddress ?
+                (InetSocketAddress) localAddress : null;
     }
 
     /**
@@ -98,6 +155,9 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         Channel channel = ctx.channel();
+
+
+
 
         log.info("新的QUIC连接建立: {}", channel);
 

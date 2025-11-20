@@ -255,11 +255,14 @@
             <classifier>${netty.quic.classifier}</classifier>
         </dependency>
 
+
     </dependencies>
 
 
 
     <build>
+        <!-- 直接定义最终JAR名称，优先级最高 -->
+        <finalName>${project.artifactId}-${project.version}-${netty.quic.classifier}</finalName>
         <plugins>
             <!-- Spring Boot打包插件：生成可执行JAR（repackage目标） -->
             <plugin>

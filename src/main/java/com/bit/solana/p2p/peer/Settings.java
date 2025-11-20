@@ -18,10 +18,10 @@ import java.util.concurrent.TimeUnit;
 public class Settings {
     private byte[] localPeerId;//32字节公钥
     private byte[] prvkey;//32字节私钥
-    private int bucketSize;
-    private int findNodeSize;
+    private int bucketSize = 20;
+    private int findNodeSize = 20;
     private int maximumLastSeenAgeToConsiderAlive;
-    private int identifierSize;
+    private int identifierSize = 256;//256位 256个桶
     private int pingScheduleTimeValue;
     private TimeUnit pingScheduleTimeUnit = TimeUnit.SECONDS;
     private int dhtExecutorPoolSize;
