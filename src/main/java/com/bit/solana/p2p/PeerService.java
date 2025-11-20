@@ -1,6 +1,11 @@
 package com.bit.solana.p2p;
 
+import java.io.IOException;
+import java.security.cert.CertificateException;
+
 public interface PeerService {
+
+    void init() throws IOException, CertificateException;
 
     //注册协议  注册的协议可以有返回值
 

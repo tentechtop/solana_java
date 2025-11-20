@@ -2,17 +2,17 @@ package com.bit.solana.p2p.impl;
 
 import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolPacketCodec;
+import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.ChannelInputShutdownReadComplete;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.incubator.codec.quic.*;
-import io.netty.util.NetUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import jakarta.annotation.PostConstruct;
@@ -52,23 +52,34 @@ public class PeerClient {
     private static final int MAX_FRAME_SIZE = 1024 * 1024; // 最大帧大小 1MB
     private static final int EVENT_LOOP_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors() * 2); // EventLoop 线程数
 
+    // 注入协议注册器
+    @Autowired
+    private ProtocolRegistry protocolRegistry;
 
     @Autowired
     private RoutingTable routingTable;
+
+    @Autowired
+    private ClientQuicStreamHandler clientQuicStreamHandler;
 
     // 全局锁（避免重复连接）
     private final ReentrantLock connectLock = new ReentrantLock();
     // 节点ID -> 重连计数器（控制最大重连次数）
     private final Map<String, AtomicInteger> reconnectCounter = new ConcurrentHashMap<>();
     // 节点ID -> 响应Future缓存（用于同步等待响应）
-    private final Map<String, CompletableFuture<byte[]>> responseFutureMap = new ConcurrentHashMap<>();
+    public static Map<UUID, CompletableFuture<byte[]>> responseFutureCache = new ConcurrentHashMap<>();
+
+
     // 节点ID -> 心跳任务调度器（用于取消心跳）
     private final Map<String, ScheduledFuture<?>> heartbeatTaskMap = new ConcurrentHashMap<>();
+    // 响应Future缓存（请求ID -> 响应Future）
+
     public static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2, r -> {
         Thread t = new Thread(r, "peer-client-scheduler");
         t.setDaemon(true); // 守护线程，避免阻塞应用退出
         return t;
     }); // 定时任务线程池
+
 
     private NioEventLoopGroup eventLoopGroup;
     private Bootstrap bootstrap;
@@ -92,11 +103,6 @@ public class PeerClient {
                 .build();
         bootstrap = new Bootstrap();
 
-/*        datagramChannel = bootstrap.group(eventLoopGroup)
-                .channel(NioDatagramChannel.class)
-                .handler(codec)
-                .bind(0).sync().channel();*/
-
         datagramChannel = bootstrap.group(eventLoopGroup)
                 .channel(NioDatagramChannel.class)
                 .option(ChannelOption.SO_REUSEADDR, true) // 复用端口
@@ -106,27 +112,13 @@ public class PeerClient {
                 .bind(0) // 随机绑定可用端口
                 .sync()
                 .channel();
-
-
         log.info("PeerClient 初始化完成，绑定UDP端口:{}", datagramChannel.localAddress());
-
-        //连接自己
-        InetSocketAddress inetSocketAddress = new InetSocketAddress("127.0.0.1", 8333);
-
-        new Thread(() -> {
-            try {
-                sleep(1000);
-                QuicStreamChannel connect = connect(inetSocketAddress);
-            } catch (Exception e) {
-                log.error("连接自己异常:{}", e.getMessage());
-            }
-        }).start();
-
     }
 
 
     /**
      * 主动连接某个节点（幂等）
+     * 创建通道 / 流后，若后续步骤失败，兜底关闭资源
      */
     public QuicNodeWrapper connect(String nodeId) throws ExecutionException, InterruptedException {
         // 1. 幂等检查：已连接且活跃则直接返回
@@ -138,6 +130,8 @@ public class PeerClient {
         }
         // 2. 加锁避免并发连接
         connectLock.lock();
+        QuicChannel quicChannel = null;
+        QuicStreamChannel heartbeatStream = null;
 
         try {
             // 二次检查（防止锁等待期间已建立连接）
@@ -157,15 +151,15 @@ public class PeerClient {
             }
 
             InetSocketAddress inetSocketAddress = node.getInetSocketAddress();
-            QuicChannel quicChannel = QuicChannel.newBootstrap(datagramChannel)
-                    .streamHandler(new QuicStreamHandler())
+            quicChannel = QuicChannel.newBootstrap(datagramChannel)
+                    .streamHandler(clientQuicStreamHandler)
                     .remoteAddress(inetSocketAddress)
                     .connect()
                     .get();
 
 
-            QuicStreamChannel heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                    new QuicStreamHandler()).sync().getNow();
+            heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+                    clientQuicStreamHandler).sync().getNow();
 
             QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(scheduler);
             quicNodeWrapper.setNodeId(nodeId);
@@ -182,6 +176,15 @@ public class PeerClient {
 
             startHeartbeatTask(nodeId);
             return quicNodeWrapper;
+        } catch (Exception e) {
+            // 兜底关闭
+            if (heartbeatStream != null && heartbeatStream.isActive()) {
+                heartbeatStream.close().syncUninterruptibly();
+            }
+            if (quicChannel != null && quicChannel.isActive()) {
+                quicChannel.close().syncUninterruptibly();
+            }
+            throw e;
         }finally {
             connectLock.unlock();
         }
@@ -196,7 +199,7 @@ public class PeerClient {
          * 3. 建立逻辑上的 QUIC 会话（基于 UDP 的软连接）
          */
         QuicChannel quicChannel = QuicChannel.newBootstrap(datagramChannel)
-                .streamHandler(new QuicStreamHandler())
+                .streamHandler(clientQuicStreamHandler)
                 .remoteAddress(address)
                 .connect()
                 .get();
@@ -208,10 +211,10 @@ public class PeerClient {
          * 3. 流成为数据传输的最小单元
          */
         QuicStreamChannel streamChannel = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new QuicStreamHandler()).sync().getNow();
-
+                clientQuicStreamHandler).sync().getNow();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
+            //发送临时数据
             if (streamChannel.isActive()) {
                 // 生成随机二进制测试数据（也可替换为自定义二进制内容）
                 byte[] sendData = HEARTBEAT_SIGNAL;
@@ -231,7 +234,6 @@ public class PeerClient {
                 scheduler.shutdown();
             }
         }, 0, SEND_INTERVAL, TimeUnit.SECONDS);
-
         return streamChannel;
     }
 
@@ -283,6 +285,9 @@ public class PeerClient {
             ByteBuf buf = Unpooled.copiedBuffer(data);
             if (data.length <= STREAM_REUSE_THRESHOLD) {
                 streamChannel.writeAndFlush(buf).addListener(future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
                     if (!future.isSuccess()) {
                         log.error("临时节点{}复用流发送失败", nodeAddress, future.cause());
                     }
@@ -291,8 +296,11 @@ public class PeerClient {
                 // 临时连接的大数据：创建新流发送
                 QuicChannel quicChannel = (QuicChannel) streamChannel.parent();
                 QuicStreamChannel tempStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
-                        new QuicStreamHandler()).sync().getNow();
+                        clientQuicStreamHandler).sync().getNow();
                 tempStream.writeAndFlush(buf).addListener(future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
                     if (future.isSuccess()) {
                         log.info("临时节点{}临时流发送成功，数据大小:{}KB",
                                 nodeAddress, data.length/1024);
@@ -319,8 +327,8 @@ public class PeerClient {
 
         // 创建响应Future
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
-        String requestId = UUID.randomUUID().toString();
-        responseFutureMap.put(requestId, responseFuture);
+        UUID requestId = UUID.randomUUID();
+        responseFutureCache.put(requestId, responseFuture);
 
         try {
             // 获取/创建连接
@@ -356,7 +364,7 @@ public class PeerClient {
                 businessStream.writeAndFlush(buf).sync();
             } else {
                 // 临时流发送
-                byte[] tempKey = requestId.getBytes(StandardCharsets.UTF_8);
+                byte[] tempKey = requestId.toString().getBytes();
                 QuicStreamChannel tempStream = wrapper.createTempStream(tempKey);
                 if (tempStream == null) {
                     throw new IOException("节点" + nodeId + "临时流创建失败");
@@ -391,7 +399,7 @@ public class PeerClient {
             return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
         } finally {
             // 清理Future
-            responseFutureMap.remove(requestId);
+            responseFutureCache.remove(requestId);
         }
     }
 
@@ -465,13 +473,9 @@ public class PeerClient {
             }
 
             // 3. 清理响应Future
-            responseFutureMap.entrySet().removeIf(entry -> {
-                if (entry.getValue().isDone()) {
-                    return false;
-                }
-                entry.getValue().completeExceptionally(new IOException("节点已断开连接: " + nodeId));
-                return true;
-            });
+
+
+
 
             // 4. 重置重连计数器
             reconnectCounter.remove(nodeId);
@@ -525,31 +529,28 @@ public class PeerClient {
     private void reconnect(String nodeId) {
         // 1. 检查重连次数
         AtomicInteger counter = reconnectCounter.computeIfAbsent(nodeId, k -> new AtomicInteger(0));
-        int currentAttempt = counter.incrementAndGet();
-        if (currentAttempt > MAX_RECONNECT_ATTEMPTS) {
-            log.error("节点{}重连次数达到上限({})，停止重连", nodeId, MAX_RECONNECT_ATTEMPTS);
+        int current = counter.get();
+        if (current >= MAX_RECONNECT_ATTEMPTS) {
             disconnect(nodeId);
             return;
         }
-
         // 2. 延迟重连
         scheduler.schedule(() -> {
             try {
-                log.info("节点{}开始第{}次重连", nodeId, currentAttempt);
                 connect(nodeId);
-                log.info("节点{}第{}次重连成功", nodeId, currentAttempt);
+                counter.set(0); // 重连成功重置计数器
             } catch (Exception e) {
-                log.error("节点{}第{}次重连失败", nodeId, currentAttempt, e);
-                reconnect(nodeId); // 递归重连
+                counter.incrementAndGet();
+                reconnect(nodeId);
             }
-        }, RECONNECT_DELAY * currentAttempt, TimeUnit.SECONDS); // 指数退避
+        }, RECONNECT_DELAY * (current + 1), TimeUnit.SECONDS);
     }
 
 
 
 
     @PreDestroy
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         log.info("开始关闭 PeerClient 资源");
 
         // 1. 取消所有心跳任务
@@ -560,11 +561,7 @@ public class PeerClient {
 
         // 2. 关闭定时任务线程池
         scheduler.shutdown();
-        try {
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                scheduler.shutdownNow();
-            }
-        } catch (InterruptedException e) {
+        if (!scheduler.awaitTermination(3, TimeUnit.SECONDS)) {
             scheduler.shutdownNow();
         }
 
@@ -584,11 +581,11 @@ public class PeerClient {
             datagramChannel.close().syncUninterruptibly();
         }
         if (eventLoopGroup != null) {
-            eventLoopGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS);
+            eventLoopGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS)
+                    .awaitUninterruptibly(5, TimeUnit.SECONDS);
         }
 
         // 5. 清空缓存
-        responseFutureMap.clear();
         reconnectCounter.clear();
 
         log.info("PeerClient 资源关闭完成");
@@ -626,6 +623,9 @@ public class PeerClient {
         ByteBuf buf = Unpooled.copiedBuffer(data);
         streamChannel.writeAndFlush(buf)
                 .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
                     if (future.isSuccess()) {
                         log.debug("节点{}发送数据成功，长度:{}字节", nodeId, data.length);
                     } else {
@@ -682,6 +682,9 @@ public class PeerClient {
         ByteBuf buf = Unpooled.copiedBuffer(data);
         businessStream.writeAndFlush(buf)
                 .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
                     if (future.isSuccess()) {
                         log.debug("节点{}复用业务流发送成功，数据大小:{}字节", nodeId, data.length);
                         wrapper.updateActiveTime();
@@ -713,6 +716,9 @@ public class PeerClient {
         ByteBuf buf = Unpooled.copiedBuffer(data);
         tempStream.writeAndFlush(buf)
                 .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
                     if (future.isSuccess()) {
                         log.info("节点{}临时流发送成功，数据大小:{}KB，流ID:{}",
                                 nodeId, data.length/1024, tempStream.streamId());
@@ -748,5 +754,113 @@ public class PeerClient {
             log.debug("节点{}临时流已关闭，清理映射，流ID:{}", nodeId, tempStream.streamId());
         });
     }
+
+
+
+    /**
+     * 有返回值的协议调用（同步）
+     * @param nodeId 节点ID
+     * @param protocol 协议枚举
+     * @param requestParams protobuf序列化的请求参数
+     * @return protobuf序列化的响应结果
+     */
+    public byte[] invokeWithReturn(String nodeId, ProtocolEnum protocol, byte[] requestParams) throws Exception {
+        return invokeWithReturn(nodeId, protocol, requestParams, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * 有返回值的协议调用（同步，自定义超时）
+     * @param nodeId 节点ID
+     * @param protocol 协议枚举
+     * @param requestParams protobuf序列化的请求参数
+     * @param timeout 超时时间（毫秒）
+     * @return protobuf序列化的响应结果
+     */
+    public byte[] invokeWithReturn(String nodeId, ProtocolEnum protocol, byte[] requestParams, long timeout) throws Exception {
+        // 1. 构建请求数据包
+        byte[] requestData = ProtocolPacketCodec.buildRequest(protocol, true, requestParams);
+        // 2. 创建响应Future
+        UUID requestId = ProtocolPacketCodec.parseRequest(requestData).getRequestId();
+        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        responseFutureCache.put(requestId, responseFuture);
+
+        try {
+            // 3. 发送请求
+            sendData(nodeId, requestData);
+            // 4. 等待响应
+            return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
+        } finally {
+            // 5. 清理缓存
+            responseFutureCache.remove(requestId);
+        }
+    }
+
+    /**
+     * 无返回值的协议调用（异步）
+     * @param nodeId 节点ID
+     * @param protocol 协议枚举
+     * @param requestParams protobuf序列化的请求参数
+     */
+    public void invokeWithoutReturn(String nodeId, ProtocolEnum protocol, byte[] requestParams) {
+        // 1. 构建请求数据包（无返回值）
+        byte[] requestData = ProtocolPacketCodec.buildRequest(protocol, false, requestParams);
+        // 2. 发送请求
+        sendData(nodeId, requestData);
+        log.debug("无返回值协议调用发送成功：{}，节点ID：{}", protocol.getPath(), nodeId);
+    }
+
+    /**
+     * 按地址的有返回值协议调用
+     */
+    public byte[] invokeWithReturn(InetSocketAddress address, ProtocolEnum protocol, byte[] requestParams) throws Exception {
+        return invokeWithReturn(address, protocol, requestParams, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * 按地址的有返回值协议调用（自定义超时）
+     */
+    public byte[] invokeWithReturn(InetSocketAddress address, ProtocolEnum protocol, byte[] requestParams, long timeout) throws Exception {
+        byte[] requestData = ProtocolPacketCodec.buildRequest(protocol, true, requestParams);
+        UUID requestId = ProtocolPacketCodec.parseRequest(requestData).getRequestId();
+        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        responseFutureCache.put(requestId, responseFuture);
+        try {
+            sendData(address, requestData);
+            return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
+        } finally {
+            responseFutureCache.remove(requestId);
+        }
+    }
+
+    /**
+     * 按地址的无返回值协议调用
+     */
+    public void invokeWithoutReturn(InetSocketAddress address, ProtocolEnum protocol, byte[] requestParams) {
+        byte[] requestData = ProtocolPacketCodec.buildRequest(protocol, false, requestParams);
+        sendData(address, requestData);
+        log.debug("无返回值协议调用发送成功：{}，地址：{}", protocol.getPath(), address);
+    }
+
+    /**
+     * 处理响应数据包（供QuicStreamHandler调用）
+     */
+    public void handleResponse(byte[] responseData) {
+        try {
+            ProtocolPacketCodec.ResponsePacket responsePacket = ProtocolPacketCodec.parseResponse(responseData);
+            UUID requestId = responsePacket.getRequestId();
+            byte[] response = responsePacket.getResponse();
+            // 唤醒等待的Future并移除缓存
+            CompletableFuture<byte[]> future = responseFutureCache.remove(requestId); // 关键：使用remove而非get
+            if (future != null) {
+                future.complete(response);
+                log.debug("收到协议响应，请求ID：{}，响应长度：{}字节", requestId, response.length);
+            } else {
+                log.warn("收到未知请求ID的响应：{}", requestId);
+            }
+        } catch (Exception e) {
+            log.error("处理响应数据包失败", e);
+        }
+    }
+
 
 }

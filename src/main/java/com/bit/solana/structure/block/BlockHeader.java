@@ -1,15 +1,13 @@
 package com.bit.solana.structure.block;
 
 import com.bit.solana.common.*;
-import com.bit.solana.proto.block.Structure;
+import com.bit.solana.proto.Structure;
 import com.google.common.hash.BloomFilter;
 import com.google.protobuf.ByteString;
 import lombok.Data;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Solana区块头结构，包含区块核心元数据，用于验证区块合法性、维护链连续性及支持共识机制
@@ -152,6 +150,7 @@ public class BlockHeader {
         Structure.ProtoBlockHeader proto = Structure.ProtoBlockHeader.parseFrom(data);
         return fromProto(proto);
     }
+
 
 
     // ========================== Protobuf 转换 ==========================

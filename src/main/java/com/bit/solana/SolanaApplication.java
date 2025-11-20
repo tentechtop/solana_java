@@ -1,5 +1,6 @@
 package com.bit.solana;
 
+import com.bit.solana.database.DbConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,7 @@ import java.security.Security;
 @SpringBootApplication(scanBasePackages = "com.bit.solana")
 public class SolanaApplication {
     public static void main(String[] args) {
+        System.setProperty("io.netty.leakDetection.level", "PARANOID");
         SpringApplication.run(SolanaApplication.class, args);
     }
     //二进制统一大端

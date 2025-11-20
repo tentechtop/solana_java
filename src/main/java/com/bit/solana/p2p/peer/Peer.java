@@ -1,8 +1,11 @@
 package com.bit.solana.p2p.peer;
 
 
+import com.bit.solana.proto.Structure;
+import com.google.protobuf.ByteString;
 import lombok.*;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 
@@ -72,11 +75,6 @@ public class Peer {
      */
     private long latestSlot;
 
-    /**
-     * 最后一次与当前节点成功通信的时间
-     * 用于判断节点是否在线（如超过5分钟无通信则标记为离线）
-     */
-    private long lastContactTime;
 
     // ==================== 能力与属性（描述节点功能） ====================
     /**
@@ -92,27 +90,17 @@ public class Peer {
     private double stakeAmount;
 
     /**
-     * 节点支持的服务能力
-     * 例：["transaction-relay", "block-propagation", "rpc"]
-     * - transaction-relay：支持交易转发
-     * - block-propagation：支持区块广播
-     * - rpc：提供RPC服务
-     */
-    private List<String> capabilities;
-
-    /**
      * 节点软件版本（如"SOLANA_VERSION=1.14.19"）
      * 用于排查版本兼容问题（如某些功能仅高版本支持）
      */
-    private String softwareVersion;
-
+    private int softwareVersion;
 
     /**
      * 最后访问时间
      */
     private long lastSeen;
 
-
+    // 衍生字段（无需序列化，通过address+port动态构建）
     private InetSocketAddress inetSocketAddress;
 
 
@@ -121,5 +109,109 @@ public class Peer {
             inetSocketAddress = new InetSocketAddress(address, port);
         }
         return inetSocketAddress;
+    }
+
+
+    //序列化
+
+    //
+
+    // ==================== 序列化/反序列化 ====================
+    /**
+     * 序列化当前Peer对象为字节数组（基于Protobuf）
+     */
+    public byte[] serialize() throws IOException {
+        return toProto().toByteArray();
+    }
+
+    /**
+     * 从字节数组反序列化为Peer对象（基于Protobuf）
+     */
+    public static Peer deserialize(byte[] data) throws IOException {
+        Structure.ProtoPeer protoPeer = Structure.ProtoPeer.parseFrom(data);
+        return fromProto(protoPeer);
+    }
+
+    // ==================== Proto转换 ====================
+    /**
+     * 转换为Protobuf对象
+     */
+    public Structure.ProtoPeer toProto() {
+        Structure.ProtoPeer.Builder builder = Structure.ProtoPeer.newBuilder();
+
+        // 核心标识字段
+        if (id != null) {
+            builder.setId(ByteString.copyFrom(id));
+        }
+        if (privateKey != null) {
+            builder.setPrivateKey(ByteString.copyFrom(privateKey));
+        }
+
+        // 网络信息字段
+        if (address != null) {
+            builder.setAddress(address);
+        }
+        builder.setPort(port);
+        if (multiaddr != null) {
+            builder.setMultiaddr(multiaddr);
+        }
+        if (protocolVersion != null) {
+            builder.setProtocolVersion(protocolVersion);
+        }
+
+        // 节点状态字段
+        builder.setNodeType(nodeType);
+        builder.setIsOnline(isOnline);
+        builder.setLatestSlot(latestSlot);
+
+        // 能力与属性字段
+        builder.setIsValidator(isValidator);
+        builder.setStakeAmount(stakeAmount);
+        builder.setSoftwareVersion(softwareVersion);
+        builder.setLastSeen(lastSeen);
+
+        return builder.build();
+    }
+
+    /**
+     * 从Protobuf对象转换为Peer对象
+     */
+    public static Peer fromProto(Structure.ProtoPeer protoPeer) {
+        Peer peer = new Peer();
+
+        // 核心标识字段
+        if (!protoPeer.getId().isEmpty()) {
+            peer.setId(protoPeer.getId().toByteArray());
+        }
+        if (!protoPeer.getPrivateKey().isEmpty()) {
+            peer.setPrivateKey(protoPeer.getPrivateKey().toByteArray());
+        }
+
+        // 网络信息字段
+        peer.setAddress(protoPeer.getAddress());
+        peer.setPort(protoPeer.getPort());
+        peer.setMultiaddr(protoPeer.getMultiaddr());
+        peer.setProtocolVersion(protoPeer.getProtocolVersion());
+
+        // 节点状态字段
+        peer.setNodeType(protoPeer.getNodeType());
+        peer.setOnline(protoPeer.getIsOnline());
+        peer.setLatestSlot(protoPeer.getLatestSlot());
+
+        // 能力与属性字段
+        peer.setValidator(protoPeer.getIsValidator());
+        peer.setStakeAmount(protoPeer.getStakeAmount());
+        peer.setSoftwareVersion(protoPeer.getSoftwareVersion());
+        peer.setLastSeen(protoPeer.getLastSeen());
+
+        // 衍生字段inetSocketAddress不序列化，调用get时自动构建
+        return peer;
+    }
+
+    /**
+     * 计算Peer对象序列化后的字节大小（用于内存/网络传输预估）
+     */
+    public int getSerializedSize() {
+        return toProto().getSerializedSize();
     }
 }

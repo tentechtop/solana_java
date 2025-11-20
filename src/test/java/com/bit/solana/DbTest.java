@@ -33,12 +33,12 @@ public class DbTest {
 
 
         String  keyV = "value";
- /*       dataBase.insert(TableEnum.CHAIN, keyS.getBytes(), keyV.getBytes());*/
+        dataBase.insert(TableEnum.PEER, keyS.getBytes(), keyV.getBytes());
 
-        byte[] bytes = dataBase.get(TableEnum.CHAIN, keyS.getBytes());
+        byte[] bytes = dataBase.get(TableEnum.PEER, keyS.getBytes());
         log.info("查询的数据是{} ", Arrays.equals(bytes, keyV.getBytes()));
 
-        byte[] bytes1 = dataBase.get(TableEnum.CHAIN, keyS.getBytes());
+        byte[] bytes1 = dataBase.get(TableEnum.PEER, keyS.getBytes());
         log.info("查询的数据是{} ", Arrays.equals(bytes1, keyV.getBytes()));
 
         byte[] bytes12 = dataBase.get(TableEnum.BLOCK, keyS.getBytes());

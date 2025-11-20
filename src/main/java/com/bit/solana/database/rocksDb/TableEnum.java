@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyOptions;
+import org.springframework.stereotype.Component;
 
 
 /**
@@ -20,10 +21,9 @@ public enum TableEnum {
             100,  //MB
             60 * 60 * 60  //单位
     ),
-
     // 链信息表：定义表标识、列族名称、列族配置
     CHAIN(
-            (short) 1,
+            (short) 2,
             "chain",  // 列族实际存储名称
             new ColumnFamilyOptions(),  // 列族配置
             100,  //MB
@@ -31,7 +31,7 @@ public enum TableEnum {
     ),
     // 区块信息表：定义表标识、列族名称、列族配置
     BLOCK(
-            (short) 2,
+            (short) 3,
             "block",  // 列族实际存储名称
             new ColumnFamilyOptions()  // 列族配置
                     .setTableFormatConfig(new BlockBasedTableConfig()
@@ -39,8 +39,19 @@ public enum TableEnum {
                             .setCacheIndexAndFilterBlocks(true)),
             100, //内存缓存 MB
             60 * 60
-    );
+    ),
 
+    PEER(
+            (short) 4,
+            "peer",  // 列族实际存储名称
+            new ColumnFamilyOptions(),  // 列族配置
+            100,  //MB
+            60 * 60
+    ),
+
+
+
+    ;
     @Getter private final short code;  // 表唯一标识（short类型）
     @Getter private final String columnFamilyName;  // 列族实际存储名称
     @Getter private final ColumnFamilyOptions columnFamilyOptions;  // 列族配置

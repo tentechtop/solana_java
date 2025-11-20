@@ -1,17 +1,26 @@
 package com.bit.solana.p2p.impl;
 
-import com.bit.solana.p2p.protocol.P2pMessageHeader;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolPacketCodec;
+import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.*;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.incubator.codec.quic.QuicChannel;
-import io.netty.incubator.codec.quic.QuicConnectionAddress;
-import io.netty.incubator.codec.quic.QuicStreamAddress;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
+import static com.bit.solana.p2p.impl.PeerClient.responseFutureCache;
 import static com.bit.solana.p2p.protocol.P2pMessageHeader.HEARTBEAT_SIGNAL;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 
@@ -20,7 +29,13 @@ import static com.bit.solana.util.ByteUtils.bytesToHex;
  * 处理QUIC连接的处理器
  */
 @Slf4j
-public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
+@Component
+@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+public class ClientQuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
+    // 注入协议注册器（Spring管理）
+    @Autowired
+    private ProtocolRegistry protocolRegistry;
+
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
@@ -48,18 +63,6 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
             msg.resetReaderIndex();
             handleNonHeartbeatData(ctx, msg);
         }
-
-
-        // ========== 修正：获取QUIC连接的IP/端口 ==========
-        Channel channel = ctx.channel();
-        InetSocketAddress remoteAddress = getQuicRemoteInetAddress(channel);
-        InetSocketAddress localAddress = getQuicLocalInetAddress(channel);
-
-        log.info("QUIC连接信息 | 源IP: {} | 源端口: {} | 本地IP: {} | 本地端口: {}",
-                remoteAddress != null ? remoteAddress.getAddress().getHostAddress() : "未知",
-                remoteAddress != null ? remoteAddress.getPort() : "未知",
-                localAddress != null ? localAddress.getAddress().getHostAddress() : "未知",
-                localAddress != null ? localAddress.getPort() : "未知");
 
     }
 
@@ -110,16 +113,94 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
      * 处理非心跳业务数据
      */
     private void handleNonHeartbeatData(ChannelHandlerContext ctx, ByteBuf msg) {
-        Channel channel = ctx.channel();
-        int readableBytes = msg.readableBytes();
-
         log.info("收到QUIC业务数据");
+        try {
+            // 1. 读取完整数据包
+            byte[] data = new byte[msg.readableBytes()];
+            msg.readBytes(data);
 
-        // ========== 替换为实际业务逻辑 ==========
-        // 示例：解析P2P消息头、处理业务数据等
-        // P2pMessageHeader header = parseHeader(msg);
-        // handleBusinessData(ctx, header, msg);
+
+            // 1. 先解析数据包类型
+            ProtocolPacketCodec.PacketType packetType = ProtocolPacketCodec.parsePacketType(data);
+            if (packetType == ProtocolPacketCodec.PacketType.REQUEST) {
+                // 处理请求包（原有逻辑）
+                handleRequestPacket(ctx, data);
+            } else if (packetType == ProtocolPacketCodec.PacketType.RESPONSE) {
+                // 处理响应包（匹配客户端回调）
+                handleResponsePacket(ctx,data);
+            }
+        } catch (Exception e) {
+            log.error("QUIC流处理请求失败", e);
+            ctx.close();
+        }
     }
+
+    // 处理请求包（原有逻辑封装）
+    private void handleRequestPacket(ChannelHandlerContext ctx, byte[] data) {
+        ProtocolPacketCodec.RequestPacket requestPacket = ProtocolPacketCodec.parseRequest(data);
+        ProtocolEnum protocol = requestPacket.getProtocol();
+        UUID requestId = requestPacket.getRequestId();
+        byte[] params = requestPacket.getParams();
+        boolean hasReturn = requestPacket.isHasReturn();
+
+        log.info("收到协议请求：{}，请求ID：{}，参数长度：{}字节",
+                protocol.getPath(), requestId, params.length);
+
+        try {
+            byte[] response = protocolRegistry.handleRequest(protocol, params);
+            if (hasReturn && response != null) {
+                log.info("发送响应，请求ID：{}，响应长度：{}字节", requestId, response.length);
+                byte[] responseData = ProtocolPacketCodec.buildResponse(protocol, requestId, response);
+                ByteBuf respBuf = ctx.alloc().buffer().writeBytes(responseData);
+                ctx.writeAndFlush(respBuf)
+                        .addListener(future -> {
+                            if (future.isSuccess()) {
+                                log.debug("协议{}响应发送成功，请求ID：{}", protocol.getPath(), requestId);
+                            } else {
+                                log.error("协议{}响应发送失败，请求ID：{}", protocol.getPath(), requestId, future.cause());
+                            }
+                        });
+            }
+        } catch (Exception e) {
+            log.error("处理协议请求失败，请求ID：{}", requestId, e);
+        }
+    }
+
+    // 处理响应包（匹配客户端缓存的请求回调）
+    private void handleResponsePacket(ChannelHandlerContext ctx,byte[] data) {
+        ProtocolPacketCodec.ResponsePacket responsePacket = ProtocolPacketCodec.parseResponse(data);
+        UUID requestId = responsePacket.getRequestId();
+        byte[] responseData = responsePacket.getResponse();
+        ProtocolEnum protocol = responsePacket.getProtocol();
+
+        log.info("收到协议响应：{}，请求ID：{}，响应长度：{}字节",
+                protocol.getPath(), requestId, responseData.length);
+
+        handleResponse(data);
+    }
+
+
+    /**
+     * 处理响应数据包（供QuicStreamHandler调用）
+     */
+    public void handleResponse(byte[] responseData) {
+        try {
+            ProtocolPacketCodec.ResponsePacket responsePacket = ProtocolPacketCodec.parseResponse(responseData);
+            UUID requestId = responsePacket.getRequestId();
+            byte[] response = responsePacket.getResponse();
+            // 唤醒等待的Future并移除缓存
+            CompletableFuture<byte[]> future = responseFutureCache.remove(requestId); // 关键：使用remove而非get
+            if (future != null) {
+                future.complete(response);
+                log.debug("收到协议响应，请求ID：{}，响应长度：{}字节", requestId, response.length);
+            } else {
+                log.warn("收到未知请求ID的响应：{}", requestId);
+            }
+        } catch (Exception e) {
+            log.error("处理响应数据包失败", e);
+        }
+    }
+
 
     /**
      * 处理心跳消息
@@ -156,11 +237,7 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
     public void channelActive(ChannelHandlerContext ctx) {
         Channel channel = ctx.channel();
 
-
-
-
         log.info("新的QUIC连接建立: {}", channel);
-
     }
 
 

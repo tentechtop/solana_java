@@ -1,6 +1,8 @@
 package com.bit.solana;
 
-import com.bit.solana.proto.block.Structure;
+import com.bit.solana.common.BlockHash;
+import com.bit.solana.p2p.peer.Peer;
+import com.bit.solana.proto.Structure;
 import com.bit.solana.structure.block.BlockHeader;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +56,8 @@ public class ProtoTest {
 
             // BlockHeader的序列化和反序列化时间记录
             BlockHeader blockHeader = new BlockHeader();
-            blockHeader.setBlockTime(1234567890L);
+            blockHeader.setPreviousBlockHash(new BlockHash(null));
+            blockHeader.setBlockTime(1L);
 
             // 序列化BlockHeader
             long blockSerializeStart = System.nanoTime();
@@ -71,8 +74,38 @@ public class ProtoTest {
                     (blockDeserializeEnd - blockDeserializeStart)/ 1_000_000.0);
             log.info("反序列化结果: {}", deserialize);
 
+
+
+// 构建Peer对象
+            Peer peer = Peer.builder()
+                    .id("7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2".getBytes())
+                    .address("192.168.1.100")
+                    .port(8000)
+                    .multiaddr("/ip4/192.168.1.100/tcp/8000/p2p/7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2")
+                    .protocolVersion("solana-p2p/1.14.19")
+                    .nodeType(1)
+                    .isOnline(true)
+                    .latestSlot(198765432L)
+                    .isValidator(true)
+                    .stakeAmount(10000.5)
+                    .softwareVersion(11419)
+                    .lastSeen(System.currentTimeMillis())
+                    .build();
+
+// 序列化
+            byte[] serialized = peer.serialize();
+
+// 反序列化
+            Peer deserializedPeer = Peer.deserialize(serialized);
+
+// 验证一致性
+            System.out.println(peer.getAddress().equals(deserializedPeer.getAddress())); // true
+            System.out.println(peer.getPort() == deserializedPeer.getPort()); // true
+
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }

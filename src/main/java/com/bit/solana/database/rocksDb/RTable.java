@@ -6,6 +6,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -35,8 +36,9 @@ public class RTable {
      * 根据表枚举获取列族句柄
      */
     public static ColumnFamilyHandle getColumnFamilyHandle(TableEnum tableEnum) {
+        log.info("获取表{}对应的列族句柄", tableEnum);
         if (tableEnum == null) {
-            log.warn("表枚举为空，无法获取列族句柄");
+            log.info("表枚举为空，无法获取列族句柄");
             return null;
         }
         ColumnFamilyHolder holder = tableToCfMap.get(tableEnum);

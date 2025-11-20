@@ -2,9 +2,7 @@ package com.bit.solana.p2p.impl;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
 import io.netty.incubator.codec.quic.QuicChannel;
-import io.netty.incubator.codec.quic.QuicChannelOption;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
 import lombok.Data;
@@ -150,7 +148,8 @@ public class QuicNodeWrapper {
         if (tempStreams != null) {
             tempStreams.values().forEach(stream -> {
                 try {
-                    if (stream.isActive()) stream.closeFuture().sync();
+                    //改用 syncUninterruptibly() 避免中断，且逐个关闭并捕获异常
+                    if (stream.isActive()) stream.closeFuture().sync().syncUninterruptibly();
                 } catch (Exception e) {
                     log.error("Close block sync stream failed for node: {}", nodeId, e);
                 }
@@ -232,7 +231,7 @@ public class QuicNodeWrapper {
 
 
         QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new QuicStreamHandler()).sync().get();//get() 等待异步完成（sync()已保证，get()是安全的）
+                new ServiceQuicStreamHandler()).sync().get();//get() 等待异步完成（sync()已保证，get()是安全的）
         this.heartbeatStream = newHeartbeatStream;
         log.info("Node {} heartbeat stream recreated, streamId: {}", nodeId, newHeartbeatStream.streamId());
         return newHeartbeatStream;
@@ -249,28 +248,28 @@ public class QuicNodeWrapper {
             return null;
         }
         QuicStreamChannel newBusinessStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new QuicStreamHandler()).sync().get();
+                new ServiceQuicStreamHandler()).sync().get();
         this.businessStream = newBusinessStream;
         log.info("Node {} business stream recreated, streamId: {}", nodeId, newBusinessStream.streamId());
         return newBusinessStream;
     }
 
     // 4. 临时流（不复用，按需创建/销毁）
-    public QuicStreamChannel createTempStream(byte[] blockId) throws InterruptedException, ExecutionException {
+    public QuicStreamChannel createTempStream(byte[] tempKey) throws InterruptedException, ExecutionException {
         if (quicChannel == null || !quicChannel.isActive()) {
             log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
             return null;
         }
         // 区块流用单向流（下载区块仅需读，上传仅需写），减少双向流开销
         QuicStreamChannel blockStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
-                new QuicStreamHandler()).sync().get();
+                new ServiceQuicStreamHandler()).sync().get();
         if (tempStreams == null) {
             tempStreams = new ConcurrentHashMap<>();
         }
-        tempStreams.put(blockId, blockStream);
-        log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, blockId, blockStream.streamId());
+        tempStreams.put(tempKey, blockStream);
+        log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, tempKey, blockStream.streamId());
         // 注册流关闭回调，自动清理
-        blockStream.closeFuture().addListener(future -> tempStreams.remove(blockId));
+        blockStream.closeFuture().addListener(future -> tempStreams.remove(tempKey));
         //超时
         return blockStream;
     }

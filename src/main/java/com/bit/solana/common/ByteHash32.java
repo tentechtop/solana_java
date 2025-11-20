@@ -29,7 +29,8 @@ public abstract class ByteHash32 implements Serializable {
      */
     protected ByteHash32(byte[] value) {
         if (value == null) {
-            throw new NullPointerException("Hash value cannot be null");
+            //返回32字节空
+            value = new byte[HASH_LENGTH];
         }
         if (value.length != HASH_LENGTH) {
             throw new IllegalArgumentException("Hash must be " + HASH_LENGTH + " bytes, got " + value.length);

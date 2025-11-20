@@ -24,3 +24,23 @@ message ProtoBlock {
 
 
 }
+
+message ProtoPeer {
+  // 核心标识
+  bytes id = 1;                // 节点公钥（32字节）
+  bytes private_key = 2;       // 节点私钥
+  // 网络信息
+  string address = 3;          // IP地址（IPv4/IPv6）
+  int32 port = 4;              // P2P通信端口
+  string multiaddr = 5;        // 多地址（Multiaddr格式）
+  string protocol_version = 6; // 通信协议版本
+  // 节点状态
+  int32 node_type = 7;         // 节点类型
+  bool is_online = 8;          // 是否在线
+  uint64 latest_slot = 9;      // 最新同步区块槽位
+  // 能力与属性
+  bool is_validator = 10;      // 是否为验证者
+  double stake_amount = 11;    // 验证者质押量（SOL）
+  int32 software_version = 12; // 节点软件版本
+  uint64 last_seen = 13;       // 最后访问时间（毫秒级时间戳）
+}
