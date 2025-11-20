@@ -64,7 +64,7 @@ public class PeerClient {
     private final Map<String, CompletableFuture<byte[]>> responseFutureMap = new ConcurrentHashMap<>();
     // 节点ID -> 心跳任务调度器（用于取消心跳）
     private final Map<String, ScheduledFuture<?>> heartbeatTaskMap = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2, r -> {
+    public static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2, r -> {
         Thread t = new Thread(r, "peer-client-scheduler");
         t.setDaemon(true); // 守护线程，避免阻塞应用退出
         return t;
@@ -167,7 +167,7 @@ public class PeerClient {
             QuicStreamChannel heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                     new QuicStreamHandler()).sync().getNow();
 
-            QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper();
+            QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(scheduler);
             quicNodeWrapper.setNodeId(nodeId);
             quicNodeWrapper.setQuicChannel(quicChannel);
             quicNodeWrapper.setHeartbeatStream(heartbeatStream);

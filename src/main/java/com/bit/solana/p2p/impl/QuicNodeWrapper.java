@@ -9,8 +9,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.bit.solana.p2p.impl.PeerServiceImpl.NODE_EXPIRATION_TIME;
 
@@ -39,14 +41,30 @@ public class QuicNodeWrapper {
     // 1. 拆分核心流：心跳流（独立）+ 业务流（复用）+ 临时区块流（按需创建）
     //基于连接创建的流
     private QuicStreamChannel heartbeatStream; // 专属心跳流（复用，不销毁）
-    private QuicStreamChannel businessStream; // 轻量业务复用流
-    private Map<byte[], QuicStreamChannel> tempStreams; // 区块同步临时流（区块Hash） 交易流
+    private QuicStreamChannel businessStream; // 轻量业务复用流  适合高频小包传输，避免窗口频繁调整的开销
+    private Map<byte[], QuicStreamChannel> tempStreams; // 区块同步临时流（区块Hash） 交易流  大数据（>64KB）：临时流可独立配置更大流控窗口（如 1MB），配合 QUIC 的拥塞控制算法，提升大文件吞吐，同时不影响其他流的传输。
 
     private long lastActiveTime; // 最后活跃时间（用于过期清理）
     private boolean isOutbound; // 是否为主动出站连接
     private boolean active;
 
     private InetSocketAddress inetSocketAddress;
+
+
+    // 仅持有全局调度器引用，不自己创建
+    private final ScheduledExecutorService globalScheduler;
+
+
+    // 必须通过构造器注入全局调度器（强制依赖，避免误创建）
+    public QuicNodeWrapper(ScheduledExecutorService globalScheduler) {
+        this.globalScheduler = Objects.requireNonNull(globalScheduler, "全局调度器不能为空");
+    }
+
+    // 禁止空构造器（避免误使用）
+    private QuicNodeWrapper() {
+        throw new UnsupportedOperationException("必须注入全局调度器，禁止无参构造");
+    }
+
 
     // 检查连接是否活跃（通道活跃+未过期）
     public boolean isActive() {
@@ -190,6 +208,9 @@ public class QuicNodeWrapper {
         blockStream.closeFuture().addListener(future -> tempStreams.remove(blockId));
         return blockStream;
     }
+
+
+
 
 
     /**
