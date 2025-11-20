@@ -210,7 +210,7 @@ public class PeerClient {
         QuicStreamChannel streamChannel = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 new QuicStreamHandler()).sync().getNow();
 
-/*        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             if (streamChannel.isActive()) {
                 // 生成随机二进制测试数据（也可替换为自定义二进制内容）
@@ -230,7 +230,7 @@ public class PeerClient {
                 System.err.println("流已断开，停止发送");
                 scheduler.shutdown();
             }
-        }, 0, SEND_INTERVAL, TimeUnit.SECONDS);*/
+        }, 0, SEND_INTERVAL, TimeUnit.SECONDS);
 
         return streamChannel;
     }
@@ -357,7 +357,7 @@ public class PeerClient {
             } else {
                 // 临时流发送
                 byte[] tempKey = requestId.getBytes(StandardCharsets.UTF_8);
-                QuicStreamChannel tempStream = wrapper.createBlockSyncStream(tempKey);
+                QuicStreamChannel tempStream = wrapper.createTempStream(tempKey);
                 if (tempStream == null) {
                     throw new IOException("节点" + nodeId + "临时流创建失败");
                 }
@@ -652,7 +652,6 @@ public class PeerClient {
             log.error("节点{}连接未激活，发送失败", nodeId);
             return;
         }
-
         try {
             // 1. 判断数据大小选择流类型
             if (data.length <= STREAM_REUSE_THRESHOLD) {
@@ -704,7 +703,7 @@ public class PeerClient {
         byte[] keyBytes = tempStreamKey.getBytes(StandardCharsets.UTF_8);
 
         // 创建临时流（单向流，适合大数据传输）
-        QuicStreamChannel tempStream = wrapper.createBlockSyncStream(keyBytes);
+        QuicStreamChannel tempStream = wrapper.createTempStream(keyBytes);
         if (tempStream == null || !tempStream.isActive()) {
             log.error("节点{}临时流创建失败，发送大数据失败", nodeId);
             return;

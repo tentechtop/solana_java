@@ -1,7 +1,10 @@
 package com.bit.solana.p2p.impl;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.incubator.codec.quic.QuicChannel;
+import io.netty.incubator.codec.quic.QuicChannelOption;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
 import lombok.Data;
@@ -10,11 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 
 import static com.bit.solana.p2p.impl.PeerServiceImpl.NODE_EXPIRATION_TIME;
+import static com.bit.solana.p2p.protocol.P2pMessageHeader.HEARTBEAT_SIGNAL;
 
 
 /**
@@ -53,6 +55,67 @@ public class QuicNodeWrapper {
 
     // 仅持有全局调度器引用，不自己创建
     private final ScheduledExecutorService globalScheduler;
+    // 每个节点一个心跳任务实例（全局调度器调度）
+    private ScheduledFuture<?> heartbeatTask;//心跳任务异常仅影响单个节点，不扩散（流隔离的延伸）。
+
+
+    // 启动节点独有心跳任务（提交到全局调度器）
+    public void startHeartbeat(long intervalSeconds) {
+        // 取消原有任务（避免重复调度）
+        if (heartbeatTask != null && !heartbeatTask.isCancelled()) {
+            heartbeatTask.cancel(false);
+        }
+
+        // 每个节点创建独立的心跳任务（Runnable），提交到全局调度器
+        this.heartbeatTask = globalScheduler.scheduleAtFixedRate(
+                // 节点独有任务：检查自己的状态、发送自己的心跳
+                () -> {
+                    try {
+                        // 1. 节点私有状态检查
+                        if (!isActive()) {
+                            log.warn("节点{}连接失效，停止心跳", nodeId);
+                            stopHeartbeat();
+                            return;
+                        }
+                        // 2. 节点私有流检查/重建
+                        QuicStreamChannel stream = getOrCreateHeartbeatStream();
+                        if (stream == null || !stream.isActive()) {
+                            log.error("节点{}心跳流不可用", nodeId);
+                            setActive(false);
+                            return;
+                        }
+                        // 3. 发送节点私有心跳
+                        ByteBuf buf = Unpooled.copiedBuffer(HEARTBEAT_SIGNAL);
+                        stream.writeAndFlush(buf).addListener(future -> {
+                            if (future.isSuccess()) {
+                                updateActiveTime();
+                                log.debug("节点{}心跳发送成功", nodeId);
+                            } else {
+                                log.error("节点{}心跳发送失败", nodeId, future.cause());
+                                setActive(false);
+                            }
+                        });
+                    } catch (Exception e) {
+                        log.error("节点{}心跳任务异常", nodeId, e);
+                        setActive(false);
+                    }
+                },
+                0, // 初始延迟0秒
+                intervalSeconds, // 间隔（节点可自定义）
+                TimeUnit.SECONDS
+        );
+        log.info("节点{}心跳任务已提交到全局调度器，间隔{}秒", nodeId, intervalSeconds);
+    }
+
+
+    // 停止当前节点的心跳任务
+    public void stopHeartbeat() {
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel(false);
+            heartbeatTask = null;
+            log.info("节点{}心跳任务已取消", nodeId);
+        }
+    }
 
 
     // 必须通过构造器注入全局调度器（强制依赖，避免误创建）
@@ -118,6 +181,8 @@ public class QuicNodeWrapper {
         } catch (Exception e) {
             log.error("Close QUIC channel failed for node: {}", nodeId, e);
         }
+        //关闭心跳
+        stopHeartbeat();
     }
 
     /**
@@ -163,11 +228,11 @@ public class QuicNodeWrapper {
         }
         // 心跳流用双向流，配置更小的缓冲区（适配小包）
 /*        QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new HeartbeatStreamHandler()).sync().getNow();*/
+                new HeartbeatStreamHandler()).sync().getNow();*///若异步未完成，返回null
 
 
         QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new QuicStreamHandler()).sync().getNow();
+                new QuicStreamHandler()).sync().get();//get() 等待异步完成（sync()已保证，get()是安全的）
         this.heartbeatStream = newHeartbeatStream;
         log.info("Node {} heartbeat stream recreated, streamId: {}", nodeId, newHeartbeatStream.streamId());
         return newHeartbeatStream;
@@ -184,21 +249,21 @@ public class QuicNodeWrapper {
             return null;
         }
         QuicStreamChannel newBusinessStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
-                new QuicStreamHandler()).sync().getNow();
+                new QuicStreamHandler()).sync().get();
         this.businessStream = newBusinessStream;
         log.info("Node {} business stream recreated, streamId: {}", nodeId, newBusinessStream.streamId());
         return newBusinessStream;
     }
 
     // 4. 临时流（不复用，按需创建/销毁）
-    public QuicStreamChannel createBlockSyncStream(byte[] blockId) throws InterruptedException, ExecutionException {
+    public QuicStreamChannel createTempStream(byte[] blockId) throws InterruptedException, ExecutionException {
         if (quicChannel == null || !quicChannel.isActive()) {
             log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
             return null;
         }
         // 区块流用单向流（下载区块仅需读，上传仅需写），减少双向流开销
         QuicStreamChannel blockStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
-                new QuicStreamHandler()).sync().getNow();
+                new QuicStreamHandler()).sync().get();
         if (tempStreams == null) {
             tempStreams = new ConcurrentHashMap<>();
         }
@@ -206,10 +271,9 @@ public class QuicNodeWrapper {
         log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, blockId, blockStream.streamId());
         // 注册流关闭回调，自动清理
         blockStream.closeFuture().addListener(future -> tempStreams.remove(blockId));
+        //超时
         return blockStream;
     }
-
-
 
 
 
