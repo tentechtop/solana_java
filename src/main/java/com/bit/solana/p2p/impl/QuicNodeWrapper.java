@@ -3,12 +3,30 @@ package com.bit.solana.p2p.impl;
 import io.netty.channel.Channel;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
+import io.netty.incubator.codec.quic.QuicStreamType;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 import static com.bit.solana.p2p.impl.PeerServiceImpl.NODE_EXPIRATION_TIME;
+
+
+/**
+ * 心跳流：小窗口（如 8KB），适配高频小包，减少内存占用；
+ * 业务流：中等窗口（如 64KB），适配交易广播等轻量业务；
+ * 区块流：大窗口（如 1MB），提升大包吞吐。
+ */
+
+/**
+ * QUIC 流是轻量级操作，核心耗时几乎可忽略：
+ * 无握手成本：流基于已建立的 QUIC 连接创建，无需额外网络往返（RTT=0）；
+ * 状态初始化：仅需在用户态（如 Netty）分配流 ID、流控窗口（KB 级内存），无内核级资源占用；
+ * 协议开销：仅需发送一个 STREAM 帧（含流 ID），数据包大小仅字节级，网络开销可忽略。
+ */
 
 @Data
 @Slf4j  // 添加日志注解
@@ -16,8 +34,14 @@ public class QuicNodeWrapper {
     private String nodeId; // 节点唯一标识（公钥Hex）
     private String address;
     private int port;
-    private QuicChannel quicChannel; // QUIC连接通道
-    private QuicStreamChannel streamChannel; // 复用双向流（心跳+业务）
+    private QuicChannel quicChannel; // 连接
+
+    // 1. 拆分核心流：心跳流（独立）+ 业务流（复用）+ 临时区块流（按需创建）
+    //基于连接创建的流
+    private QuicStreamChannel heartbeatStream; // 专属心跳流（复用，不销毁）
+    private QuicStreamChannel businessStream; // 轻量业务复用流
+    private Map<byte[], QuicStreamChannel> tempStreams; // 区块同步临时流（区块Hash） 交易流
+
     private long lastActiveTime; // 最后活跃时间（用于过期清理）
     private boolean isOutbound; // 是否为主动出站连接
     private boolean active;
@@ -26,14 +50,13 @@ public class QuicNodeWrapper {
 
     // 检查连接是否活跃（通道活跃+未过期）
     public boolean isActive() {
-        // 增加空指针防护
-        if (quicChannel == null || streamChannel == null) {
-            return false;
-        }
-        boolean channelActive = quicChannel.isActive() && streamChannel.isActive();
+        boolean channelActive = quicChannel != null && quicChannel.isActive();
+        boolean heartbeatActive = heartbeatStream != null && heartbeatStream.isActive();
         boolean notExpired = System.currentTimeMillis() - lastActiveTime < NODE_EXPIRATION_TIME * 1000;
-        return channelActive && notExpired;
+        // 核心：心跳流活 + 通道活 + 未过期，业务流可重建
+        return channelActive && heartbeatActive && notExpired;
     }
+
 
     // 更新活跃时间
     public void updateActiveTime() {
@@ -42,20 +65,40 @@ public class QuicNodeWrapper {
 
     // 关闭连接
     public void close() {
-        // 增加空指针防护
+        // 1. 先关临时流（区块流）
+        if (tempStreams != null) {
+            tempStreams.values().forEach(stream -> {
+                try {
+                    if (stream.isActive()) stream.closeFuture().sync();
+                } catch (Exception e) {
+                    log.error("Close block sync stream failed for node: {}", nodeId, e);
+                }
+            });
+            tempStreams.clear();
+        }
+        // 2. 再关业务流
         try {
-            if (streamChannel != null && streamChannel.isActive()) {
-                streamChannel.closeFuture().sync();
+            if (businessStream != null && businessStream.isActive()) {
+                businessStream.closeFuture().sync();
             }
         } catch (Exception e) {
-            log.error("Failed to close bidirectional stream for node: {}", nodeId, e);
+            log.error("Close business stream failed for node: {}", nodeId, e);
         }
+        // 3. 最后关心跳流（确保最后检测节点存活）
+        try {
+            if (heartbeatStream != null && heartbeatStream.isActive()) {
+                heartbeatStream.closeFuture().sync();
+            }
+        } catch (Exception e) {
+            log.error("Close heartbeat stream failed for node: {}", nodeId, e);
+        }
+        // 4. 关QUIC通道
         try {
             if (quicChannel != null && quicChannel.isActive()) {
                 quicChannel.closeFuture().sync();
             }
         } catch (Exception e) {
-            log.error("Failed to close QUIC channel for node: {}", nodeId, e);
+            log.error("Close QUIC channel failed for node: {}", nodeId, e);
         }
     }
 
@@ -87,5 +130,77 @@ public class QuicNodeWrapper {
         }
         return inetSocketAddress;
     }
+
+
+
+
+    // 2. 心跳流专属创建方法（独立复用）
+    public QuicStreamChannel getOrCreateHeartbeatStream() throws InterruptedException, ExecutionException {
+        if (heartbeatStream != null && heartbeatStream.isActive()) {
+            return heartbeatStream;
+        }
+        if (quicChannel == null || !quicChannel.isActive()) {
+            log.error("Node {} QUIC connection inactive, cannot create heartbeat stream", nodeId);
+            return null;
+        }
+        // 心跳流用双向流，配置更小的缓冲区（适配小包）
+/*        QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+                new HeartbeatStreamHandler()).sync().getNow();*/
+
+
+        QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+                new QuicStreamHandler()).sync().getNow();
+        this.heartbeatStream = newHeartbeatStream;
+        log.info("Node {} heartbeat stream recreated, streamId: {}", nodeId, newHeartbeatStream.streamId());
+        return newHeartbeatStream;
+    }
+
+
+    // 3. 业务流复用方法（轻量业务）
+    public QuicStreamChannel getOrCreateBusinessStream() throws InterruptedException, ExecutionException {
+        if (businessStream != null && businessStream.isActive()) {
+            return businessStream;
+        }
+        if (quicChannel == null || !quicChannel.isActive()) {
+            log.error("Node {} QUIC connection inactive, cannot create business stream", nodeId);
+            return null;
+        }
+        QuicStreamChannel newBusinessStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+                new QuicStreamHandler()).sync().getNow();
+        this.businessStream = newBusinessStream;
+        log.info("Node {} business stream recreated, streamId: {}", nodeId, newBusinessStream.streamId());
+        return newBusinessStream;
+    }
+
+    // 4. 临时流（不复用，按需创建/销毁）
+    public QuicStreamChannel createBlockSyncStream(byte[] blockId) throws InterruptedException, ExecutionException {
+        if (quicChannel == null || !quicChannel.isActive()) {
+            log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
+            return null;
+        }
+        // 区块流用单向流（下载区块仅需读，上传仅需写），减少双向流开销
+        QuicStreamChannel blockStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
+                new QuicStreamHandler()).sync().getNow();
+        if (tempStreams == null) {
+            tempStreams = new ConcurrentHashMap<>();
+        }
+        tempStreams.put(blockId, blockStream);
+        log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, blockId, blockStream.streamId());
+        // 注册流关闭回调，自动清理
+        blockStream.closeFuture().addListener(future -> tempStreams.remove(blockId));
+        return blockStream;
+    }
+
+
+    /**
+     * // 创建心跳流时配置流控窗口
+     * QuicStreamChannel newHeartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+     *         new HeartbeatStreamHandler())
+     *         .sync()
+     *         .getNow();
+     * // 设置流控窗口（Netty QUIC 配置）
+     * newHeartbeatStream.config().setOption(QuicChannelOption.QUIC_STREAM_RECEIVE_BUFFER_SIZE, 8 * 1024);
+     * newHeartbeatStream.config().setOption(QuicChannelOption.QUIC_STREAM_SEND_BUFFER_SIZE, 8 * 1024);
+     */
 
 }

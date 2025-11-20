@@ -41,6 +41,8 @@ import static java.lang.Thread.sleep;
 @Slf4j
 @Component
 public class PeerClient {
+    // 新增：64KB 阈值（字节）
+    private static final int STREAM_REUSE_THRESHOLD = 64 * 1024;
     // 配置参数（可移至配置文件）
     private static final long SEND_INTERVAL = 15; // 心跳间隔（秒）
     private static final long RECONNECT_DELAY = 3; // 重连延迟（秒）
@@ -160,13 +162,15 @@ public class PeerClient {
                     .remoteAddress(inetSocketAddress)
                     .connect()
                     .get();
-            QuicStreamChannel streamChannel = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+
+
+            QuicStreamChannel heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                     new QuicStreamHandler()).sync().getNow();
 
             QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper();
             quicNodeWrapper.setNodeId(nodeId);
             quicNodeWrapper.setQuicChannel(quicChannel);
-            quicNodeWrapper.setStreamChannel(streamChannel);
+            quicNodeWrapper.setHeartbeatStream(heartbeatStream);
             quicNodeWrapper.setAddress(node.getAddress());
             quicNodeWrapper.setPort(node.getPort());
             quicNodeWrapper.setInetSocketAddress(inetSocketAddress);
@@ -185,16 +189,28 @@ public class PeerClient {
 
 
     public QuicStreamChannel connect(InetSocketAddress address) throws InterruptedException, ExecutionException {
+        /**
+         * 完成 QUIC 连接（Connection） 的建立：
+         * 1. 客户端与服务端完成 TLS 握手
+         * 2. 协商 QUIC 连接 ID、流控参数等
+         * 3. 建立逻辑上的 QUIC 会话（基于 UDP 的软连接）
+         */
         QuicChannel quicChannel = QuicChannel.newBootstrap(datagramChannel)
                 .streamHandler(new QuicStreamHandler())
                 .remoteAddress(address)
                 .connect()
                 .get();
 
+        /**
+         * 在已建立的 QUIC 连接上，创建 双向流（Stream）：
+         * 1. 分配流 ID（第一个流默认是 0）
+         * 2. 初始化流的读写缓冲区
+         * 3. 流成为数据传输的最小单元
+         */
         QuicStreamChannel streamChannel = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 new QuicStreamHandler()).sync().getNow();
 
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+/*        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             if (streamChannel.isActive()) {
                 // 生成随机二进制测试数据（也可替换为自定义二进制内容）
@@ -214,7 +230,7 @@ public class PeerClient {
                 System.err.println("流已断开，停止发送");
                 scheduler.shutdown();
             }
-        }, 0, SEND_INTERVAL, TimeUnit.SECONDS);
+        }, 0, SEND_INTERVAL, TimeUnit.SECONDS);*/
 
         return streamChannel;
     }
@@ -232,6 +248,7 @@ public class PeerClient {
     public void sendData(String nodeId, byte[] data) {
         Objects.requireNonNull(nodeId, "节点ID不能为空");
         Objects.requireNonNull(data, "发送数据不能为空");
+
         // 1. 获取连接对象
         QuicNodeWrapper wrapper = peerNodeMap.get(nodeId);
         if (wrapper == null || !wrapper.isActive()) {
@@ -243,28 +260,57 @@ public class PeerClient {
                 return;
             }
         }
-        // 2. 发送数据
-        sendDataToStream(wrapper.getStreamChannel(), data, nodeId);
+        // 2. 智能发送（替换原有 sendDataToStream）
+        sendDataWithSmartStream(wrapper, data, nodeId);
     }
 
     /** 按地址发送*/
     public void sendData(InetSocketAddress nodeAddress, byte[] data) {
         Objects.requireNonNull(nodeAddress, "节点地址不能为空");
         Objects.requireNonNull(data, "发送数据不能为空");
+
         // 1. 通过地址获取节点ID
         String nodeId = addrToNodeIdMap.get(nodeAddress);
         if (nodeId != null) {
             sendData(nodeId, data);
             return;
         }
-        // 2. 临时连接发送
+
+        // 2. 临时连接发送（保留原有逻辑，如需智能流可扩展）
         try {
             QuicStreamChannel streamChannel = connect(nodeAddress);
-            sendDataToStream(streamChannel, data, nodeAddress.toString());
+            // 临时连接也按大小选择流类型
+            ByteBuf buf = Unpooled.copiedBuffer(data);
+            if (data.length <= STREAM_REUSE_THRESHOLD) {
+                streamChannel.writeAndFlush(buf).addListener(future -> {
+                    if (!future.isSuccess()) {
+                        log.error("临时节点{}复用流发送失败", nodeAddress, future.cause());
+                    }
+                });
+            } else {
+                // 临时连接的大数据：创建新流发送
+                QuicChannel quicChannel = (QuicChannel) streamChannel.parent();
+                QuicStreamChannel tempStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
+                        new QuicStreamHandler()).sync().getNow();
+                tempStream.writeAndFlush(buf).addListener(future -> {
+                    if (future.isSuccess()) {
+                        log.info("临时节点{}临时流发送成功，数据大小:{}KB",
+                                nodeAddress, data.length/1024);
+                        // 发送完成后关闭临时流
+                        tempStream.close().addListener(closeFuture ->
+                                log.debug("临时节点{}临时流已关闭", nodeAddress));
+                    } else {
+                        log.error("临时节点{}临时流发送失败", nodeAddress, future.cause());
+                        tempStream.close();
+                    }
+                });
+            }
         } catch (Exception e) {
             log.error("向临时节点{}发送数据失败", nodeAddress, e);
         }
     }
+
+
 
     /** 有返回值的同步发送 */
     public byte[] sendData(String nodeId, byte[] request, long timeout) throws Exception {
@@ -275,11 +321,72 @@ public class PeerClient {
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         String requestId = UUID.randomUUID().toString();
         responseFutureMap.put(requestId, responseFuture);
+
         try {
             // 获取/创建连接
             QuicNodeWrapper wrapper = connect(nodeId);
-            // 发送数据
-            sendDataToStream(wrapper.getStreamChannel(), request, nodeId);
+
+            // 智能选择流并发送
+            if (request.length <= STREAM_REUSE_THRESHOLD) {
+                // 复用业务流
+                QuicStreamChannel businessStream = wrapper.getOrCreateBusinessStream();
+                if (businessStream == null) {
+                    throw new IOException("节点" + nodeId + "业务流创建失败");
+                }
+                // 注册响应处理器
+                businessStream.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                        if (msg instanceof ByteBuf buf) {
+                            byte[] data = new byte[buf.readableBytes()];
+                            buf.readBytes(data);
+                            responseFuture.complete(data);
+                            ctx.pipeline().remove(this); // 移除处理器避免重复响应
+                        }
+                    }
+
+                    @Override
+                    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+                        responseFuture.completeExceptionally(cause);
+                        ctx.pipeline().remove(this);
+                    }
+                });
+                // 发送数据
+                ByteBuf buf = Unpooled.copiedBuffer(request);
+                businessStream.writeAndFlush(buf).sync();
+            } else {
+                // 临时流发送
+                byte[] tempKey = requestId.getBytes(StandardCharsets.UTF_8);
+                QuicStreamChannel tempStream = wrapper.createBlockSyncStream(tempKey);
+                if (tempStream == null) {
+                    throw new IOException("节点" + nodeId + "临时流创建失败");
+                }
+                // 注册响应处理器
+                tempStream.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                        if (msg instanceof ByteBuf buf) {
+                            byte[] data = new byte[buf.readableBytes()];
+                            buf.readBytes(data);
+                            responseFuture.complete(data);
+                            // 关闭临时流并清理
+                            ctx.close();
+                            wrapper.getTempStreams().remove(tempKey);
+                        }
+                    }
+
+                    @Override
+                    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+                        responseFuture.completeExceptionally(cause);
+                        ctx.close();
+                        wrapper.getTempStreams().remove(tempKey);
+                    }
+                });
+                // 发送数据
+                ByteBuf buf = Unpooled.copiedBuffer(request);
+                tempStream.writeAndFlush(buf).sync();
+            }
+
             // 等待响应
             return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
         } finally {
@@ -287,6 +394,7 @@ public class PeerClient {
             responseFutureMap.remove(requestId);
         }
     }
+
 
     /**
      * 按地址同步发送数据（等待响应）
@@ -393,7 +501,7 @@ public class PeerClient {
                     reconnect(nodeId);
                     return;
                 }
-                sendDataToStream(wrapper.getStreamChannel(), HEARTBEAT_SIGNAL, nodeId);
+                sendDataToStream(wrapper.getHeartbeatStream(), HEARTBEAT_SIGNAL, nodeId);
                 // 更新最后活跃时间
                 wrapper.setLastActiveTime(System.currentTimeMillis());
                 log.debug("节点{}心跳发送成功", nodeId);
@@ -490,13 +598,7 @@ public class PeerClient {
      * 关闭 QUIC 资源
      */
     private void closeQuicResources(QuicNodeWrapper wrapper) {
-        if (wrapper.getStreamChannel() != null) {
-            wrapper.getStreamChannel().close().syncUninterruptibly();
-        }
-        if (wrapper.getQuicChannel() != null) {
-            closeQuicChannel(wrapper.getQuicChannel());
-        }
-        wrapper.setActive(false);
+        wrapper.close();
     }
 
     /**
@@ -537,5 +639,115 @@ public class PeerClient {
                 });
     }
 
+
+
+    /**
+     * 智能发送数据：根据数据大小选择复用流/临时流
+     * @param wrapper 节点包装类
+     * @param data 发送数据
+     * @param nodeId 节点ID
+     */
+    private void sendDataWithSmartStream(QuicNodeWrapper wrapper, byte[] data, String nodeId) {
+        if (wrapper == null || !wrapper.isActive()) {
+            log.error("节点{}连接未激活，发送失败", nodeId);
+            return;
+        }
+
+        try {
+            // 1. 判断数据大小选择流类型
+            if (data.length <= STREAM_REUSE_THRESHOLD) {
+                // 小于等于64KB：复用轻量级业务流
+                sendWithReusableStream(wrapper, data, nodeId);
+            } else {
+                // 大于64KB：创建临时流发送
+                sendWithTemporaryStream(wrapper, data, nodeId);
+            }
+        } catch (Exception e) {
+            log.error("节点{}智能流发送数据失败", nodeId, e);
+            wrapper.setActive(false);
+        }
+    }
+
+    /**
+     * 复用轻量级业务流发送小数据（≤64KB）
+     */
+    private void sendWithReusableStream(QuicNodeWrapper wrapper, byte[] data, String nodeId) throws ExecutionException, InterruptedException {
+        // 获取/重建业务流
+        QuicStreamChannel businessStream = wrapper.getOrCreateBusinessStream();
+        if (businessStream == null || !businessStream.isActive()) {
+            log.error("节点{}业务流创建失败，发送小数据失败", nodeId);
+            return;
+        }
+
+        // 发送数据
+        ByteBuf buf = Unpooled.copiedBuffer(data);
+        businessStream.writeAndFlush(buf)
+                .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (future.isSuccess()) {
+                        log.debug("节点{}复用业务流发送成功，数据大小:{}字节", nodeId, data.length);
+                        wrapper.updateActiveTime();
+                    } else {
+                        log.error("节点{}复用业务流发送失败", nodeId, future.cause());
+                        // 标记流失效，下次自动重建
+                        wrapper.setBusinessStream(null);
+                        wrapper.setActive(false);
+                    }
+                });
+    }
+
+    /**
+     * 创建临时流发送大数据（>64KB）
+     */
+    private void sendWithTemporaryStream(QuicNodeWrapper wrapper, byte[] data, String nodeId) throws ExecutionException, InterruptedException {
+        // 生成临时流唯一标识（用UUID避免冲突）
+        String tempStreamKey = UUID.randomUUID().toString();
+        byte[] keyBytes = tempStreamKey.getBytes(StandardCharsets.UTF_8);
+
+        // 创建临时流（单向流，适合大数据传输）
+        QuicStreamChannel tempStream = wrapper.createBlockSyncStream(keyBytes);
+        if (tempStream == null || !tempStream.isActive()) {
+            log.error("节点{}临时流创建失败，发送大数据失败", nodeId);
+            return;
+        }
+
+        // 发送数据
+        ByteBuf buf = Unpooled.copiedBuffer(data);
+        tempStream.writeAndFlush(buf)
+                .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (future.isSuccess()) {
+                        log.info("节点{}临时流发送成功，数据大小:{}KB，流ID:{}",
+                                nodeId, data.length/1024, tempStream.streamId());
+                        wrapper.updateActiveTime();
+                        // 发送完成后延迟关闭临时流（确保数据传输完成）
+                        scheduler.schedule(() -> {
+                            try {
+                                if (tempStream.isActive()) {
+                                    tempStream.close().sync();
+                                }
+                            } catch (InterruptedException e) {
+                                log.warn("节点{}临时流关闭失败", nodeId, e);
+                            }
+                        }, 1, TimeUnit.SECONDS);
+                    } else {
+                        log.error("节点{}临时流发送失败", nodeId, future.cause());
+                        // 关闭流并清理
+                        try {
+                            if (tempStream.isActive()) {
+                                tempStream.close().sync();
+                            }
+                        } catch (InterruptedException e) {
+                            log.warn("节点{}临时流异常关闭失败", nodeId, e);
+                        }
+                        wrapper.getTempStreams().remove(keyBytes);
+                        wrapper.setActive(false);
+                    }
+                });
+
+        // 注册流关闭回调（自动清理临时流映射）
+        tempStream.closeFuture().addListener(future -> {
+            wrapper.getTempStreams().remove(keyBytes);
+            log.debug("节点{}临时流已关闭，清理映射，流ID:{}", nodeId, tempStream.streamId());
+        });
+    }
 
 }
