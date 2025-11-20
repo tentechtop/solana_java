@@ -84,7 +84,7 @@ public class PeerClient {
                 .build();
         codec = new QuicClientCodecBuilder()
                 .sslContext(sslContext)
-                .maxIdleTimeout(10, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
+                .maxIdleTimeout(300, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
                 .initialMaxData(10 * 1024 * 1024) // 增大数据限制
                 .initialMaxStreamDataBidirectionalLocal(10 * 1024 * 1024)
                 .build();
@@ -113,17 +113,13 @@ public class PeerClient {
 
         new Thread(() -> {
             try {
-
                 sleep(1000);
                 QuicStreamChannel connect = connect(inetSocketAddress);
-
-
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } catch (ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (Exception e) {
+                log.error("连接自己异常:{}", e.getMessage());
             }
         }).start();
+
     }
 
 
@@ -179,8 +175,9 @@ public class PeerClient {
             quicNodeWrapper.setLastActiveTime(System.currentTimeMillis());
             peerNodeMap.put(nodeId, quicNodeWrapper);
             addrToNodeIdMap.put(inetSocketAddress, nodeId);
-            return quicNodeWrapper;
 
+            startHeartbeatTask(nodeId);
+            return quicNodeWrapper;
         }finally {
             connectLock.unlock();
         }
@@ -217,7 +214,7 @@ public class PeerClient {
                 System.err.println("流已断开，停止发送");
                 scheduler.shutdown();
             }
-        }, 0, SEND_INTERVAL, TimeUnit.MILLISECONDS);
+        }, 0, SEND_INTERVAL, TimeUnit.SECONDS);
 
         return streamChannel;
     }

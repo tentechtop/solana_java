@@ -112,8 +112,8 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private void handleNonHeartbeatData(ChannelHandlerContext ctx, ByteBuf msg) {
         Channel channel = ctx.channel();
         int readableBytes = msg.readableBytes();
-        log.info("收到QUIC业务数据 | 连接：{} | 数据长度：{} bytes | 数据内容：{}",
-                channel, readableBytes, bytesToHex(msg.array()));
+
+        log.info("收到QUIC业务数据");
 
         // ========== 替换为实际业务逻辑 ==========
         // 示例：解析P2P消息头、处理业务数据等

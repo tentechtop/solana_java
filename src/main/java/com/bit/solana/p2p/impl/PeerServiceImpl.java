@@ -107,7 +107,7 @@ public class PeerServiceImpl implements PeerService {
             // 构建QUIC服务器编解码器（参数与客户端对齐，避免兼容性问题）
             ChannelHandler quicCodec = new QuicServerCodecBuilder()
                     .sslContext(sslContext)
-                    .maxIdleTimeout(10, TimeUnit.SECONDS)
+                    .maxIdleTimeout(300, TimeUnit.SECONDS)
                     .initialMaxData(50 * 1024 * 1024) // 与客户端一致（50MB）
                     .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024) // 与客户端一致（5MB）
                     .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
