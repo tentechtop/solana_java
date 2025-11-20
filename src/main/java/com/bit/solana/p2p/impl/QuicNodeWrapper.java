@@ -14,21 +14,23 @@ import static com.bit.solana.p2p.impl.PeerServiceImpl.NODE_EXPIRATION_TIME;
 @Slf4j  // 添加日志注解
 public class QuicNodeWrapper {
     private String nodeId; // 节点唯一标识（公钥Hex）
-    private String hostname;
+    private String address;
     private int port;
     private QuicChannel quicChannel; // QUIC连接通道
-    private QuicStreamChannel bidirectionalStream; // 复用双向流（心跳+业务）
+    private QuicStreamChannel streamChannel; // 复用双向流（心跳+业务）
     private long lastActiveTime; // 最后活跃时间（用于过期清理）
     private boolean isOutbound; // 是否为主动出站连接
     private boolean active;
 
+    private InetSocketAddress inetSocketAddress;
+
     // 检查连接是否活跃（通道活跃+未过期）
     public boolean isActive() {
         // 增加空指针防护
-        if (quicChannel == null || bidirectionalStream == null) {
+        if (quicChannel == null || streamChannel == null) {
             return false;
         }
-        boolean channelActive = quicChannel.isActive() && bidirectionalStream.isActive();
+        boolean channelActive = quicChannel.isActive() && streamChannel.isActive();
         boolean notExpired = System.currentTimeMillis() - lastActiveTime < NODE_EXPIRATION_TIME * 1000;
         return channelActive && notExpired;
     }
@@ -42,13 +44,12 @@ public class QuicNodeWrapper {
     public void close() {
         // 增加空指针防护
         try {
-            if (bidirectionalStream != null && bidirectionalStream.isActive()) {
-                bidirectionalStream.closeFuture().sync();
+            if (streamChannel != null && streamChannel.isActive()) {
+                streamChannel.closeFuture().sync();
             }
         } catch (Exception e) {
             log.error("Failed to close bidirectional stream for node: {}", nodeId, e);
         }
-
         try {
             if (quicChannel != null && quicChannel.isActive()) {
                 quicChannel.closeFuture().sync();
@@ -79,5 +80,12 @@ public class QuicNodeWrapper {
         }
     }
 
+
+    public InetSocketAddress getInetSocketAddress() {
+        if (inetSocketAddress == null){
+            inetSocketAddress = new InetSocketAddress(address, port);
+        }
+        return inetSocketAddress;
+    }
 
 }

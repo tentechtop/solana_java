@@ -36,10 +36,7 @@ public class PeerServiceImpl implements PeerService {
     public static final long MESSAGE_EXPIRATION_TIME = 30;//秒
     // 节点过期时间
     public static final long NODE_EXPIRATION_TIME = 60;//秒
-    // 心跳消息标识（与 PeerClient 对齐）
-    public static final byte[] HEARTBEAT_SIGNAL = new byte[]{0x00, 0x01};
-    // 业务数据消息标识
-    public static final byte[] BUSINESS_DATA_SIGNAL = new byte[]{0x00, 0x02};
+
 
     //节点信息
     private Peer self;//本地节点信息
@@ -48,9 +45,9 @@ public class PeerServiceImpl implements PeerService {
     // 事件循环组
     private NioEventLoopGroup eventLoopGroup;
     // 节点ID -> 节点连接封装（线程安全）
-    public final Map<String, QuicNodeWrapper> peerNodeMap = new ConcurrentHashMap<>();
+    public static Map<String, QuicNodeWrapper> peerNodeMap = new ConcurrentHashMap<>();
     // 节点地址 -> 节点ID（反向映射，用于快速查询）
-    public final Map<InetSocketAddress, String> addrToNodeIdMap = new ConcurrentHashMap<>();
+    public static Map<InetSocketAddress, String> addrToNodeIdMap = new ConcurrentHashMap<>();
     public Cache<String, Long> messageCache;
 
 
@@ -88,8 +85,7 @@ public class PeerServiceImpl implements PeerService {
         startQuicServer();
         // 启动节点过期清理任务（定时移除无效节点）
         startNodeCleanupTask();
-        // 连接初始种子节点（从配置读取）
-        connectSeedNodes();
+
     }
 
     /**
@@ -147,9 +143,9 @@ public class PeerServiceImpl implements PeerService {
     /**
      * 关闭服务器
      */
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         if (quicServerChannel != null) {
-            quicServerChannel.close();
+            quicServerChannel.closeFuture().sync();
         }
         if (eventLoopGroup != null) {
             eventLoopGroup.shutdownGracefully();
@@ -158,12 +154,7 @@ public class PeerServiceImpl implements PeerService {
     }
 
 
-    /**
-     * 连接配置中的种子节点
-     */
-    private void connectSeedNodes() {
 
-    }
 
     /**
      * 启动节点过期清理任务（每30秒执行一次）
@@ -176,7 +167,7 @@ public class PeerServiceImpl implements PeerService {
                 boolean expired = currentTime - wrapper.getLastActiveTime() > NODE_EXPIRATION_TIME * 1000;
                 if (expired || !wrapper.isActive()) {
                     String nodeId = entry.getKey();
-                    InetSocketAddress addr = wrapper.getRemoteAddr();
+                    InetSocketAddress addr = wrapper.getInetSocketAddress();
                     log.info("节点{}({})已过期或断开，从节点列表移除", nodeId, addr);
                     addrToNodeIdMap.remove(addr);
                     //TODO 路由表
