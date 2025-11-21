@@ -30,18 +30,19 @@ public class Common {
 
 
     /**
-     * 创建健壮的全局调度器：
+     * 全局调度器：固定4个核心线程，轻量处理定时任务（监控、清理、心跳等）
+     * DelayedWorkQueue（Java 内置），这个队列本身就是无界的（没有固定容量上限，理论上可无限添加任务，直到 JVM 内存耗尽）；
      */
     public static final ScheduledExecutorService GLOBAL_SCHEDULER = createGlobalScheduler();
 
     /**
-     * 创建健壮的全局定时调度器（适配ScheduledThreadPoolExecutor特性）
-     * 通过「限流+取消清理+监控」防控任务堆积
+     * 创建全局定时调度器（固定4个核心线程）
+     * 保留「任务清理+监控+优雅关闭」等健壮性优化，避免资源泄漏和任务堆积
      */
     private static ScheduledExecutorService createGlobalScheduler() {
-        // 核心线程数：基于CPU核心数适配（定时任务以IO等待为主，避免线程过少导致任务排队）
-        int corePoolSize = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
-        log.info("创建全局调度器，核心线程数：{}", corePoolSize);
+        // 核心调整：固定核心线程数为4，不再动态计算
+        int corePoolSize = 4;
+        log.info("创建全局调度器，固定核心线程数：{}", corePoolSize);
 
         // 带异常捕获的线程工厂（避免单个任务崩溃导致线程退出）
         ThreadFactory threadFactory = new ThreadFactory() {
@@ -68,12 +69,12 @@ public class Common {
         ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(
                 corePoolSize,
                 threadFactory,
-                new ThreadPoolExecutor.CallerRunsPolicy() // 将 AbortPolicy 改为 CallerRunsPolicy，极端情况下由调用方执行超时任务，避免流无超时关闭
+                new ThreadPoolExecutor.CallerRunsPolicy() // 极端场景由调用方执行，避免任务丢失
         );
 
         // 关键优化1：取消的任务立即从队列移除（避免无效任务堆积）
         scheduler.setRemoveOnCancelPolicy(true);
-        // 关键优化2：核心线程允许超时退出（空闲60秒），减少资源占用
+        // 关键优化2：核心线程允许超时退出（空闲60秒），减少资源占用（4个线程空闲时自动释放）
         scheduler.setKeepAliveTime(60, TimeUnit.SECONDS);
         scheduler.allowCoreThreadTimeOut(true);
 
@@ -113,7 +114,7 @@ public class Common {
      */
     private static int getScheduledQueueSize(ScheduledThreadPoolExecutor scheduler) {
         try {
-            // 获取ScheduledThreadPoolExecutor的queue字段（私有）
+            // 获取ThreadPoolExecutor的workQueue私有字段
             Field queueField = ThreadPoolExecutor.class.getDeclaredField("workQueue");
             queueField.setAccessible(true);
             BlockingQueue<?> queue = (BlockingQueue<?>) queueField.get(scheduler);
