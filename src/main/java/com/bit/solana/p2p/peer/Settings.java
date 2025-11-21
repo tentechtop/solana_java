@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 @ConfigurationProperties(prefix = "system")
 public class Settings {
+    private String id;
     private byte[] publicKey;//32字节公钥
     private byte[] privateKey;//32字节私钥
     private int bucketSize=20;
@@ -32,6 +34,13 @@ public class Settings {
 
 
     //初始化配置参数
+    //衍生字段ID
+    public String getId() {
+        if (publicKey == null) {
+            return null;
+        }
+        return Base58.encode(publicKey);
+    }
 
 
 }

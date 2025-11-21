@@ -17,7 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Component
 public class RoutingTable {
     /* 路由表所有者的ID（节点ID） */
-    protected byte[] localNodeId;
+    protected String localNodeId;
 
     /* 存储桶列表 */
     protected CopyOnWriteArrayList<Bucket> buckets;//读多写少场景
@@ -34,7 +34,7 @@ public class RoutingTable {
      */
     @PostConstruct
     public void init() {
-        localNodeId = settings.getPublicKey();
+        localNodeId = settings.getId();
         buckets = new CopyOnWriteArrayList<>();
         for (int i = 0; i < settings.getIdentifierSize() + 1; i++) {
             buckets.add(createBucketOfId(i));

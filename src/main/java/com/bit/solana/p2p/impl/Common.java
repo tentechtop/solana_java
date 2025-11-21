@@ -24,15 +24,19 @@ public class Common {
     // 节点过期时间
     public static final long NODE_EXPIRATION_TIME = 60;//秒
 
-    // 心跳消息
-    public static final byte[] HEARTBEAT_SIGNAL = new byte[]{0x00, 0x01};
-    // 业务数据消息标识
-    public static final byte[] BUSINESS_DATA_SIGNAL = new byte[]{0x00, 0x02};
+    // 心跳消息 ping
+    public static final byte[] HEARTBEAT_PING_SIGNAL = new byte[]{0x00, 0x01};
+    // 心跳消息 pong
+    public static final byte[] HEARTBEAT_ping_SIGNAL = new byte[]{0x00, 0x02};
 
 
     /**
      * 全局调度器：固定4个核心线程，轻量处理定时任务（监控、清理、心跳等）
      * DelayedWorkQueue（Java 内置），这个队列本身就是无界的（没有固定容量上限，理论上可无限添加任务，直到 JVM 内存耗尽）；
+     * 你的场景是「心跳、监控、简单定时任务」，核心特点是：
+     * 任务逻辑简单（无复杂业务、无大量计算）；
+     * 任务量小（心跳 / 监控通常每分钟 / 几秒一次，队列不会堆积）；
+     * 无严格的 “资源泄漏” 风险（心跳 / 监控任务无持有的重量级资源）；
      */
     public static final ScheduledExecutorService GLOBAL_SCHEDULER = Executors.newScheduledThreadPool(4, r -> {
         Thread t = new Thread(r, "global-scheduler");

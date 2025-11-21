@@ -5,11 +5,13 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Data
 @Component
+@Order(0)
 @ConfigurationProperties(prefix = "system")
 public class DbConfig {
     private String path;//保存路径
