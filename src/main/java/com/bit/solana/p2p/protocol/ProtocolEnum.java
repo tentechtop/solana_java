@@ -7,6 +7,9 @@ import lombok.Getter;
  */
 @Getter
 public enum ProtocolEnum {
+    // 心跳协议（内置） /heartbeat/1.0.0 (code=0)
+    HEARTBEAT_V1(0, "/heartbeat/1.0.0", "1.0.0"),
+
     // 区块查询协议 /block/1.0.0 (code=1)
     BLOCK_V1(1, "/block/1.0.0", "1.0.0"),
     // 交易提交协议 /tx/1.0.0 (code=2)
@@ -14,8 +17,12 @@ public enum ProtocolEnum {
 
     CHAIN_V1(3, "/CHAIN/1.0.0", "1.0.0"),
 
-    // 心跳协议（内置） /heartbeat/1.0.0 (code=0)
-    HEARTBEAT_V1(0, "/heartbeat/1.0.0", "1.0.0");
+
+
+
+
+
+    ;
 
     // 4字节int协议编码（网络字节序）
     private final int code;

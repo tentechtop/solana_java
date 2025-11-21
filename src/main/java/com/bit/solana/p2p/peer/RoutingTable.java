@@ -34,7 +34,7 @@ public class RoutingTable {
      */
     @PostConstruct
     public void init() {
-        localNodeId = settings.getLocalPeerId();
+        localNodeId = settings.getPublicKey();
         buckets = new CopyOnWriteArrayList<>();
         for (int i = 0; i < settings.getIdentifierSize() + 1; i++) {
             buckets.add(createBucketOfId(i));

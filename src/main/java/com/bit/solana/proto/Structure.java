@@ -2275,10 +2275,10 @@ public final class Structure {
      * 核心标识
      * </pre>
      *
-     * <code>bytes id = 1;</code>
-     * @return The id.
+     * <code>bytes public_key = 1;</code>
+     * @return The publicKey.
      */
-    com.google.protobuf.ByteString getId();
+    com.google.protobuf.ByteString getPublicKey();
 
     /**
      * <pre>
@@ -2452,7 +2452,7 @@ public final class Structure {
       super(builder);
     }
     private ProtoPeer() {
-      id_ = com.google.protobuf.ByteString.EMPTY;
+      publicKey_ = com.google.protobuf.ByteString.EMPTY;
       privateKey_ = com.google.protobuf.ByteString.EMPTY;
       address_ = "";
       multiaddr_ = "";
@@ -2472,19 +2472,19 @@ public final class Structure {
               Structure.ProtoPeer.class, Structure.ProtoPeer.Builder.class);
     }
 
-    public static final int ID_FIELD_NUMBER = 1;
-    private com.google.protobuf.ByteString id_ = com.google.protobuf.ByteString.EMPTY;
+    public static final int PUBLIC_KEY_FIELD_NUMBER = 1;
+    private com.google.protobuf.ByteString publicKey_ = com.google.protobuf.ByteString.EMPTY;
     /**
      * <pre>
      * 核心标识
      * </pre>
      *
-     * <code>bytes id = 1;</code>
-     * @return The id.
+     * <code>bytes public_key = 1;</code>
+     * @return The publicKey.
      */
     @java.lang.Override
-    public com.google.protobuf.ByteString getId() {
-      return id_;
+    public com.google.protobuf.ByteString getPublicKey() {
+      return publicKey_;
     }
 
     public static final int PRIVATE_KEY_FIELD_NUMBER = 2;
@@ -2777,8 +2777,8 @@ public final class Structure {
     @java.lang.Override
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      if (!id_.isEmpty()) {
-        output.writeBytes(1, id_);
+      if (!publicKey_.isEmpty()) {
+        output.writeBytes(1, publicKey_);
       }
       if (!privateKey_.isEmpty()) {
         output.writeBytes(2, privateKey_);
@@ -2825,9 +2825,9 @@ public final class Structure {
       if (size != -1) return size;
 
       size = 0;
-      if (!id_.isEmpty()) {
+      if (!publicKey_.isEmpty()) {
         size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(1, id_);
+          .computeBytesSize(1, publicKey_);
       }
       if (!privateKey_.isEmpty()) {
         size += com.google.protobuf.CodedOutputStream
@@ -2889,8 +2889,8 @@ public final class Structure {
       }
       Structure.ProtoPeer other = (Structure.ProtoPeer) obj;
 
-      if (!getId()
-          .equals(other.getId())) return false;
+      if (!getPublicKey()
+          .equals(other.getPublicKey())) return false;
       if (!getPrivateKey()
           .equals(other.getPrivateKey())) return false;
       if (!getAddress()
@@ -2927,8 +2927,8 @@ public final class Structure {
       }
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + ID_FIELD_NUMBER;
-      hash = (53 * hash) + getId().hashCode();
+      hash = (37 * hash) + PUBLIC_KEY_FIELD_NUMBER;
+      hash = (53 * hash) + getPublicKey().hashCode();
       hash = (37 * hash) + PRIVATE_KEY_FIELD_NUMBER;
       hash = (53 * hash) + getPrivateKey().hashCode();
       hash = (37 * hash) + ADDRESS_FIELD_NUMBER;
@@ -3089,7 +3089,7 @@ public final class Structure {
       public Builder clear() {
         super.clear();
         bitField0_ = 0;
-        id_ = com.google.protobuf.ByteString.EMPTY;
+        publicKey_ = com.google.protobuf.ByteString.EMPTY;
         privateKey_ = com.google.protobuf.ByteString.EMPTY;
         address_ = "";
         port_ = 0;
@@ -3136,7 +3136,7 @@ public final class Structure {
       private void buildPartial0(Structure.ProtoPeer result) {
         int from_bitField0_ = bitField0_;
         if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.id_ = id_;
+          result.publicKey_ = publicKey_;
         }
         if (((from_bitField0_ & 0x00000002) != 0)) {
           result.privateKey_ = privateKey_;
@@ -3188,8 +3188,8 @@ public final class Structure {
 
       public Builder mergeFrom(Structure.ProtoPeer other) {
         if (other == Structure.ProtoPeer.getDefaultInstance()) return this;
-        if (!other.getId().isEmpty()) {
-          setId(other.getId());
+        if (!other.getPublicKey().isEmpty()) {
+          setPublicKey(other.getPublicKey());
         }
         if (!other.getPrivateKey().isEmpty()) {
           setPrivateKey(other.getPrivateKey());
@@ -3260,7 +3260,7 @@ public final class Structure {
                 done = true;
                 break;
               case 10: {
-                id_ = input.readBytes();
+                publicKey_ = input.readBytes();
                 bitField0_ |= 0x00000001;
                 break;
               } // case 10
@@ -3341,31 +3341,31 @@ public final class Structure {
       }
       private int bitField0_;
 
-      private com.google.protobuf.ByteString id_ = com.google.protobuf.ByteString.EMPTY;
+      private com.google.protobuf.ByteString publicKey_ = com.google.protobuf.ByteString.EMPTY;
       /**
        * <pre>
        * 核心标识
        * </pre>
        *
-       * <code>bytes id = 1;</code>
-       * @return The id.
+       * <code>bytes public_key = 1;</code>
+       * @return The publicKey.
        */
       @java.lang.Override
-      public com.google.protobuf.ByteString getId() {
-        return id_;
+      public com.google.protobuf.ByteString getPublicKey() {
+        return publicKey_;
       }
       /**
        * <pre>
        * 核心标识
        * </pre>
        *
-       * <code>bytes id = 1;</code>
-       * @param value The id to set.
+       * <code>bytes public_key = 1;</code>
+       * @param value The publicKey to set.
        * @return This builder for chaining.
        */
-      public Builder setId(com.google.protobuf.ByteString value) {
+      public Builder setPublicKey(com.google.protobuf.ByteString value) {
         if (value == null) { throw new NullPointerException(); }
-        id_ = value;
+        publicKey_ = value;
         bitField0_ |= 0x00000001;
         onChanged();
         return this;
@@ -3375,12 +3375,12 @@ public final class Structure {
        * 核心标识
        * </pre>
        *
-       * <code>bytes id = 1;</code>
+       * <code>bytes public_key = 1;</code>
        * @return This builder for chaining.
        */
-      public Builder clearId() {
+      public Builder clearPublicKey() {
         bitField0_ = (bitField0_ & ~0x00000001);
-        id_ = getDefaultInstance().getId();
+        publicKey_ = getDefaultInstance().getPublicKey();
         onChanged();
         return this;
       }
@@ -4142,14 +4142,14 @@ public final class Structure {
       "nt\030\013 \001(\004\022\033\n\023fee_calculator_hash\030\014 \001(\014\022\027\n" +
       "\017tx_bloom_filter\030\r \001(\014\022\030\n\020log_bloom_filt" +
       "er\030\016 \001(\014\"/\n\nProtoBlock\022!\n\006header\030\001 \001(\0132\021" +
-      ".ProtoBlockHeader\"\214\002\n\tProtoPeer\022\n\n\002id\030\001 " +
-      "\001(\014\022\023\n\013private_key\030\002 \001(\014\022\017\n\007address\030\003 \001(" +
-      "\t\022\014\n\004port\030\004 \001(\005\022\021\n\tmultiaddr\030\005 \001(\t\022\030\n\020pr" +
-      "otocol_version\030\006 \001(\t\022\021\n\tnode_type\030\007 \001(\005\022" +
-      "\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slot\030\t \001(\004\022" +
-      "\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_amount\030\013 " +
-      "\001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n\tlast_se" +
-      "en\030\r \001(\004b\006proto3"
+      ".ProtoBlockHeader\"\224\002\n\tProtoPeer\022\022\n\npubli" +
+      "c_key\030\001 \001(\014\022\023\n\013private_key\030\002 \001(\014\022\017\n\007addr" +
+      "ess\030\003 \001(\t\022\014\n\004port\030\004 \001(\005\022\021\n\tmultiaddr\030\005 \001" +
+      "(\t\022\030\n\020protocol_version\030\006 \001(\t\022\021\n\tnode_typ" +
+      "e\030\007 \001(\005\022\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slo" +
+      "t\030\t \001(\004\022\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_a" +
+      "mount\030\013 \001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n" +
+      "\tlast_seen\030\r \001(\004b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -4172,7 +4172,7 @@ public final class Structure {
     internal_static_ProtoPeer_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ProtoPeer_descriptor,
-        new java.lang.String[] { "Id", "PrivateKey", "Address", "Port", "Multiaddr", "ProtocolVersion", "NodeType", "IsOnline", "LatestSlot", "IsValidator", "StakeAmount", "SoftwareVersion", "LastSeen", });
+        new java.lang.String[] { "PublicKey", "PrivateKey", "Address", "Port", "Multiaddr", "ProtocolVersion", "NodeType", "IsOnline", "LatestSlot", "IsValidator", "StakeAmount", "SoftwareVersion", "LastSeen", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

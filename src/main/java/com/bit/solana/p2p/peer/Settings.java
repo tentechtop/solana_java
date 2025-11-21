@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit;
 @Component
 @ConfigurationProperties(prefix = "system")
 public class Settings {
-    private byte[] localPeerId;//32字节公钥
-    private byte[] prvkey;//32字节私钥
+    private byte[] publicKey;//32字节公钥
+    private byte[] privateKey;//32字节私钥
     private int bucketSize=20;
     private int findNodeSize=20;
     private int maximumLastSeenAgeToConsiderAlive;

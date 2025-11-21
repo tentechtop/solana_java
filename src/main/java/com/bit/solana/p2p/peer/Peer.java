@@ -4,6 +4,7 @@ package com.bit.solana.p2p.peer;
 import com.bit.solana.proto.Structure;
 import com.google.protobuf.ByteString;
 import lombok.*;
+import org.bitcoinj.core.Base58;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,9 +26,11 @@ public class Peer {
      * 节点公钥（32字节，Base58编码字符串）
      * Solana节点的唯一身份标识，用于加密通信、签名验证（如节点消息签名）
      * 例："7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2"
-     * 节点的公钥 base58编码后的值
+     * 节点的公钥 base58编码后的值  Base58.encode(publicKey) 衍生字段 不参与序列化 只在反序列化衍生
      */
-    private byte[] id;
+    private String id;
+
+    private byte[] publicKey; // 节点公钥  也可用于计算异或距离
 
     private byte[] privateKey;
 
@@ -121,6 +124,7 @@ public class Peer {
      * 序列化当前Peer对象为字节数组（基于Protobuf）
      */
     public byte[] serialize() throws IOException {
+
         return toProto().toByteArray();
     }
 
@@ -138,11 +142,11 @@ public class Peer {
      */
     public Structure.ProtoPeer toProto() {
         Structure.ProtoPeer.Builder builder = Structure.ProtoPeer.newBuilder();
-
         // 核心标识字段
-        if (id != null) {
-            builder.setId(ByteString.copyFrom(id));
+        if (publicKey != null) {
+            builder.setPublicKey(ByteString.copyFrom(publicKey));
         }
+
         if (privateKey != null) {
             builder.setPrivateKey(ByteString.copyFrom(privateKey));
         }
@@ -180,13 +184,16 @@ public class Peer {
         Peer peer = new Peer();
 
         // 核心标识字段
-        if (!protoPeer.getId().isEmpty()) {
-            peer.setId(protoPeer.getId().toByteArray());
+        if (!protoPeer.getPublicKey().isEmpty()) {
+            peer.setId(Base58.encode(protoPeer.getPublicKey().toByteArray()));
         }
+        if (!protoPeer.getPublicKey().isEmpty()) {
+            peer.setPublicKey(protoPeer.getPublicKey().toByteArray());
+        }
+
         if (!protoPeer.getPrivateKey().isEmpty()) {
             peer.setPrivateKey(protoPeer.getPrivateKey().toByteArray());
         }
-
         // 网络信息字段
         peer.setAddress(protoPeer.getAddress());
         peer.setPort(protoPeer.getPort());
