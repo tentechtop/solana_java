@@ -1,21 +1,15 @@
 package com.bit.solana.p2p.impl;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
-import io.netty.util.ReferenceCountUtil;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
-
-import static com.bit.solana.p2p.impl.Common.*;
 
 /**
  * 随用随建是其最优使用方式
@@ -61,46 +55,7 @@ public class QuicNodeWrapper {
         if (heartbeatTask != null && !heartbeatTask.isCancelled()) {
             heartbeatTask.cancel(false);
         }
-        // 使用弱引用持有节点，避免任务持有强引用导致GC失败
-        WeakReference<QuicNodeWrapper> nodeRef = new WeakReference<>(this);
-        // 每个节点创建独立的心跳任务（Runnable），提交到全局调度器
-        this.heartbeatTask = globalScheduler.scheduleAtFixedRate(
-                // 节点独有任务：检查自己的状态、发送自己的心跳
-                () -> {
-                    try {
-                        // 1. 节点私有状态检查
-                        if (!isActive()) {
-                            log.warn("节点{}连接失效，停止心跳", nodeId);
-                            stopHeartbeat();
-                            return;
-                        }
-                        // 2. 节点心跳流检查/重建
-                        QuicStreamChannel stream = getOrCreateHeartbeatStream();
-                        if (stream == null || !stream.isActive()) {
-                            log.error("节点{}心跳流不可用", nodeId);
-                            setActive(false);
-                            return;
-                        }
-                        // 3. 发送节点心跳
-                        ByteBuf buf = Unpooled.copiedBuffer(HEARTBEAT_PING_SIGNAL);
-                        stream.writeAndFlush(buf).addListener(future -> {
-                            ReferenceCountUtil.release(buf);
-                            if (future.isSuccess()) {
-                                log.debug("节点{}心跳发送成功", nodeId);
-                            } else {
-                                log.error("节点{}心跳发送失败", nodeId, future.cause());
-                                setActive(false);
-                            }
-                        });
-                    } catch (Exception e) {
-                        log.error("节点{}心跳任务异常", nodeId, e);
-                        setActive(false);
-                    }
-                },
-                0, // 初始延迟0秒
-                intervalSeconds, // 间隔（节点可自定义）
-                TimeUnit.SECONDS
-        );
+
     }
 
 

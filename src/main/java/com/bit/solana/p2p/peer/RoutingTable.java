@@ -3,6 +3,7 @@ package com.bit.solana.p2p.peer;
 import jakarta.annotation.PostConstruct;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Component
 public class RoutingTable {
     /* 路由表所有者的ID（节点ID） */
-    protected String localNodeId;
+    protected byte[] localNodeId;
 
     /* 存储桶列表 */
     protected CopyOnWriteArrayList<Bucket> buckets;//读多写少场景
@@ -79,6 +80,11 @@ public class RoutingTable {
     }
 
     public Peer getNode(String nodeId) {
+        //不为空 且解码正确
+        return getNode(Base58.decode(nodeId));
+    }
+    public Peer getNode(byte[] nodeId) {
+        //不为空
         return null;
     }
 

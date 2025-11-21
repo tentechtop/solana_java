@@ -1,5 +1,7 @@
 package com.bit.solana;
 
+import com.bit.solana.p2p.impl.PeerClient;
+
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutionException;
 
@@ -15,8 +17,7 @@ public class QUICTest {
 
         peerClient.init(); // 手动调用 init
 
-        // 手动连接本地测试节点
-        peerClient.connect(new InetSocketAddress("127.0.0.1", 8333));
+
 
 
     }

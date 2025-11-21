@@ -17,18 +17,22 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class Common {
+    //连接保活时间300秒
+    public static final long CONNECT_KEEP_ALIVE_SECONDS = 300;
     //临时流超时时间
     public static final long TEMP_STREAM_TIMEOUT_SECONDS = 30;
     // 消息过期时间
     public static final long MESSAGE_EXPIRATION_TIME = 30;//秒
     // 节点过期时间
     public static final long NODE_EXPIRATION_TIME = 60;//秒
-
-    // 心跳消息 ping
-    public static final byte[] HEARTBEAT_PING_SIGNAL = new byte[]{0x00, 0x01};
-    // 心跳消息 pong
-    public static final byte[] HEARTBEAT_ping_SIGNAL = new byte[]{0x00, 0x02};
-
+    //节点心跳 15秒
+    public static final long HEARTBEAT_INTERVAL = 15;
+    // 最大重连次数
+    public static final int MAX_RECONNECT_ATTEMPTS = 10;
+    // 默认请求超时（毫秒）
+    public static final int DEFAULT_TIMEOUT = 5000;
+    // 本地节点标识
+    public static final byte[] PEER_KEY = "LOCAL_PEER".getBytes();
 
     /**
      * 全局调度器：固定4个核心线程，轻量处理定时任务（监控、清理、心跳等）
@@ -46,14 +50,14 @@ public class Common {
 
 
     /**
-     * 节点连接缓存
+     * 节点连接缓存 节点ID -> 节点的连接
      */
-    public static Cache<String, QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
+    public static Cache<byte[], QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
             .recordStats()
             // 改为同步执行（避免调度器延迟），或限制监听器执行超时
-            .removalListener((String nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
+            .removalListener((byte[] nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
                 if (node != null) {
                     log.info("Node {} removed from cache (cause: {}), closing resources", nodeId, cause);
                     // 同步关闭，设置超时
@@ -70,9 +74,10 @@ public class Common {
 
     /**
      * 请求响应Future缓存：最大容量100万个，30秒过期（请求超时后自动清理，避免内存泄漏）
-     * Key：请求ID（UUID），Value：响应Future
+     * Key：请求ID，Value：响应Future
+     * 16字节的UUIDV7 - > CompletableFuture<byte[]>
      */
-    public static Cache<UUID, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+    public static Cache<byte[], CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(30, TimeUnit.SECONDS)
             .weakValues() // 弱引用存储Future，GC时可回收
@@ -82,17 +87,38 @@ public class Common {
     /**
      * 最多缓存1万个节点的重连计数
      * 重连成功后重置 / 清理计数器
+     * 节点ID - >节点的重连计数
      */
-    public final Cache<String, AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
+    public final Cache<byte[], AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
             .build();
+
+
+    /**
+     * UUIDV7 16字节ID - > 缓存时间 代表消息已经处理
+     */
+    public Cache<byte[], Long> MESSAGE_CACHE = Caffeine.newBuilder()
+            .maximumSize(10000)  // 最大缓存
+            .expireAfterWrite(10, TimeUnit.MINUTES)  // 10分钟过期
+            .build();// 缓存未命中时从数据源加载
+
 
 
     @PreDestroy
     public void shutdown() throws InterruptedException {
         GLOBAL_SCHEDULER.shutdown();
         log.info("关闭全局调度器");
+
+        //关闭所有的连接
+        for (QuicNodeWrapper node : PEER_CONNECT_CACHE.asMap().values()) {
+            node.close();
+        }
+        //清空所有的缓存
+        PEER_CONNECT_CACHE.invalidateAll();
+        RESPONSE_FUTURECACHE.invalidateAll();
+        RECONNECT_COUNTER.invalidateAll();
+        MESSAGE_CACHE.invalidateAll();
     }
 
 

@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 @ConfigurationProperties(prefix = "system")
 public class Settings {
-    private String id;
-    private byte[] publicKey;//32字节公钥
+    private byte[] id;;//32字节公钥
     private byte[] privateKey;//32字节私钥
     private int bucketSize=20;
     private int findNodeSize=20;
@@ -33,14 +32,6 @@ public class Settings {
     private boolean enabledFirstStoreRequestForcePass;
 
 
-    //初始化配置参数
-    //衍生字段ID
-    public String getId() {
-        if (publicKey == null) {
-            return null;
-        }
-        return Base58.encode(publicKey);
-    }
 
 
 }

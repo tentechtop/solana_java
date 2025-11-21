@@ -28,9 +28,7 @@ public class Peer {
      * 例："7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2"
      * 节点的公钥 base58编码后的值  Base58.encode(publicKey) 衍生字段 不参与序列化 只在反序列化衍生
      */
-    private String id;
-
-    private byte[] publicKey; // 节点公钥  也可用于计算异或距离
+    private byte[] id;
 
     private byte[] privateKey;
 
@@ -143,14 +141,12 @@ public class Peer {
     public Structure.ProtoPeer toProto() {
         Structure.ProtoPeer.Builder builder = Structure.ProtoPeer.newBuilder();
         // 核心标识字段
-        if (publicKey != null) {
-            builder.setPublicKey(ByteString.copyFrom(publicKey));
+        if (id != null) {
+            builder.setId(ByteString.copyFrom(id));
         }
-
         if (privateKey != null) {
             builder.setPrivateKey(ByteString.copyFrom(privateKey));
         }
-
         // 网络信息字段
         if (address != null) {
             builder.setAddress(address);
@@ -184,11 +180,8 @@ public class Peer {
         Peer peer = new Peer();
 
         // 核心标识字段
-        if (!protoPeer.getPublicKey().isEmpty()) {
-            peer.setId(Base58.encode(protoPeer.getPublicKey().toByteArray()));
-        }
-        if (!protoPeer.getPublicKey().isEmpty()) {
-            peer.setPublicKey(protoPeer.getPublicKey().toByteArray());
+        if (!protoPeer.getId().isEmpty()) {
+            peer.setId(protoPeer.getId().toByteArray());
         }
 
         if (!protoPeer.getPrivateKey().isEmpty()) {

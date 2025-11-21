@@ -27,7 +27,7 @@ message ProtoBlock {
 
 message ProtoPeer {
   // 核心标识
-  bytes public_key = 1;        // 节点公钥（32字节）
+  bytes id = 1;        // 节点公钥（32字节）
   bytes private_key = 2;       // 节点私钥
   // 网络信息
   string address = 3;          // IP地址（IPv4/IPv6）
