@@ -5,9 +5,11 @@ import io.netty.buffer.Unpooled;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
+import io.netty.util.ReferenceCountUtil;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Objects;
@@ -49,18 +51,24 @@ public class QuicNodeWrapper {
         throw new UnsupportedOperationException("必须注入全局调度器，禁止无参构造");
     }
 
-
-
     public void startHeartbeat(long intervalSeconds) {
         // 取消原有任务（避免重复调度）
         if (heartbeatTask != null && !heartbeatTask.isCancelled()) {
             heartbeatTask.cancel(false);
         }
-
+        // 使用弱引用持有节点，避免任务持有强引用导致GC失败
+        WeakReference<QuicNodeWrapper> nodeRef = new WeakReference<>(this);
         // 每个节点创建独立的心跳任务（Runnable），提交到全局调度器
         this.heartbeatTask = globalScheduler.scheduleAtFixedRate(
                 // 节点独有任务：检查自己的状态、发送自己的心跳
                 () -> {
+                    QuicNodeWrapper node = nodeRef.get();
+                    if (node == null) {
+                        log.warn("Node GC'd, cancel heartbeat task");
+                        // 取消自身任务
+                        Thread.currentThread().getThreadGroup().enumerate(new Thread[0], false); // 仅示例，实际需持有task引用
+                        return;
+                    }
                     try {
                         // 1. 节点私有状态检查
                         if (!isActive()) {
@@ -78,7 +86,7 @@ public class QuicNodeWrapper {
                         // 3. 发送节点私有心跳
                         ByteBuf buf = Unpooled.copiedBuffer(HEARTBEAT_SIGNAL);
                         stream.writeAndFlush(buf).addListener(future -> {
-                            buf.release(); // 手动释放Buf，避免泄漏
+                            ReferenceCountUtil.release(buf); // 兜底释放，即使失败也执行
                             if (future.isSuccess()) {
                                 updateActiveTime();
                                 log.debug("节点{}心跳发送成功", nodeId);

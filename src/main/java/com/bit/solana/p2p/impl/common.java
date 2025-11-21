@@ -17,7 +17,6 @@ import com.github.benmanes.caffeine.cache.RemovalListener;
 
 
 @Slf4j
-@Component
 public class common {
     //临时流超时时间
     public static final long TEMP_STREAM_TIMEOUT_SECONDS = 30;
@@ -140,10 +139,18 @@ public class common {
             .maximumSize(10000)
             .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) // 按访问过期，长期不活跃直接淘汰
             .recordStats()
+            // 改为同步执行（避免调度器延迟），或限制监听器执行超时
             .removalListener((String nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
                 if (node != null) {
                     log.info("Node {} removed from cache (cause: {}), closing resources", nodeId, cause);
-                    node.close(); // 缓存淘汰时强制关闭节点资源
+                    // 同步关闭，设置超时
+                    try {
+                        CompletableFuture.runAsync(node::close, Executors.newSingleThreadExecutor())
+                                .get(5, TimeUnit.SECONDS); // 5秒超时，避免阻塞
+                    } catch (Exception e) {
+                        log.error("Close node {} failed in removal listener", nodeId, e);
+                        node.close(); // 兜底同步关闭
+                    }
                 }
             })
             .executor(GLOBAL_SCHEDULER) // 指定listener执行线程池，避免异步线程堆积
@@ -156,6 +163,7 @@ public class common {
     public static Cache<UUID, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(30, TimeUnit.SECONDS)
+            .weakValues() // 弱引用存储Future，GC时可回收
             .recordStats()
             .build();
 
@@ -163,7 +171,7 @@ public class common {
      * 最多缓存1万个节点的重连计数
      * 重连成功后重置 / 清理计数器
      */
-    private final Cache<String, AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
+    public final Cache<String, AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
             .build();
