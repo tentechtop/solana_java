@@ -1,23 +1,21 @@
 package com.bit.solana.p2p.impl;
 
 import com.github.benmanes.caffeine.cache.RemovalCause;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalListener;
+import org.springframework.stereotype.Component;
 
 
 @Slf4j
-public class common {
+@Component
+public class Common {
     //临时流超时时间
     public static final long TEMP_STREAM_TIMEOUT_SECONDS = 30;
     // 消息过期时间
@@ -30,15 +28,9 @@ public class common {
     // 业务数据消息标识
     public static final byte[] BUSINESS_DATA_SIGNAL = new byte[]{0x00, 0x02};
 
-    public static final AtomicInteger TEMP_STREAM_TASK_COUNT = new AtomicInteger(0);
-    public static final int MAX_TEMP_STREAM_TASKS = 100000; // 最大临时流超时任务数
 
     /**
      * 创建健壮的全局调度器：
-     * 1. 核心线程数根据CPU适配，避免固定2线程瓶颈；
-     * 2. 线程工厂增加异常捕获，防止任务崩溃导致线程退出；
-     * 3. 拒绝策略避免任务堆积；
-     * 4. 注册JVM关闭钩子，优雅关闭调度器；
      */
     public static final ScheduledExecutorService GLOBAL_SCHEDULER = createGlobalScheduler();
 
@@ -49,6 +41,7 @@ public class common {
     private static ScheduledExecutorService createGlobalScheduler() {
         // 核心线程数：基于CPU核心数适配（定时任务以IO等待为主，避免线程过少导致任务排队）
         int corePoolSize = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+        log.info("创建全局调度器，核心线程数：{}", corePoolSize);
 
         // 带异常捕获的线程工厂（避免单个任务崩溃导致线程退出）
         ThreadFactory threadFactory = new ThreadFactory() {
@@ -60,13 +53,13 @@ public class common {
                     try {
                         r.run();
                     } catch (Throwable e) {
-                        log.error("Global scheduler thread {} caught exception", Thread.currentThread().getName(), e);
+                        log.error("全局调度器线程 {} 执行任务时捕获到异常", Thread.currentThread().getName(), e);
                     }
                 }, "global-scheduler-" + threadNum.getAndIncrement());
                 t.setDaemon(true); // 守护线程，不阻塞应用退出
                 // 未捕获异常兜底
                 t.setUncaughtExceptionHandler((thread, e) ->
-                        log.error("Uncaught exception in scheduler thread {}", thread.getName(), e));
+                        log.error("调度器线程 {} 发生未捕获异常", thread.getName(), e));
                 return t;
             }
         };
@@ -75,7 +68,7 @@ public class common {
         ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(
                 corePoolSize,
                 threadFactory,
-                new ThreadPoolExecutor.CallerRunsPolicy() // 将 AbortPolicy 改为 CallerRunsPolicy，极端情况下由调用方执行超时任务，避免流无超时关闭：
+                new ThreadPoolExecutor.CallerRunsPolicy() // 将 AbortPolicy 改为 CallerRunsPolicy，极端情况下由调用方执行超时任务，避免流无超时关闭
         );
 
         // 关键优化1：取消的任务立即从队列移除（避免无效任务堆积）
@@ -88,27 +81,27 @@ public class common {
         scheduler.scheduleAtFixedRate(() -> {
             int queueSize = getScheduledQueueSize(scheduler);
             if (queueSize > 500) { // 阈值可根据业务调整
-                log.warn("Global scheduler queue size exceeds threshold: {} (max warn: 500)", queueSize);
+                log.warn("全局调度器任务队列长度超过阈值：{}（告警阈值：500）", queueSize);
                 // 可选：触发告警（如发送监控通知）
             } else if (queueSize > 0) {
-                log.debug("Global scheduler queue size: {}", queueSize);
+                log.debug("全局调度器任务队列长度：{}", queueSize);
             }
         }, 1, 1, TimeUnit.MINUTES);
 
         // 注册JVM关闭钩子：优雅关闭调度器
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutting down global scheduler...");
+            log.info("开始关闭全局调度器...");
             scheduler.shutdown();
             try {
                 if (!scheduler.awaitTermination(10, TimeUnit.SECONDS)) {
-                    log.warn("Scheduler did not terminate in 10s, force shutdown");
+                    log.warn("调度器未在10秒内完成终止，执行强制关闭");
                     scheduler.shutdownNow();
                 }
             } catch (InterruptedException e) {
                 scheduler.shutdownNow();
                 Thread.currentThread().interrupt();
             }
-            log.info("Global scheduler shutdown complete");
+            log.info("全局调度器关闭完成");
         }, "scheduler-shutdown-hook"));
 
         return scheduler;
@@ -126,7 +119,7 @@ public class common {
             BlockingQueue<?> queue = (BlockingQueue<?>) queueField.get(scheduler);
             return queue.size();
         } catch (Exception e) {
-            log.error("Failed to get scheduler queue size", e);
+            log.error("获取调度器任务队列长度失败", e);
             return -1; // 监控失败返回-1
         }
     }
@@ -137,7 +130,7 @@ public class common {
      */
     public static Cache<String, QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
             .maximumSize(10000)
-            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) // 按访问过期，长期不活跃直接淘汰
+            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
             .recordStats()
             // 改为同步执行（避免调度器延迟），或限制监听器执行超时
             .removalListener((String nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
@@ -153,7 +146,6 @@ public class common {
                     }
                 }
             })
-            .executor(GLOBAL_SCHEDULER) // 指定listener执行线程池，避免异步线程堆积
             .build();
 
     /**

@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
 
-import static com.bit.solana.p2p.impl.common.*;
+import static com.bit.solana.p2p.impl.Common.*;
 
 @Data
 @Slf4j
@@ -205,60 +205,31 @@ public class QuicNodeWrapper {
      * @throws ExecutionException
      */
     public QuicStreamChannel createTempStream(String tempKey) throws InterruptedException, ExecutionException {
-        // 1. 先递增计数，再判断（CAS保证原子性）
-        int currentCount = TEMP_STREAM_TASK_COUNT.incrementAndGet();
-        if (currentCount > MAX_TEMP_STREAM_TASKS) {
-            TEMP_STREAM_TASK_COUNT.decrementAndGet(); // 回退计数
-            log.error("Temp stream tasks reach max limit: {}, reject create stream for node {}", MAX_TEMP_STREAM_TASKS, nodeId);
+        if (quicChannel == null || !quicChannel.isActive()) {
+            log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
             return null;
         }
-
-        try {
-            if (quicChannel == null || !quicChannel.isActive()) {
-                log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
-                return null;
-            }
-            QuicStreamChannel tempStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
-                    new QuicStreamHandler()).sync().get();
-            if (tempStreams == null) {
-                tempStreams = new ConcurrentHashMap<>();
-            }
-            tempStreams.put(tempKey, tempStream);
-            log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, tempKey, tempStream.streamId());
-
-            // 超时自动关闭任务
-            ScheduledFuture<?> timeoutTask = globalScheduler.schedule(() -> {
-                if (tempStream.isActive()) {
-                    log.warn("Node {} temp stream {} timeout ({}s), close automatically", nodeId, tempKey, TEMP_STREAM_TIMEOUT_SECONDS);
-                    try {
-                        tempStream.close().syncUninterruptibly();
-                    } catch (Exception e) {
-                        log.error("Node {} close timeout temp stream {} failed", nodeId, tempKey, e);
-                    }
-                }
-            }, TEMP_STREAM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-            tempStream.closeFuture().addListener(future -> {
-                try {
-                    if (tempStreams != null) {
-                        tempStreams.remove(tempKey);
-                    }
-                    timeoutTask.cancel(false);
-                    TEMP_STREAM_TASK_COUNT.decrementAndGet(); // 关闭后递减计数
-                    log.debug("Node {} temp stream {} closed, removed from map", nodeId, tempKey);
-                } catch (Exception e) {
-                    log.error("Node {} remove temp stream {} failed", nodeId, tempKey, e);
-                    if (tempStreams != null) {
-                        tempStreams.remove(tempKey);
-                    }
-                    TEMP_STREAM_TASK_COUNT.decrementAndGet(); // 异常也要递减
-                }
-            });
-            return tempStream;
-        } catch (Exception e) {
-            TEMP_STREAM_TASK_COUNT.decrementAndGet(); // 创建失败回退计数
-            throw e;
+        QuicStreamChannel tempStream = quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
+                new QuicStreamHandler()).sync().get();
+        if (tempStreams == null) {
+            tempStreams = new ConcurrentHashMap<>();
         }
+        tempStreams.put(tempKey, tempStream);
+        log.info("Node {} create block sync stream, blockId: {}, streamId: {}", nodeId, tempKey, tempStream.streamId());
+        tempStream.closeFuture().addListener(future -> {
+            try {
+                if (tempStreams != null) {
+                    log.info("删除临时流");
+                    tempStreams.remove(tempKey);
+                }
+            } catch (Exception e) {
+                if (tempStreams != null) {
+                    log.info("删除临时流");
+                    tempStreams.remove(tempKey);
+                }
+            }
+        });
+        return tempStream;
     }
 
 

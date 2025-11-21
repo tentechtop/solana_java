@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Slf4j
+@Component
 public class RTable {
     // 核心：表枚举 -> 列族句柄映射（仅维护句柄，不重复定义表信息）
     private static final Map<TableEnum, ColumnFamilyHolder> tableToCfMap = new HashMap<>();
@@ -36,7 +37,6 @@ public class RTable {
      * 根据表枚举获取列族句柄
      */
     public static ColumnFamilyHandle getColumnFamilyHandle(TableEnum tableEnum) {
-        log.info("获取表{}对应的列族句柄", tableEnum);
         if (tableEnum == null) {
             log.info("表枚举为空，无法获取列族句柄");
             return null;
