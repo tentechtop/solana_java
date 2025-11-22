@@ -2,6 +2,7 @@ package com.bit.solana.p2p.impl;
 
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
+import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import io.netty.bootstrap.Bootstrap;
@@ -19,11 +20,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.bit.solana.p2p.impl.Common.CONNECT_KEEP_ALIVE_SECONDS;
+import static com.bit.solana.p2p.impl.Common.*;
 
 @Slf4j
 @Component
@@ -80,8 +82,43 @@ public class PeerClient {
      * 连接节点
      */
     public QuicNodeWrapper connect(byte[] nodeId) throws ExecutionException, InterruptedException {
+        QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeId);
+        if (existingWrapper != null && existingWrapper.isActive()) {
+            existingWrapper.setLastSeen(System.currentTimeMillis());
+            log.debug("节点{}已处于活跃连接状态，直接返回", nodeId);
+            return existingWrapper;
+        }
+        QuicChannel quicChannel = null;
+        QuicStreamChannel heartbeatStream = null;
+        Peer node = routingTable.getNode(nodeId);
+        if (node == null) {
+            return null;
+        }
+        InetSocketAddress remoteAddress = node.getInetSocketAddress();
+        if (remoteAddress == null) {
+            return null;
+        }
+        quicChannel = QuicChannel.newBootstrap(datagramChannel)
+                .handler(quicConnHandler)
+                .streamHandler(quicStreamHandler)
+                .remoteAddress(remoteAddress)
+                .connect()
+                .get();
 
-        return null;
+        heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
+                quicStreamHandler).sync().getNow();
+        QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
+        quicNodeWrapper.setNodeId(nodeId);
+        quicNodeWrapper.setQuicChannel(quicChannel);
+        quicNodeWrapper.setHeartbeatStream(heartbeatStream);
+        quicNodeWrapper.setAddress(node.getAddress());
+        quicNodeWrapper.setPort(node.getPort());
+        quicNodeWrapper.setOutbound(true);//主动出站
+        quicNodeWrapper.setActive(true);
+        quicNodeWrapper.setLastSeen(System.currentTimeMillis());
+        PEER_CONNECT_CACHE.put(nodeId, quicNodeWrapper);
+        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);
+        return quicNodeWrapper;
     }
 
 

@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 @Data
 @Slf4j
 public class QuicNodeWrapper {
-    private String nodeId; // 节点ID 公钥的base58编码
+    private byte[] nodeId; // 节点ID 公钥的base58编码
     private String address;
     private int port;
     private QuicChannel quicChannel; // 连接 一个连接 + 无数临时流

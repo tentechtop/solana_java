@@ -87,6 +87,7 @@ public class PeerServiceImpl implements PeerService {
         }
         byte[] selfNodeId = self.getId();
         log.info("本地节点初始化完成，ID: {}, 监听端口: {}", Base58.encode(selfNodeId), self.getPort());
+        log.info("Base58.encode(selfNodeId){}",Base58.encode(selfNodeId).length());
         // 启动QUIC服务器
         startQuicServer();
     }
