@@ -11,19 +11,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public enum ProtocolEnum {
     // 枚举项：(code, 协议字符串)
-    CHAIN_V1(1, "/chain/1.0.0"),
-    BLOCK_V1(2, "/block/1.0.0"),
-    PING_V1(3, "/ping/1.0.0");
+    zero_V1(1, "/zero/1.0.0",false),
+
+    CHAIN_V1(1, "/chain/1.0.0",true),//需要返回chain
+    BLOCK_V1(2, "/block/1.0.0",true),//需要返回block
+    PING_V1(3, "/ping/1.0.0",true);//需要返回pong
 
     // Getter
     // 协议编码（对应P2PMessage的type字段）
     private final int code;
     // 协议字符串标识
     private final String protocol;
+    // 是否有返回值 true/有返回值 false/无返回值
+    private final boolean hasResponse;
 
-    ProtocolEnum(int code, String protocol) {
+
+    ProtocolEnum(int code, String protocol, boolean hasResponse) {
         this.code = code;
         this.protocol = protocol;
+        this.hasResponse = hasResponse;
     }
 
     // ========== 辅助方法 ==========

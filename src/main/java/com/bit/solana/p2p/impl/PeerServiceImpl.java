@@ -9,7 +9,6 @@ import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
-import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -31,8 +30,8 @@ import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
-import static com.bit.solana.p2p.impl.Common.CONNECT_KEEP_ALIVE_SECONDS;
-import static com.bit.solana.p2p.impl.Common.PEER_KEY;
+import static com.bit.solana.p2p.impl.CommonConfig.CONNECT_KEEP_ALIVE_SECONDS;
+import static com.bit.solana.p2p.impl.CommonConfig.PEER_KEY;
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 
 @Slf4j
@@ -44,16 +43,15 @@ public class PeerServiceImpl implements PeerService {
     @Autowired
     private DbConfig config;
     @Autowired
-    private RoutingTable routingTable;
+    private CommonConfig commonConfig;
     @Autowired
-    private ProtocolRegistry protocolRegistry;
+    private RoutingTable routingTable;
     @Autowired
     private QuicConnHandler quicConnHandler;
     @Autowired
     private QuicStreamHandler quicStreamHandler;
 
-    //节点信息
-    private Peer self;//本地节点信息
+
     // QUIC服务器通道
     private Channel quicServerChannel;
     // 事件循环组
@@ -66,28 +64,6 @@ public class PeerServiceImpl implements PeerService {
     @PostConstruct
     @Override
     public void init() throws IOException, CertificateException {
-        DataBase dataBase = config.getDataBase();
-        byte[] bytes = dataBase.get(TableEnum.PEER, PEER_KEY);
-        if (bytes == null) {
-            self = new Peer();
-            self.setAddress("127.0.0.1");
-            self.setPort(8333);
-            byte[][] aliceKeys = generateCurve25519KeyPair();
-            byte[] alicePrivateKey = aliceKeys[0];
-            byte[] alicePublicKey = aliceKeys[1];
-            self.setId(alicePublicKey);
-            self.setPrivateKey(alicePrivateKey);
-
-            //保存到本地数据库
-            byte[] serialize = self.serialize();
-            dataBase.insert(TableEnum.PEER, PEER_KEY, serialize);
-        } else {
-            //反序列化
-            self = Peer.deserialize(bytes);
-        }
-        byte[] selfNodeId = self.getId();
-        log.info("本地节点初始化完成，ID: {}, 监听端口: {}", Base58.encode(selfNodeId), self.getPort());
-        log.info("Base58.encode(selfNodeId){}",Base58.encode(selfNodeId).length());
         // 启动QUIC服务器
         startQuicServer();
     }
@@ -128,10 +104,10 @@ public class PeerServiceImpl implements PeerService {
                     .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                     .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
                     .handler(quicCodec)
-                    .bind(self.getPort())
+                    .bind(commonConfig.getSelf().getPort())
                     .sync()
                     .channel();
-            log.info("QUIC服务器启动成功，监听端口: {}", self.getPort());
+            log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
         }catch (Exception e) {
             log.error("启动QUIC服务器失败", e);
             throw new RuntimeException("QUIC服务器启动失败", e);

@@ -4,37 +4,44 @@ import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
+import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
-import com.bit.solana.p2p.protocol.ProtocolRegistry;
+import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.incubator.codec.quic.*;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
-import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.bit.solana.p2p.impl.Common.*;
+import static com.bit.solana.p2p.impl.CommonConfig.*;
+import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
 
 @Slf4j
 @Component
 public class PeerClient {
 
     @Autowired
-    private ProtocolRegistry protocolRegistry;
+    private CommonConfig commonConfig;
+
     @Autowired
     private RoutingTable routingTable;
     @Autowired
@@ -81,7 +88,7 @@ public class PeerClient {
 
 
     /**
-     * 连接节点
+     * 基于路由表连接节点
      */
     public QuicNodeWrapper connect(byte[] nodeId) throws ExecutionException, InterruptedException {
         QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeId);
@@ -100,51 +107,163 @@ public class PeerClient {
         if (remoteAddress == null) {
             return null;
         }
+        QuicNodeWrapper quicNodeWrapper = connect(remoteAddress);
+        quicNodeWrapper.setNodeId(nodeId);
+        quicNodeWrapper.setAddress(node.getAddress());
+        quicNodeWrapper.setPort(node.getPort());
+        PEER_CONNECT_CACHE.put(nodeId, quicNodeWrapper);
+        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
+        return quicNodeWrapper;
+    }
+
+    /**
+     * 基于自解释型Url连接目标节点
+     */
+    public QuicNodeWrapper connect(String multiAddressString) throws ExecutionException, InterruptedException {
+        //不为空
+        if (multiAddressString == null || multiAddressString.isEmpty()) {
+            return null;
+        }
+        MultiAddress multiAddress = new MultiAddress(multiAddressString);
+        //仅仅支持IPV4 和 QUIC协议
+        if (!multiAddress.getIpType().equals("ip4") || !multiAddress.getProtocol().equals(MultiAddress.Protocol.QUIC)) {
+            return null;
+        }
+        String ipAddress1 = multiAddress.getIpAddress();
+        int port = multiAddress.getPort();
+        InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress1, port);
+        QuicNodeWrapper quicNodeWrapper = connect(remoteAddress);
+        byte[] nodeId = Base58.decode(multiAddress.getPeerId());
+        quicNodeWrapper.setNodeId(nodeId);
+        quicNodeWrapper.setAddress(ipAddress1);
+        quicNodeWrapper.setPort(port);
+        PEER_CONNECT_CACHE.put(nodeId, quicNodeWrapper);
+        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
+        return quicNodeWrapper;
+    }
+
+    public QuicNodeWrapper connect(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException {
+        QuicChannel quicChannel = null;
+        QuicStreamChannel heartbeatStream = null;
         quicChannel = QuicChannel.newBootstrap(datagramChannel)
                 .handler(quicConnHandler)
                 .streamHandler(quicStreamHandler)
                 .remoteAddress(remoteAddress)
                 .connect()
                 .get();
-
         heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 quicStreamHandler).sync().getNow();
         QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
-        quicNodeWrapper.setNodeId(nodeId);
         quicNodeWrapper.setQuicChannel(quicChannel);
         quicNodeWrapper.setHeartbeatStream(heartbeatStream);
-        quicNodeWrapper.setAddress(node.getAddress());
-        quicNodeWrapper.setPort(node.getPort());
+        quicNodeWrapper.setLastSeen(System.currentTimeMillis());
         quicNodeWrapper.setOutbound(true);//主动出站
         quicNodeWrapper.setActive(true);
-        quicNodeWrapper.setLastSeen(System.currentTimeMillis());
-        PEER_CONNECT_CACHE.put(nodeId, quicNodeWrapper);
-        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
         return quicNodeWrapper;
     }
 
 
     //发送任意数据
+    public void sendData(byte[] nodeId, byte[] data) throws Exception {
+        String encode = Base58.encode(nodeId);
+        QuicNodeWrapper quicNodeWrapper = null;
 
-    public void sendData(byte[] nodeId, byte[] data) {
-        Objects.requireNonNull(nodeId, "节点ID不能为空");
-        Objects.requireNonNull(data, "发送数据不能为空");
-
+        quicNodeWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeId);
+        if (quicNodeWrapper == null) {
+            quicNodeWrapper = connect(nodeId);
+            // 连接创建失败直接抛出异常
+            if (quicNodeWrapper == null) {
+                throw new ExecutionException(new RuntimeException("节点连接创建失败，nodeId=" +encode));
+            }
+        }
+        boolean active = quicNodeWrapper.isActive();
+        if (!active) {
+            quicNodeWrapper = connect(nodeId);
+        }
+        sendData(quicNodeWrapper, data);
+    }
+    public void sendData(QuicNodeWrapper wrapper, byte[] data) throws Exception {
+        QuicStreamChannel tempStream = wrapper.createTempStream();
+        if (tempStream == null || !tempStream.isActive()) {
+            log.error("临时流创建失败或者已经失效，发送数据失败");
+            return;
+        }
+        ByteBuf buf = Unpooled.copiedBuffer(data);
+        tempStream.writeAndFlush(buf)
+                .addListener((GenericFutureListener<Future<Void>>) future -> {
+                    if (buf.refCnt() > 0) {
+                        buf.release(); // 操作完成后释放
+                    }
+                    if (future.isSuccess()) {
+                        wrapper.setLastSeen(System.currentTimeMillis());
+                        // 发送完成后延迟关闭临时流（确保数据传输完成）
+                        GLOBAL_SCHEDULER.schedule(() -> {
+                            try {
+                                if (tempStream.isActive()) {
+                                    tempStream.close().sync();
+                                }
+                            } catch (InterruptedException e) {
+                                log.warn("临时流异常关闭失败", e);
+                            }
+                        }, 1, TimeUnit.SECONDS);
+                    } else {
+                        log.error("临时流发送失败", future.cause());
+                        // 关闭流并清理
+                        try {
+                            if (tempStream.isActive()) {
+                                tempStream.close().sync();
+                            }
+                        } catch (InterruptedException e) {
+                            log.warn("节点临时流异常关闭失败", e);
+                        }
+                        wrapper.setActive(false);
+                    }
+                });
     }
 
 
-    public byte[] sendData(byte[] nodeId, byte[] request, long timeout) throws Exception {
-
-        return null;
+    //发送协议消息
+    public void sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request) throws Exception {
+        String nodeIdBase58 = Base58.encode(nodeId);
+        log.debug("向节点{}发送协议消息，协议:{}", nodeIdBase58, protocol.getProtocol());
+        // 1. 获取或创建连接
+        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeId);
+        if (wrapper == null || !wrapper.isActive()) {
+            wrapper = connect(nodeId);
+            if (wrapper == null) {
+                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdBase58);
+            }
+        }
+        P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
+        byte[] serialize = p2PMessage.serialize();
+        sendData(wrapper, serialize);
     }
+
 
 
     //发送协议数据 根据协议判断有无返回值 有就返回 无就返回null
     public byte[] sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request, long timeout) throws Exception {
-
-        return null;
+        String nodeIdBase58 = Base58.encode(nodeId);
+        log.debug("向节点{}发送协议消息，协议:{}", nodeIdBase58, protocol.getProtocol());
+        // 1. 获取或创建连接
+        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeId);
+        if (wrapper == null || !wrapper.isActive()) {
+            wrapper = connect(nodeId);
+            if (wrapper == null) {
+                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdBase58);
+            }
+        }
+        P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
+        byte[] serialize = p2PMessage.serialize();
+        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        RESPONSE_FUTURECACHE.put(p2PMessage.getRequestId(), responseFuture);
+        try {
+            sendData(wrapper, serialize);
+            return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
+        } finally {
+            RESPONSE_FUTURECACHE.invalidate(p2PMessage.getRequestId());
+        }
     }
-
 
 
 

@@ -2266,6 +2266,1108 @@ public final class Structure {
 
   }
 
+  public interface ProtoP2pMessageOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:ProtoP2pMessage)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * 32字节Solana公钥（Base58编码前的原始字节）
+     * </pre>
+     *
+     * <code>bytes sender_id = 1;</code>
+     * @return The senderId.
+     */
+    com.google.protobuf.ByteString getSenderId();
+
+    /**
+     * <pre>
+     * 16字节UUID V7原始字节
+     * </pre>
+     *
+     * <code>bytes message_id = 2;</code>
+     * @return The messageId.
+     */
+    com.google.protobuf.ByteString getMessageId();
+
+    /**
+     * <pre>
+     * 16字节UUID V7原始字节（全零=非请求/响应）
+     * </pre>
+     *
+     * <code>bytes request_id = 3;</code>
+     * @return The requestId.
+     */
+    com.google.protobuf.ByteString getRequestId();
+
+    /**
+     * <pre>
+     * 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+     * </pre>
+     *
+     * <code>uint32 req_res_flag = 4;</code>
+     * @return The reqResFlag.
+     */
+    int getReqResFlag();
+
+    /**
+     * <pre>
+     * 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+     * </pre>
+     *
+     * <code>uint32 type = 5;</code>
+     * @return The type.
+     */
+    int getType();
+
+    /**
+     * <pre>
+     * data字段长度（防御性存储）
+     * </pre>
+     *
+     * <code>uint32 length = 6;</code>
+     * @return The length.
+     */
+    int getLength();
+
+    /**
+     * <pre>
+     * 协议版本（short转uint32，避免符号问题）
+     * </pre>
+     *
+     * <code>uint32 version = 7;</code>
+     * @return The version.
+     */
+    int getVersion();
+
+    /**
+     * <pre>
+     * 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+     * </pre>
+     *
+     * <code>bytes data = 8;</code>
+     * @return The data.
+     */
+    com.google.protobuf.ByteString getData();
+  }
+  /**
+   * Protobuf type {@code ProtoP2pMessage}
+   */
+  public static final class ProtoP2pMessage extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:ProtoP2pMessage)
+      ProtoP2pMessageOrBuilder {
+  private static final long serialVersionUID = 0L;
+    static {
+      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+        /* major= */ 4,
+        /* minor= */ 31,
+        /* patch= */ 1,
+        /* suffix= */ "",
+        ProtoP2pMessage.class.getName());
+    }
+    // Use ProtoP2pMessage.newBuilder() to construct.
+    private ProtoP2pMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private ProtoP2pMessage() {
+      senderId_ = com.google.protobuf.ByteString.EMPTY;
+      messageId_ = com.google.protobuf.ByteString.EMPTY;
+      requestId_ = com.google.protobuf.ByteString.EMPTY;
+      data_ = com.google.protobuf.ByteString.EMPTY;
+    }
+
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return Structure.internal_static_ProtoP2pMessage_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return Structure.internal_static_ProtoP2pMessage_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              Structure.ProtoP2pMessage.class, Structure.ProtoP2pMessage.Builder.class);
+    }
+
+    public static final int SENDER_ID_FIELD_NUMBER = 1;
+    private com.google.protobuf.ByteString senderId_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 32字节Solana公钥（Base58编码前的原始字节）
+     * </pre>
+     *
+     * <code>bytes sender_id = 1;</code>
+     * @return The senderId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getSenderId() {
+      return senderId_;
+    }
+
+    public static final int MESSAGE_ID_FIELD_NUMBER = 2;
+    private com.google.protobuf.ByteString messageId_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 16字节UUID V7原始字节
+     * </pre>
+     *
+     * <code>bytes message_id = 2;</code>
+     * @return The messageId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getMessageId() {
+      return messageId_;
+    }
+
+    public static final int REQUEST_ID_FIELD_NUMBER = 3;
+    private com.google.protobuf.ByteString requestId_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 16字节UUID V7原始字节（全零=非请求/响应）
+     * </pre>
+     *
+     * <code>bytes request_id = 3;</code>
+     * @return The requestId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getRequestId() {
+      return requestId_;
+    }
+
+    public static final int REQ_RES_FLAG_FIELD_NUMBER = 4;
+    private int reqResFlag_ = 0;
+    /**
+     * <pre>
+     * 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+     * </pre>
+     *
+     * <code>uint32 req_res_flag = 4;</code>
+     * @return The reqResFlag.
+     */
+    @java.lang.Override
+    public int getReqResFlag() {
+      return reqResFlag_;
+    }
+
+    public static final int TYPE_FIELD_NUMBER = 5;
+    private int type_ = 0;
+    /**
+     * <pre>
+     * 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+     * </pre>
+     *
+     * <code>uint32 type = 5;</code>
+     * @return The type.
+     */
+    @java.lang.Override
+    public int getType() {
+      return type_;
+    }
+
+    public static final int LENGTH_FIELD_NUMBER = 6;
+    private int length_ = 0;
+    /**
+     * <pre>
+     * data字段长度（防御性存储）
+     * </pre>
+     *
+     * <code>uint32 length = 6;</code>
+     * @return The length.
+     */
+    @java.lang.Override
+    public int getLength() {
+      return length_;
+    }
+
+    public static final int VERSION_FIELD_NUMBER = 7;
+    private int version_ = 0;
+    /**
+     * <pre>
+     * 协议版本（short转uint32，避免符号问题）
+     * </pre>
+     *
+     * <code>uint32 version = 7;</code>
+     * @return The version.
+     */
+    @java.lang.Override
+    public int getVersion() {
+      return version_;
+    }
+
+    public static final int DATA_FIELD_NUMBER = 8;
+    private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+     * </pre>
+     *
+     * <code>bytes data = 8;</code>
+     * @return The data.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getData() {
+      return data_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (!senderId_.isEmpty()) {
+        output.writeBytes(1, senderId_);
+      }
+      if (!messageId_.isEmpty()) {
+        output.writeBytes(2, messageId_);
+      }
+      if (!requestId_.isEmpty()) {
+        output.writeBytes(3, requestId_);
+      }
+      if (reqResFlag_ != 0) {
+        output.writeUInt32(4, reqResFlag_);
+      }
+      if (type_ != 0) {
+        output.writeUInt32(5, type_);
+      }
+      if (length_ != 0) {
+        output.writeUInt32(6, length_);
+      }
+      if (version_ != 0) {
+        output.writeUInt32(7, version_);
+      }
+      if (!data_.isEmpty()) {
+        output.writeBytes(8, data_);
+      }
+      getUnknownFields().writeTo(output);
+    }
+
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (!senderId_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(1, senderId_);
+      }
+      if (!messageId_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(2, messageId_);
+      }
+      if (!requestId_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(3, requestId_);
+      }
+      if (reqResFlag_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(4, reqResFlag_);
+      }
+      if (type_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(5, type_);
+      }
+      if (length_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(6, length_);
+      }
+      if (version_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(7, version_);
+      }
+      if (!data_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(8, data_);
+      }
+      size += getUnknownFields().getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof Structure.ProtoP2pMessage)) {
+        return super.equals(obj);
+      }
+      Structure.ProtoP2pMessage other = (Structure.ProtoP2pMessage) obj;
+
+      if (!getSenderId()
+          .equals(other.getSenderId())) return false;
+      if (!getMessageId()
+          .equals(other.getMessageId())) return false;
+      if (!getRequestId()
+          .equals(other.getRequestId())) return false;
+      if (getReqResFlag()
+          != other.getReqResFlag()) return false;
+      if (getType()
+          != other.getType()) return false;
+      if (getLength()
+          != other.getLength()) return false;
+      if (getVersion()
+          != other.getVersion()) return false;
+      if (!getData()
+          .equals(other.getData())) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + SENDER_ID_FIELD_NUMBER;
+      hash = (53 * hash) + getSenderId().hashCode();
+      hash = (37 * hash) + MESSAGE_ID_FIELD_NUMBER;
+      hash = (53 * hash) + getMessageId().hashCode();
+      hash = (37 * hash) + REQUEST_ID_FIELD_NUMBER;
+      hash = (53 * hash) + getRequestId().hashCode();
+      hash = (37 * hash) + REQ_RES_FLAG_FIELD_NUMBER;
+      hash = (53 * hash) + getReqResFlag();
+      hash = (37 * hash) + TYPE_FIELD_NUMBER;
+      hash = (53 * hash) + getType();
+      hash = (37 * hash) + LENGTH_FIELD_NUMBER;
+      hash = (53 * hash) + getLength();
+      hash = (37 * hash) + VERSION_FIELD_NUMBER;
+      hash = (53 * hash) + getVersion();
+      hash = (37 * hash) + DATA_FIELD_NUMBER;
+      hash = (53 * hash) + getData().hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static Structure.ProtoP2pMessage parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public static Structure.ProtoP2pMessage parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+
+    public static Structure.ProtoP2pMessage parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static Structure.ProtoP2pMessage parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(Structure.ProtoP2pMessage prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code ProtoP2pMessage}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:ProtoP2pMessage)
+        Structure.ProtoP2pMessageOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return Structure.internal_static_ProtoP2pMessage_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return Structure.internal_static_ProtoP2pMessage_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                Structure.ProtoP2pMessage.class, Structure.ProtoP2pMessage.Builder.class);
+      }
+
+      // Construct using Structure.ProtoP2pMessage.newBuilder()
+      private Builder() {
+
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        bitField0_ = 0;
+        senderId_ = com.google.protobuf.ByteString.EMPTY;
+        messageId_ = com.google.protobuf.ByteString.EMPTY;
+        requestId_ = com.google.protobuf.ByteString.EMPTY;
+        reqResFlag_ = 0;
+        type_ = 0;
+        length_ = 0;
+        version_ = 0;
+        data_ = com.google.protobuf.ByteString.EMPTY;
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return Structure.internal_static_ProtoP2pMessage_descriptor;
+      }
+
+      @java.lang.Override
+      public Structure.ProtoP2pMessage getDefaultInstanceForType() {
+        return Structure.ProtoP2pMessage.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public Structure.ProtoP2pMessage build() {
+        Structure.ProtoP2pMessage result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public Structure.ProtoP2pMessage buildPartial() {
+        Structure.ProtoP2pMessage result = new Structure.ProtoP2pMessage(this);
+        if (bitField0_ != 0) { buildPartial0(result); }
+        onBuilt();
+        return result;
+      }
+
+      private void buildPartial0(Structure.ProtoP2pMessage result) {
+        int from_bitField0_ = bitField0_;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.senderId_ = senderId_;
+        }
+        if (((from_bitField0_ & 0x00000002) != 0)) {
+          result.messageId_ = messageId_;
+        }
+        if (((from_bitField0_ & 0x00000004) != 0)) {
+          result.requestId_ = requestId_;
+        }
+        if (((from_bitField0_ & 0x00000008) != 0)) {
+          result.reqResFlag_ = reqResFlag_;
+        }
+        if (((from_bitField0_ & 0x00000010) != 0)) {
+          result.type_ = type_;
+        }
+        if (((from_bitField0_ & 0x00000020) != 0)) {
+          result.length_ = length_;
+        }
+        if (((from_bitField0_ & 0x00000040) != 0)) {
+          result.version_ = version_;
+        }
+        if (((from_bitField0_ & 0x00000080) != 0)) {
+          result.data_ = data_;
+        }
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof Structure.ProtoP2pMessage) {
+          return mergeFrom((Structure.ProtoP2pMessage)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(Structure.ProtoP2pMessage other) {
+        if (other == Structure.ProtoP2pMessage.getDefaultInstance()) return this;
+        if (!other.getSenderId().isEmpty()) {
+          setSenderId(other.getSenderId());
+        }
+        if (!other.getMessageId().isEmpty()) {
+          setMessageId(other.getMessageId());
+        }
+        if (!other.getRequestId().isEmpty()) {
+          setRequestId(other.getRequestId());
+        }
+        if (other.getReqResFlag() != 0) {
+          setReqResFlag(other.getReqResFlag());
+        }
+        if (other.getType() != 0) {
+          setType(other.getType());
+        }
+        if (other.getLength() != 0) {
+          setLength(other.getLength());
+        }
+        if (other.getVersion() != 0) {
+          setVersion(other.getVersion());
+        }
+        if (!other.getData().isEmpty()) {
+          setData(other.getData());
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
+        try {
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                senderId_ = input.readBytes();
+                bitField0_ |= 0x00000001;
+                break;
+              } // case 10
+              case 18: {
+                messageId_ = input.readBytes();
+                bitField0_ |= 0x00000002;
+                break;
+              } // case 18
+              case 26: {
+                requestId_ = input.readBytes();
+                bitField0_ |= 0x00000004;
+                break;
+              } // case 26
+              case 32: {
+                reqResFlag_ = input.readUInt32();
+                bitField0_ |= 0x00000008;
+                break;
+              } // case 32
+              case 40: {
+                type_ = input.readUInt32();
+                bitField0_ |= 0x00000010;
+                break;
+              } // case 40
+              case 48: {
+                length_ = input.readUInt32();
+                bitField0_ |= 0x00000020;
+                break;
+              } // case 48
+              case 56: {
+                version_ = input.readUInt32();
+                bitField0_ |= 0x00000040;
+                break;
+              } // case 56
+              case 66: {
+                data_ = input.readBytes();
+                bitField0_ |= 0x00000080;
+                break;
+              } // case 66
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.unwrapIOException();
+        } finally {
+          onChanged();
+        } // finally
+        return this;
+      }
+      private int bitField0_;
+
+      private com.google.protobuf.ByteString senderId_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 32字节Solana公钥（Base58编码前的原始字节）
+       * </pre>
+       *
+       * <code>bytes sender_id = 1;</code>
+       * @return The senderId.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getSenderId() {
+        return senderId_;
+      }
+      /**
+       * <pre>
+       * 32字节Solana公钥（Base58编码前的原始字节）
+       * </pre>
+       *
+       * <code>bytes sender_id = 1;</code>
+       * @param value The senderId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setSenderId(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        senderId_ = value;
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 32字节Solana公钥（Base58编码前的原始字节）
+       * </pre>
+       *
+       * <code>bytes sender_id = 1;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearSenderId() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        senderId_ = getDefaultInstance().getSenderId();
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString messageId_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节
+       * </pre>
+       *
+       * <code>bytes message_id = 2;</code>
+       * @return The messageId.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getMessageId() {
+        return messageId_;
+      }
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节
+       * </pre>
+       *
+       * <code>bytes message_id = 2;</code>
+       * @param value The messageId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setMessageId(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        messageId_ = value;
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节
+       * </pre>
+       *
+       * <code>bytes message_id = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearMessageId() {
+        bitField0_ = (bitField0_ & ~0x00000002);
+        messageId_ = getDefaultInstance().getMessageId();
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString requestId_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节（全零=非请求/响应）
+       * </pre>
+       *
+       * <code>bytes request_id = 3;</code>
+       * @return The requestId.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getRequestId() {
+        return requestId_;
+      }
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节（全零=非请求/响应）
+       * </pre>
+       *
+       * <code>bytes request_id = 3;</code>
+       * @param value The requestId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setRequestId(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        requestId_ = value;
+        bitField0_ |= 0x00000004;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 16字节UUID V7原始字节（全零=非请求/响应）
+       * </pre>
+       *
+       * <code>bytes request_id = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearRequestId() {
+        bitField0_ = (bitField0_ & ~0x00000004);
+        requestId_ = getDefaultInstance().getRequestId();
+        onChanged();
+        return this;
+      }
+
+      private int reqResFlag_ ;
+      /**
+       * <pre>
+       * 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+       * </pre>
+       *
+       * <code>uint32 req_res_flag = 4;</code>
+       * @return The reqResFlag.
+       */
+      @java.lang.Override
+      public int getReqResFlag() {
+        return reqResFlag_;
+      }
+      /**
+       * <pre>
+       * 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+       * </pre>
+       *
+       * <code>uint32 req_res_flag = 4;</code>
+       * @param value The reqResFlag to set.
+       * @return This builder for chaining.
+       */
+      public Builder setReqResFlag(int value) {
+
+        reqResFlag_ = value;
+        bitField0_ |= 0x00000008;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+       * </pre>
+       *
+       * <code>uint32 req_res_flag = 4;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearReqResFlag() {
+        bitField0_ = (bitField0_ & ~0x00000008);
+        reqResFlag_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int type_ ;
+      /**
+       * <pre>
+       * 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+       * </pre>
+       *
+       * <code>uint32 type = 5;</code>
+       * @return The type.
+       */
+      @java.lang.Override
+      public int getType() {
+        return type_;
+      }
+      /**
+       * <pre>
+       * 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+       * </pre>
+       *
+       * <code>uint32 type = 5;</code>
+       * @param value The type to set.
+       * @return This builder for chaining.
+       */
+      public Builder setType(int value) {
+
+        type_ = value;
+        bitField0_ |= 0x00000010;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+       * </pre>
+       *
+       * <code>uint32 type = 5;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearType() {
+        bitField0_ = (bitField0_ & ~0x00000010);
+        type_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int length_ ;
+      /**
+       * <pre>
+       * data字段长度（防御性存储）
+       * </pre>
+       *
+       * <code>uint32 length = 6;</code>
+       * @return The length.
+       */
+      @java.lang.Override
+      public int getLength() {
+        return length_;
+      }
+      /**
+       * <pre>
+       * data字段长度（防御性存储）
+       * </pre>
+       *
+       * <code>uint32 length = 6;</code>
+       * @param value The length to set.
+       * @return This builder for chaining.
+       */
+      public Builder setLength(int value) {
+
+        length_ = value;
+        bitField0_ |= 0x00000020;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * data字段长度（防御性存储）
+       * </pre>
+       *
+       * <code>uint32 length = 6;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearLength() {
+        bitField0_ = (bitField0_ & ~0x00000020);
+        length_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int version_ ;
+      /**
+       * <pre>
+       * 协议版本（short转uint32，避免符号问题）
+       * </pre>
+       *
+       * <code>uint32 version = 7;</code>
+       * @return The version.
+       */
+      @java.lang.Override
+      public int getVersion() {
+        return version_;
+      }
+      /**
+       * <pre>
+       * 协议版本（short转uint32，避免符号问题）
+       * </pre>
+       *
+       * <code>uint32 version = 7;</code>
+       * @param value The version to set.
+       * @return This builder for chaining.
+       */
+      public Builder setVersion(int value) {
+
+        version_ = value;
+        bitField0_ |= 0x00000040;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 协议版本（short转uint32，避免符号问题）
+       * </pre>
+       *
+       * <code>uint32 version = 7;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearVersion() {
+        bitField0_ = (bitField0_ & ~0x00000040);
+        version_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+       * </pre>
+       *
+       * <code>bytes data = 8;</code>
+       * @return The data.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getData() {
+        return data_;
+      }
+      /**
+       * <pre>
+       * 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+       * </pre>
+       *
+       * <code>bytes data = 8;</code>
+       * @param value The data to set.
+       * @return This builder for chaining.
+       */
+      public Builder setData(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        data_ = value;
+        bitField0_ |= 0x00000080;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+       * </pre>
+       *
+       * <code>bytes data = 8;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearData() {
+        bitField0_ = (bitField0_ & ~0x00000080);
+        data_ = getDefaultInstance().getData();
+        onChanged();
+        return this;
+      }
+
+      // @@protoc_insertion_point(builder_scope:ProtoP2pMessage)
+    }
+
+    // @@protoc_insertion_point(class_scope:ProtoP2pMessage)
+    private static final Structure.ProtoP2pMessage DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new Structure.ProtoP2pMessage();
+    }
+
+    public static Structure.ProtoP2pMessage getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ProtoP2pMessage>
+        PARSER = new com.google.protobuf.AbstractParser<ProtoP2pMessage>() {
+      @java.lang.Override
+      public ProtoP2pMessage parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
+      }
+    };
+
+    public static com.google.protobuf.Parser<ProtoP2pMessage> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ProtoP2pMessage> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public Structure.ProtoP2pMessage getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface ProtoPeerOrBuilder extends
       // @@protoc_insertion_point(interface_extends:ProtoPeer)
       com.google.protobuf.MessageOrBuilder {
@@ -4119,6 +5221,11 @@ public final class Structure {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_ProtoBlock_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_ProtoP2pMessage_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_ProtoP2pMessage_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_ProtoPeer_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -4142,14 +5249,18 @@ public final class Structure {
       "nt\030\013 \001(\004\022\033\n\023fee_calculator_hash\030\014 \001(\014\022\027\n" +
       "\017tx_bloom_filter\030\r \001(\014\022\030\n\020log_bloom_filt" +
       "er\030\016 \001(\014\"/\n\nProtoBlock\022!\n\006header\030\001 \001(\0132\021" +
-      ".ProtoBlockHeader\"\214\002\n\tProtoPeer\022\n\n\002id\030\001 " +
-      "\001(\014\022\023\n\013private_key\030\002 \001(\014\022\017\n\007address\030\003 \001(" +
-      "\t\022\014\n\004port\030\004 \001(\005\022\021\n\tmultiaddr\030\005 \001(\t\022\030\n\020pr" +
-      "otocol_version\030\006 \001(\t\022\021\n\tnode_type\030\007 \001(\005\022" +
-      "\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slot\030\t \001(\004\022" +
-      "\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_amount\030\013 " +
-      "\001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n\tlast_se" +
-      "en\030\r \001(\004b\006proto3"
+      ".ProtoBlockHeader\"\237\001\n\017ProtoP2pMessage\022\021\n" +
+      "\tsender_id\030\001 \001(\014\022\022\n\nmessage_id\030\002 \001(\014\022\022\n\n" +
+      "request_id\030\003 \001(\014\022\024\n\014req_res_flag\030\004 \001(\r\022\014" +
+      "\n\004type\030\005 \001(\r\022\016\n\006length\030\006 \001(\r\022\017\n\007version\030" +
+      "\007 \001(\r\022\014\n\004data\030\010 \001(\014\"\214\002\n\tProtoPeer\022\n\n\002id\030" +
+      "\001 \001(\014\022\023\n\013private_key\030\002 \001(\014\022\017\n\007address\030\003 " +
+      "\001(\t\022\014\n\004port\030\004 \001(\005\022\021\n\tmultiaddr\030\005 \001(\t\022\030\n\020" +
+      "protocol_version\030\006 \001(\t\022\021\n\tnode_type\030\007 \001(" +
+      "\005\022\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slot\030\t \001(" +
+      "\004\022\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_amount\030" +
+      "\013 \001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n\tlast_" +
+      "seen\030\r \001(\004b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -4167,8 +5278,14 @@ public final class Structure {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ProtoBlock_descriptor,
         new java.lang.String[] { "Header", });
-    internal_static_ProtoPeer_descriptor =
+    internal_static_ProtoP2pMessage_descriptor =
       getDescriptor().getMessageTypes().get(2);
+    internal_static_ProtoP2pMessage_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_ProtoP2pMessage_descriptor,
+        new java.lang.String[] { "SenderId", "MessageId", "RequestId", "ReqResFlag", "Type", "Length", "Version", "Data", });
+    internal_static_ProtoPeer_descriptor =
+      getDescriptor().getMessageTypes().get(3);
     internal_static_ProtoPeer_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ProtoPeer_descriptor,

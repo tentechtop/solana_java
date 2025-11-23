@@ -1,22 +1,64 @@
 package com.bit.solana.p2p.impl;
 
+import com.bit.solana.database.DataBase;
+import com.bit.solana.database.DbConfig;
+import com.bit.solana.database.rocksDb.TableEnum;
+import com.bit.solana.p2p.peer.Peer;
 import com.github.benmanes.caffeine.cache.RemovalCause;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.lang.reflect.Field;
-import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.bitcoinj.core.Base58;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 
 
 @Slf4j
 @Component
-public class Common {
+public class CommonConfig {
+    //节点信息
+    @Getter
+    private Peer self;//本地节点信息
+    @Autowired
+    private DbConfig config;
+
+
+    @PostConstruct
+    public void init() throws Exception {
+        DataBase dataBase = config.getDataBase();
+        byte[] bytes = dataBase.get(TableEnum.PEER, PEER_KEY);
+        if (bytes == null) {
+            self = new Peer();
+            self.setAddress("127.0.0.1");
+            self.setPort(8333);
+            byte[][] aliceKeys = generateCurve25519KeyPair();
+            byte[] alicePrivateKey = aliceKeys[0];
+            byte[] alicePublicKey = aliceKeys[1];
+            self.setId(alicePublicKey);
+            self.setPrivateKey(alicePrivateKey);
+
+            //保存到本地数据库
+            byte[] serialize = self.serialize();
+            dataBase.insert(TableEnum.PEER, PEER_KEY, serialize);
+        } else {
+            //反序列化
+            self = Peer.deserialize(bytes);
+        }
+        byte[] selfNodeId = self.getId();
+        log.info("本地节点初始化完成，ID: {}, 监听端口: {}", Base58.encode(selfNodeId), self.getPort());
+        log.info("Base58.encode(selfNodeId){}",Base58.encode(selfNodeId).length());
+    }
+
+
     //连接保活时间300秒
     public static final long CONNECT_KEEP_ALIVE_SECONDS = 300;
     //临时流超时时间

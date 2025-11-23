@@ -22,8 +22,20 @@ message ProtoBlockHeader {
 message ProtoBlock {
     ProtoBlockHeader header = 1;
 
-
 }
+
+message ProtoP2pMessage {
+  bytes sender_id = 1;          // 32字节Solana公钥（Base58编码前的原始字节）
+  bytes message_id = 2;         // 16字节UUID V7原始字节
+  bytes request_id = 3;         // 16字节UUID V7原始字节（全零=非请求/响应）
+  uint32 req_res_flag = 4;      // 请求/响应标识：0=请求，1=响应（protobuf无byte，用uint32兼容）
+  uint32 type = 5;              // 消息类型（PING=1, PONG=2, TRANSACTION=3等）
+  uint32 length = 6;            // data字段长度（防御性存储）
+  uint32 version = 7;           // 协议版本（short转uint32，避免符号问题）
+  bytes data = 8;               // 业务数据（嵌套Protobuf的序列化字节，如ProtoBlock/ProtoPeer）
+}
+
+
 
 message ProtoPeer {
   // 核心标识

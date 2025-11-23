@@ -1,10 +1,15 @@
 package com.bit.solana.p2p.protocol;
 
+
+import com.bit.solana.proto.Structure;
 import com.bit.solana.util.ByteUtils;
+import com.bit.solana.util.UUIDv7Generator;
+import com.google.protobuf.ByteString;
 import lombok.Data;
 import lombok.ToString;
 import org.bitcoinj.core.Base58;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -238,8 +243,207 @@ public class P2PMessage {
         return true;
     }
 
+// ===================== 新增：请求/响应消息的核心约束 =====================
+    /**
+     * 标记为请求消息（自动设置reqResFlag=0 + requestId=当前messageId）
+     * 前提：messageId必须已设置（非空且16字节）
+     */
+    public void markAsRequest() {
+        if (!isValidMessageId()) {
+            throw new IllegalStateException("请求消息必须先设置合法的messageId（16字节UUID V7）");
+        }
+        this.reqResFlag = REQ_FLAG;
+        this.requestId = this.messageId.clone(); // 深拷贝，避免后续修改messageId影响requestId
+    }
+
+    /**
+     * 标记为响应消息（自动设置reqResFlag=1 + requestId=请求的messageId）
+     * @param requestMessageId 对应的请求消息ID（16字节UUID V7）
+     */
+    public void markAsResponse(byte[] requestMessageId) {
+        if (requestMessageId == null || requestMessageId.length != UUID_V7_LENGTH) {
+            throw new IllegalArgumentException("响应消息的requestId必须是16字节的请求messageId");
+        }
+        this.reqResFlag = RES_FLAG;
+        this.requestId = requestMessageId.clone();
+    }
+
+    /**
+     * 标记为普通消息（非请求/响应，自动设置reqResFlag=0 + requestId=全零数组）
+     */
+    public void markAsNormalMessage() {
+        this.reqResFlag = REQ_FLAG; // 普通消息默认reqResFlag=0（无意义）
+        this.requestId = new byte[UUID_V7_LENGTH]; // 全零数组
+    }
+
+    /**
+     * 校验请求/响应消息的requestId规则是否合法
+     */
+    public boolean isReqResIdValid() {
+        if (!isReqRes()) {
+            return true; // 非请求/响应消息，无需校验
+        }
+        // 请求消息：requestId必须等于自身messageId
+        if (isRequest()) {
+            return Arrays.equals(this.requestId, this.messageId);
+        }
+        // 响应消息：requestId必须是16字节非全零（无需等于自身messageId）
+        return this.requestId != null && this.requestId.length == UUID_V7_LENGTH && !isAllZero(this.requestId);
+    }
+
+
+    // ===================== 新增：静态构建方法（简化外部调用） =====================
+    /**
+     * 构建请求消息（封装核心逻辑，无需手动设置requestId/reqResFlag）
+     * @param senderId 发送者Solana公钥（32字节）
+     * @param protocolEnum 消息类型（如PING=1） 协议类型
+     * @param data 业务数据（protobuf序列化字节数组）
+     * @return 标准化的请求消息
+     */
+    public static P2PMessage newRequestMessage(byte[] senderId, ProtocolEnum protocolEnum, byte[] data) {
+        P2PMessage request = new P2PMessage();
+        byte[] msgId = UUIDv7Generator.generateBytesId();
+        byte[] reqId = UUIDv7Generator.generateBytesId();
+        // 设置核心字段（自动校验）
+        request.setSenderId(senderId);
+        request.setMessageId(msgId);
+        request.setRequestId(reqId);
+        request.setType(protocolEnum.getCode());// 消息类型
+        request.setData(data);
+        // 自动标记为请求消息（绑定requestId=messageId + reqResFlag=0）
+        request.markAsRequest();
+        return request;
+    }
+
+    /**
+     * 构建响应消息（关联原请求ID，自动设置reqResFlag=1）
+     * @param senderId 响应发送者Solana公钥（32字节）
+     * @param protocolEnum 响应消息类型枚举（如PONG=2）
+     * @param reqId 原请求消息（用于关联requestId）
+     * @param data 响应业务数据（protobuf序列化字节数组）
+     * @return 标准化的响应消息
+     */
+    public static P2PMessage newResponseMessage(byte[] senderId, ProtocolEnum protocolEnum,
+                                                byte[] reqId, byte[] data) {
+        // 参数前置校验
+        if (protocolEnum == null) {
+            throw new IllegalArgumentException("消息类型枚举不能为空");
+        }
+        P2PMessage response = new P2PMessage();
+        // 生成响应自身的唯一消息ID（UUID V7）
+        byte[] respMsgId = UUIDv7Generator.generateBytesId();
+        // 设置核心字段
+        response.setSenderId(senderId);
+        response.setMessageId(respMsgId);//保障唯一性
+        response.setRequestId(reqId);//用于配对请求
+        response.setType(protocolEnum.getCode());
+        response.setData(data);
+        // 自动标记为响应消息（关联原请求的messageId作为requestId）
+        response.markAsResponse(reqId);
+        return response;
+    }
 
 
 
+    /**
+     * 构建普通消息（非请求/响应，自动设置requestId为全零数组）
+     * @param senderId 发送者Solana公钥（32字节）
+     * @param protocolEnum 消息类型枚举（如TRANSACTION=3）
+     * @param data 业务数据（protobuf序列化字节数组）
+     * @return 标准化的普通消息
+     */
+    public static P2PMessage newNormalMessage(byte[] senderId, ProtocolEnum protocolEnum, byte[] data) {
+        // 参数前置校验
+        if (protocolEnum == null) {
+            throw new IllegalArgumentException("消息类型枚举不能为空");
+        }
+        P2PMessage normalMsg = new P2PMessage();
+        // 生成唯一消息ID（UUID V7）
+        byte[] msgId = UUIDv7Generator.generateBytesId();
+        // 设置核心字段
+        normalMsg.setSenderId(senderId);
+        normalMsg.setMessageId(msgId);
+        normalMsg.setType(protocolEnum.getCode());
+        normalMsg.setData(data);
+        // 自动标记为普通消息（requestId全零 + reqResFlag=0）
+        normalMsg.markAsNormalMessage();
+        return normalMsg;
+    }
+
+
+    // ===================== 序列化/反序列化核心方法 =====================
+
+    /**
+     * 序列化当前对象为字节数组（通过Protobuf）
+     */
+    public byte[] serialize() throws IOException {
+        return toProto().toByteArray();
+    }
+
+    /**
+     * 从字节数组反序列化为P2PMessage（通过Protobuf）
+     */
+    public static P2PMessage deserialize(byte[] data) throws IOException {
+        Structure.ProtoP2pMessage proto = Structure.ProtoP2pMessage.parseFrom(data);
+        return fromProto(proto);
+    }
+
+    /**
+     * 转换为Protobuf对象
+     */
+    public Structure.ProtoP2pMessage toProto() {
+        Structure.ProtoP2pMessage.Builder builder = Structure.ProtoP2pMessage.newBuilder();
+
+        // 处理字节类型字段
+        if (senderId != null) {
+            builder.setSenderId(ByteString.copyFrom(senderId));
+        }
+        if (messageId != null) {
+            builder.setMessageId(ByteString.copyFrom(messageId));
+        }
+        if (requestId != null) {
+            builder.setRequestId(ByteString.copyFrom(requestId));
+        }
+        if (data != null) {
+            builder.setData(ByteString.copyFrom(data));
+        }
+
+        // 处理数值类型字段（注意protobuf中uint32对应Java的int，reqResFlag转uint32）
+        builder.setReqResFlag((int) reqResFlag) // byte转uint32（兼容protobuf无byte类型）
+                .setType(type)
+                .setLength(length)
+                .setVersion((int) version); // short转uint32（避免符号问题）
+
+        return builder.build();
+    }
+
+    /**
+     * 从Protobuf对象转换为P2PMessage
+     */
+    public static P2PMessage fromProto(Structure.ProtoP2pMessage proto) {
+        P2PMessage message = new P2PMessage();
+
+        // 处理字节类型字段
+        if (!proto.getSenderId().isEmpty()) {
+            message.setSenderId(proto.getSenderId().toByteArray());
+        }
+        if (!proto.getMessageId().isEmpty()) {
+            message.setMessageId(proto.getMessageId().toByteArray());
+        }
+        if (!proto.getRequestId().isEmpty()) {
+            message.setRequestId(proto.getRequestId().toByteArray());
+        }
+        if (!proto.getData().isEmpty()) {
+            message.setData(proto.getData().toByteArray());
+        }
+
+        // 处理数值类型字段（还原类型，注意范围校验）
+        message.setReqResFlag((byte) proto.getReqResFlag()); // uint32转byte（仅0/1，安全）
+        message.setType(proto.getType());
+        message.setLength(proto.getLength());
+        message.setVersion((short) proto.getVersion()); // uint32转short（已校验范围）
+
+        return message;
+    }
 
 }

@@ -1,29 +1,29 @@
 package com.bit.solana.p2p.protocol;
 
+import com.bit.solana.p2p.protocol.impl.BlockProtocolHandler;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Map;
 
 @Slf4j
 public class ProtocolDemo {
 
     public static void main(String[] args) {
+
+        BlockProtocolHandler blockProtocolHandler = new BlockProtocolHandler();
+
         // 1. 获取注册表单例
         ProtocolRegistry protocolRegistry = ProtocolRegistry.getInstance();
 
         // 2. 注册有返回值的协议（CHAIN_V1）
-        protocolRegistry.register(ProtocolEnum.CHAIN_V1, requestParams -> {
-            log.info("处理链查询请求，参数：{}", requestParams);
-            // 模拟反序列化BlockHeader
-            BlockHeader deserialize = BlockHeader.deserialize(requestParams);
-            deserialize.setSlot(123);
-            // 返回序列化结果（有返回值）
-            return deserialize.serialize();
-        });
+        protocolRegistry.registerResultHandler(ProtocolEnum.CHAIN_V1,  blockProtocolHandler);
 
         // 3. 注册无返回值的协议（BLOCK_V1）
-        protocolRegistry.register(ProtocolEnum.BLOCK_V1, requestParams -> {
+        protocolRegistry.registerResultHandler(ProtocolEnum.BLOCK_V1, requestParams -> {
             log.info("处理区块请求，无返回值，参数：{}", requestParams);
             // 无返回值：直接返回null（Lambda中可省略return null，默认返回null）
-            return null;
+            //即使未查询到消息 也应该返回一个标准的返回结果
+            return new byte[]{};
         });
 
         // 4. 调用有返回值的协议
@@ -39,6 +39,11 @@ public class ProtocolDemo {
         // 6. 也可以通过code调用（适配P2PMessage的type字段）
         byte[] resultByCode = protocolRegistry.handleByCode(1, chainRequest);
         log.info("通过code调用CHAIN_V1的结果：{}", resultByCode);
+
+        Map<ProtocolEnum, ProtocolHandler> handlerMap = protocolRegistry.getHandlerMap();
+        ProtocolHandler protocolHandler = handlerMap.get(ProtocolEnum.CHAIN_V1);
+        byte[] handle = protocolHandler.handle(new byte[0]);
+        log.info("BlockHeader反序列化结果：{}", handle);
     }
 
     // 模拟BlockHeader类（贴合你的代码）

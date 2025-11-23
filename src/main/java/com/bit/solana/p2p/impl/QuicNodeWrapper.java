@@ -114,7 +114,7 @@ public class QuicNodeWrapper {
         return newHeartbeatStream;
     }
 
-    public QuicStreamChannel createTempStream(String tempKey) throws InterruptedException, ExecutionException {
+    public QuicStreamChannel createTempStream() throws InterruptedException, ExecutionException {
         if (quicChannel == null || !quicChannel.isActive()) {
             log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
             return null;
