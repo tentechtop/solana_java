@@ -4,6 +4,7 @@ import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -117,15 +119,48 @@ public class PeerClient {
         quicNodeWrapper.setActive(true);
         quicNodeWrapper.setLastSeen(System.currentTimeMillis());
         PEER_CONNECT_CACHE.put(nodeId, quicNodeWrapper);
-        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);
+        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
         return quicNodeWrapper;
+    }
+
+
+    //发送任意数据
+
+    public void sendData(byte[] nodeId, byte[] data) {
+        Objects.requireNonNull(nodeId, "节点ID不能为空");
+        Objects.requireNonNull(data, "发送数据不能为空");
+
+    }
+
+
+    public byte[] sendData(byte[] nodeId, byte[] request, long timeout) throws Exception {
+
+        return null;
+    }
+
+
+    //发送协议数据 根据协议判断有无返回值 有就返回 无就返回null
+    public byte[] sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request, long timeout) throws Exception {
+
+        return null;
     }
 
 
 
 
+    public void disconnect(byte[] nodeId) {
 
 
+    }
+
+    /**
+     * 重连
+     * @param nodeId
+     */
+    private void reconnect(byte[] nodeId) {
+
+
+    }
 
 
     @PreDestroy
