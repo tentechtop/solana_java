@@ -1,7 +1,7 @@
 package com.bit.solana.database.rocksDb;
 
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.DataBase;
-import com.bit.solana.database.DbConfig;
 import com.bit.solana.database.KeyValueHandler;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -46,7 +46,7 @@ public class RocksDb implements DataBase {
     private String dbPath;
 
     @Override
-    public boolean createDatabase(DbConfig config) {
+    public boolean createDatabase(SystemConfig config) {
         String path = config.getPath();
         if (path == null) {
             return false;

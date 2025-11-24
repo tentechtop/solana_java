@@ -1,5 +1,6 @@
 package com.bit.solana.database;
 
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.rocksDb.PageResult;
 import com.bit.solana.database.rocksDb.RocksDb;
 import com.bit.solana.database.rocksDb.TableEnum;
@@ -18,7 +19,7 @@ public interface DataBase {
      * @param config
      * @return
      */
-    boolean createDatabase(DbConfig config);
+    boolean createDatabase(SystemConfig config);
 
     /**
      * 关闭数据库

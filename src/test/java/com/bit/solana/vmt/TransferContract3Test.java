@@ -1,13 +1,11 @@
 package com.bit.solana.vmt;
 
-import com.bit.solana.database.DbConfig;
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.rocksDb.RocksDb;
-import com.bit.solana.database.rocksDb.TableEnum;
 import com.bit.solana.vm.SolanaVm;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 
 import static com.bit.solana.util.ClassUtil.readAndCompressClassFile;
 
@@ -15,7 +13,7 @@ import static com.bit.solana.util.ClassUtil.readAndCompressClassFile;
 public class TransferContract3Test {
     public static void main(String[] args) throws Exception {
         RocksDb rocksDb = new RocksDb();
-        DbConfig dbConfig = new DbConfig();
+        SystemConfig dbConfig = new SystemConfig();
         dbConfig.setPath("/solana/db");
         rocksDb.createDatabase(dbConfig);
 

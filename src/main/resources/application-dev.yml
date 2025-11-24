@@ -1,10 +1,10 @@
 #http-json
 server:
-  port: 18333
+  port: 18884
 
 system:
   #数据存储路径 按照网络前缀分类
-  path: "/solana/db"
+  path: "/solana/devdb"
   #数据库缓存大小 单位MB 基于LRU策略实现的一级缓存
   db-cache-size: 500
   #节点与节点之间的通信 TCP通信 支持P2P网络
@@ -12,6 +12,8 @@ system:
   web-socket: 28334
   #用户在启动时可以配置公钥 对于隐私接口必须签名才能访问 也就是节点所有者
   server-pubkey:
+    - ''
+  bootstrap:
     - ''
 
 logging:

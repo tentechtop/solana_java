@@ -1,5 +1,6 @@
-package com.bit.solana.database;
+package com.bit.solana.config;
 
+import com.bit.solana.database.DataBase;
 import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(0)
 @ConfigurationProperties(prefix = "system")
-public class DbConfig {
+public class SystemConfig {
     private String path;//保存路径
     private String username;
     private String password;

@@ -129,7 +129,7 @@ public class POHEngineImpl implements POHEngine {
     private long slotStartTimeNs;
 
 
-    @PostConstruct
+    //@PostConstruct
     public void init() {
         try {
             Arrays.fill(nodeId, (byte) 0x01);

@@ -1,14 +1,12 @@
 package com.bit.solana.p2p.impl;
 
-import com.bit.solana.database.DataBase;
-import com.bit.solana.database.DbConfig;
-import com.bit.solana.database.rocksDb.TableEnum;
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
-import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
+import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -31,8 +29,6 @@ import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.p2p.impl.CommonConfig.CONNECT_KEEP_ALIVE_SECONDS;
-import static com.bit.solana.p2p.impl.CommonConfig.PEER_KEY;
-import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 
 @Slf4j
 @Data
@@ -41,7 +37,7 @@ public class PeerServiceImpl implements PeerService {
     @Autowired
     private Settings settings;
     @Autowired
-    private DbConfig config;
+    private SystemConfig config;
     @Autowired
     private CommonConfig commonConfig;
     @Autowired
@@ -66,6 +62,24 @@ public class PeerServiceImpl implements PeerService {
     public void init() throws IOException, CertificateException {
         // 启动QUIC服务器
         startQuicServer();
+
+        //连接引导节点 连接成功发起握手  A发起与X的连接 网络底层连接成功 发起握手 合适就记录 不合适就互相删除 不再打扰
+
+        //连接成功后 握手时能知道对方是内网节点还是外网节点 握手信息会携带自己的本地IP和端口 和netty的IP和端口一对比即可知道
+
+        //A连接X成功后 通过X发现B(且记录B来自与X) A知道B是内网节点 此时A连接B时 同时向X发送一转发消息 X转发给B B收到后也连接A A收到B的回复 此时打洞成功
+
+        //若A2秒内未收到则降级为中继 A标记B 为需要中继才能通信  A每次发送B的消息都通过X B收到后知道这条消息来自于A且通过X转发 B回复A 也通过X转发
+
+
+        MultiAddress address = MultiAddress.build(
+                "ip4",
+                "127.0.0.1",
+                MultiAddress.Protocol.QUIC,
+                commonConfig.getSelf().getPort(),
+                Base58.encode(commonConfig.getSelf().getId())
+        );
+        System.out.println("地址：" + address.toRawAddress());
     }
 
 

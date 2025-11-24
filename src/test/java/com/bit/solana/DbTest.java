@@ -1,7 +1,7 @@
 package com.bit.solana;
 
 import com.bit.solana.database.DataBase;
-import com.bit.solana.database.DbConfig;
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.KeyValueHandler;
 import com.bit.solana.database.rocksDb.TableEnum;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import java.util.Arrays;
 public class DbTest {
 
     @Autowired
-    private DbConfig dbConfig; // 变量名规范：小写开头
+    private SystemConfig dbConfig; // 变量名规范：小写开头
 
     // 测试数据常量（避免硬编码重复）
     private static final String TEST_KEY_1 = "key1";

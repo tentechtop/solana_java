@@ -1,5 +1,7 @@
 package com.bit.solana.api.mock;
 
+import com.bit.solana.p2p.impl.PeerClient;
+import com.bit.solana.p2p.impl.QuicNodeWrapper;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/mockSend")
 public class SendApi {
 
+    @Autowired
+    private PeerClient peerClient;
 
 
     //发送数据给指定的节点
@@ -37,5 +41,16 @@ public class SendApi {
         return "";
     }
 
+
+    /**
+     * 连接节点
+     */
+    @GetMapping("/connect")
+    public String connect(String url) throws Exception {
+        //节点回复反转换后的数据
+        QuicNodeWrapper connect = peerClient.connect(url);
+        log.info("节点连接成功：{}", connect.getInetSocketAddress());
+        return "";
+    }
 
 }

@@ -1,7 +1,7 @@
 package com.bit.solana.api;
 
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.DataBase;
-import com.bit.solana.database.DbConfig;
 import com.bit.solana.structure.dto.SmartContractDTO;
 import com.bit.solana.vm.SolanaVm;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +19,7 @@ import java.util.Map;
 public class SmartContractApi {
 
     @Autowired
-    private DbConfig config;
+    private SystemConfig config;
 
 
     @PostMapping("/test")

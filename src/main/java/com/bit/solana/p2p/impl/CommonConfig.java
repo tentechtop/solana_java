@@ -1,7 +1,7 @@
 package com.bit.solana.p2p.impl;
 
+import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.DataBase;
-import com.bit.solana.database.DbConfig;
 import com.bit.solana.database.rocksDb.TableEnum;
 import com.bit.solana.p2p.peer.Peer;
 import com.github.benmanes.caffeine.cache.RemovalCause;
@@ -29,7 +29,7 @@ public class CommonConfig {
     @Getter
     private Peer self;//本地节点信息
     @Autowired
-    private DbConfig config;
+    private SystemConfig config;
 
 
     @PostConstruct
@@ -94,12 +94,11 @@ public class CommonConfig {
     /**
      * 节点连接缓存 节点ID -> 节点的连接
      */
-    public static Cache<byte[], QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
+    public static Cache<String, QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
-            .recordStats()
             // 改为同步执行（避免调度器延迟），或限制监听器执行超时
-            .removalListener((byte[] nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
+            .removalListener((String nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
                 if (node != null) {
                     log.info("Node {} removed from cache (cause: {}), closing resources", nodeId, cause);
                     // 同步关闭，设置超时
@@ -112,6 +111,16 @@ public class CommonConfig {
                     }
                 }
             })
+            .recordStats()
+            .build();
+
+
+
+    //已经连接且握手  节点心跳15秒一次 60秒过期
+    public static Cache<String, Peer> ONLINE_PEER_CACHE  = Caffeine.newBuilder()
+            .maximumSize(5120)//256位 * 20每个桶的大小
+            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS)
+            .recordStats()
             .build();
 
     /**
@@ -119,7 +128,7 @@ public class CommonConfig {
      * Key：请求ID，Value：响应Future
      * 16字节的UUIDV7 - > CompletableFuture<byte[]>
      */
-    public static Cache<byte[], CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+    public static Cache<String, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(30, TimeUnit.SECONDS)
             .weakValues() // 弱引用存储Future，GC时可回收
@@ -131,7 +140,7 @@ public class CommonConfig {
      * 重连成功后重置 / 清理计数器
      * 节点ID - >节点的重连计数
      */
-    public final Cache<byte[], AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
+    public final Cache<String, AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
             .build();
@@ -140,7 +149,7 @@ public class CommonConfig {
     /**
      * UUIDV7 16字节ID - > 缓存时间 代表消息已经处理
      */
-    public Cache<byte[], Long> MESSAGE_CACHE = Caffeine.newBuilder()
+    public Cache<String, Long> MESSAGE_CACHE = Caffeine.newBuilder()
             .maximumSize(10000)  // 最大缓存
             .expireAfterWrite(10, TimeUnit.MINUTES)  // 10分钟过期
             .build();// 缓存未命中时从数据源加载
