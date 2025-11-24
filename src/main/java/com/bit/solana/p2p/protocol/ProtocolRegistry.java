@@ -1,8 +1,6 @@
 package com.bit.solana.p2p.protocol;
 
-import com.bit.solana.p2p.impl.CommonConfig;
-import com.bit.solana.util.UUIDv7Generator;
-import jakarta.annotation.PostConstruct;
+import com.bit.solana.config.CommonConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,9 +9,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static com.bit.solana.p2p.protocol.P2PMessage.newNormalMessage;
-import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
 
 /**
  * 协议注册表：核心管理枚举与处理器的绑定关系
@@ -84,7 +79,7 @@ public class ProtocolRegistry {
      * @param requestParams 请求参数（字节数组）
      * @return 处理结果（有返回值则返回字节数组，无返回值返回null）
      */
-    public byte[] handle(ProtocolEnum protocolEnum, P2PMessage requestParams) throws IOException {
+    public byte[] handle(ProtocolEnum protocolEnum, P2PMessage requestParams) throws Exception {
         ProtocolHandler handler = handlerMap.get(protocolEnum);
         if (handler == null) {
             throw new IllegalStateException("未找到协议处理器：" + protocolEnum.getProtocol());
@@ -95,13 +90,13 @@ public class ProtocolRegistry {
 
     // ========== 静态工具方法 ==========
     /** 根据code执行处理（适配P2PMessage的type字段） */
-    public byte[] handleByCode(int code, P2PMessage requestParams) throws IOException {
+    public byte[] handleByCode(int code, P2PMessage requestParams) throws Exception {
         ProtocolEnum protocolEnum = ProtocolEnum.fromCode(code);
         return handle(protocolEnum, requestParams);
     }
 
     /** 根据协议字符串执行处理 */
-    public byte[] handleByProtocol(String protocol, P2PMessage requestParams) throws IOException {
+    public byte[] handleByProtocol(String protocol, P2PMessage requestParams) throws Exception {
         ProtocolEnum protocolEnum = ProtocolEnum.fromProtocol(protocol);
         return handle(protocolEnum, requestParams);
     }

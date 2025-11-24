@@ -170,6 +170,7 @@ public final class Structure {
   }
   /**
    * <pre>
+   * cd F:&#92;workSpace2026&#92;blockchain&#92;solana_java&#92;src&#92;main&#92;java&#92;com&#92;bit&#92;solana&#92;proto  protoc --proto_path=. --java_out=. structure.proto
    * protoc --proto_path=. --java_out=. structure.proto
    * </pre>
    *
@@ -735,6 +736,7 @@ public final class Structure {
     }
     /**
      * <pre>
+     * cd F:&#92;workSpace2026&#92;blockchain&#92;solana_java&#92;src&#92;main&#92;java&#92;com&#92;bit&#92;solana&#92;proto  protoc --proto_path=. --java_out=. structure.proto
      * protoc --proto_path=. --java_out=. structure.proto
      * </pre>
      *
@@ -5293,6 +5295,16 @@ public final class Structure {
      * @return The signature.
      */
     com.google.protobuf.ByteString getSignature();
+
+    /**
+     * <pre>
+     * 共享密钥对
+     * </pre>
+     *
+     * <code>bytes shared_secret = 7;</code>
+     * @return The sharedSecret.
+     */
+    com.google.protobuf.ByteString getSharedSecret();
   }
   /**
    * <pre>
@@ -5326,6 +5338,7 @@ public final class Structure {
       nonceId_ = com.google.protobuf.ByteString.EMPTY;
       nodeVersion_ = "";
       signature_ = com.google.protobuf.ByteString.EMPTY;
+      sharedSecret_ = com.google.protobuf.ByteString.EMPTY;
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -5495,6 +5508,21 @@ public final class Structure {
       return signature_;
     }
 
+    public static final int SHARED_SECRET_FIELD_NUMBER = 7;
+    private com.google.protobuf.ByteString sharedSecret_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 共享密钥对
+     * </pre>
+     *
+     * <code>bytes shared_secret = 7;</code>
+     * @return The sharedSecret.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getSharedSecret() {
+      return sharedSecret_;
+    }
+
     private byte memoizedIsInitialized = -1;
     @java.lang.Override
     public final boolean isInitialized() {
@@ -5527,6 +5555,9 @@ public final class Structure {
       if (!signature_.isEmpty()) {
         output.writeBytes(6, signature_);
       }
+      if (!sharedSecret_.isEmpty()) {
+        output.writeBytes(7, sharedSecret_);
+      }
       getUnknownFields().writeTo(output);
     }
 
@@ -5558,6 +5589,10 @@ public final class Structure {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(6, signature_);
       }
+      if (!sharedSecret_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(7, sharedSecret_);
+      }
       size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
@@ -5585,6 +5620,8 @@ public final class Structure {
           .equals(other.getNodeVersion())) return false;
       if (!getSignature()
           .equals(other.getSignature())) return false;
+      if (!getSharedSecret()
+          .equals(other.getSharedSecret())) return false;
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -5608,6 +5645,8 @@ public final class Structure {
       hash = (53 * hash) + getNodeVersion().hashCode();
       hash = (37 * hash) + SIGNATURE_FIELD_NUMBER;
       hash = (53 * hash) + getSignature().hashCode();
+      hash = (37 * hash) + SHARED_SECRET_FIELD_NUMBER;
+      hash = (53 * hash) + getSharedSecret().hashCode();
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -5749,6 +5788,7 @@ public final class Structure {
         nonceId_ = com.google.protobuf.ByteString.EMPTY;
         nodeVersion_ = "";
         signature_ = com.google.protobuf.ByteString.EMPTY;
+        sharedSecret_ = com.google.protobuf.ByteString.EMPTY;
         return this;
       }
 
@@ -5800,6 +5840,9 @@ public final class Structure {
         if (((from_bitField0_ & 0x00000020) != 0)) {
           result.signature_ = signature_;
         }
+        if (((from_bitField0_ & 0x00000040) != 0)) {
+          result.sharedSecret_ = sharedSecret_;
+        }
       }
 
       @java.lang.Override
@@ -5835,6 +5878,9 @@ public final class Structure {
         }
         if (!other.getSignature().isEmpty()) {
           setSignature(other.getSignature());
+        }
+        if (!other.getSharedSecret().isEmpty()) {
+          setSharedSecret(other.getSharedSecret());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
@@ -5892,6 +5938,11 @@ public final class Structure {
                 bitField0_ |= 0x00000020;
                 break;
               } // case 50
+              case 58: {
+                sharedSecret_ = input.readBytes();
+                bitField0_ |= 0x00000040;
+                break;
+              } // case 58
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -6269,6 +6320,50 @@ public final class Structure {
         return this;
       }
 
+      private com.google.protobuf.ByteString sharedSecret_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 共享密钥对
+       * </pre>
+       *
+       * <code>bytes shared_secret = 7;</code>
+       * @return The sharedSecret.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getSharedSecret() {
+        return sharedSecret_;
+      }
+      /**
+       * <pre>
+       * 共享密钥对
+       * </pre>
+       *
+       * <code>bytes shared_secret = 7;</code>
+       * @param value The sharedSecret to set.
+       * @return This builder for chaining.
+       */
+      public Builder setSharedSecret(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        sharedSecret_ = value;
+        bitField0_ |= 0x00000040;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 共享密钥对
+       * </pre>
+       *
+       * <code>bytes shared_secret = 7;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearSharedSecret() {
+        bitField0_ = (bitField0_ & ~0x00000040);
+        sharedSecret_ = getDefaultInstance().getSharedSecret();
+        onChanged();
+        return this;
+      }
+
       // @@protoc_insertion_point(builder_scope:ProtoNetworkHandshake)
     }
 
@@ -6375,11 +6470,11 @@ public final class Structure {
       "\005\022\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slot\030\t \001(" +
       "\004\022\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_amount\030" +
       "\013 \001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n\tlast_" +
-      "seen\030\r \001(\004\"\221\001\n\025ProtoNetworkHandshake\022\025\n\r" +
+      "seen\030\r \001(\004\"\250\001\n\025ProtoNetworkHandshake\022\025\n\r" +
       "network_magic\030\001 \001(\014\022\025\n\rhardware_info\030\002 \001" +
       "(\t\022\017\n\007node_id\030\003 \001(\014\022\020\n\010nonce_id\030\004 \001(\014\022\024\n" +
-      "\014node_version\030\005 \001(\t\022\021\n\tsignature\030\006 \001(\014b\006" +
-      "proto3"
+      "\014node_version\030\005 \001(\t\022\021\n\tsignature\030\006 \001(\014\022\025" +
+      "\n\rshared_secret\030\007 \001(\014b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -6414,7 +6509,7 @@ public final class Structure {
     internal_static_ProtoNetworkHandshake_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ProtoNetworkHandshake_descriptor,
-        new java.lang.String[] { "NetworkMagic", "HardwareInfo", "NodeId", "NonceId", "NodeVersion", "Signature", });
+        new java.lang.String[] { "NetworkMagic", "HardwareInfo", "NodeId", "NonceId", "NodeVersion", "Signature", "SharedSecret", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

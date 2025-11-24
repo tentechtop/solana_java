@@ -1,5 +1,6 @@
 package com.bit.solana.p2p.impl;
 
+import com.bit.solana.config.CommonConfig;
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
@@ -7,6 +8,7 @@ import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.util.ECCWithAESGCM;
 import com.bit.solana.util.MultiAddress;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -29,6 +31,7 @@ import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
@@ -38,9 +41,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.bit.solana.p2p.impl.CommonConfig.*;
+import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
+import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
+import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
 
 //BIDIRECTIONAL 双向流 所有核心场景（心跳、带响应请求、连接维护）
 //UNIDIRECTIONAL 单向流 纯广播 / 日志推送（无需回复）
@@ -103,7 +108,7 @@ public class PeerClient {
      * 基于路由表连接节点
      */
     public QuicNodeWrapper connect(byte[] nodeId) throws ExecutionException, InterruptedException, IOException, TimeoutException {
-        String nodeIdStr = Base58.encode(nodeId);
+        String nodeIdStr = bytesToHex(nodeId);
         QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdStr);
 
         if (existingWrapper != null && existingWrapper.isActive()) {
@@ -121,7 +126,7 @@ public class PeerClient {
         if (remoteAddress == null) {
             return null;
         }
-        QuicNodeWrapper quicNodeWrapper = connect(remoteAddress);
+        QuicNodeWrapper quicNodeWrapper = connect(remoteAddress, nodeId);
         quicNodeWrapper.setNodeId(nodeId);
         quicNodeWrapper.setAddress(node.getAddress());
         quicNodeWrapper.setPort(node.getPort());
@@ -160,7 +165,7 @@ public class PeerClient {
             return null;
         }
         byte[] nodeId = Base58.decode(multiAddress.getPeerId());
-        String nodeIdStr = Base58.encode(nodeId);
+        String nodeIdStr = bytesToHex(nodeId);
         //从缓存获取连接
         QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.asMap().get(nodeIdStr);
         if (existingWrapper != null && existingWrapper.isActive()) {
@@ -171,7 +176,7 @@ public class PeerClient {
         String ipAddress1 = multiAddress.getIpAddress();
         int port = multiAddress.getPort();
         InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress1, port);
-        existingWrapper = connect(remoteAddress);
+        existingWrapper = connect(remoteAddress, nodeId);
 
         existingWrapper.setNodeId(nodeId);
         existingWrapper.setAddress(ipAddress1);
@@ -182,7 +187,7 @@ public class PeerClient {
         return existingWrapper;
     }
 
-    public QuicNodeWrapper connect(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, IOException, TimeoutException {
+    public QuicNodeWrapper connect(InetSocketAddress remoteAddress,byte[] targetNodeId) throws ExecutionException, InterruptedException, IOException, TimeoutException {
         log.info("开始连接节点:{} {}", remoteAddress.getAddress(), remoteAddress.getPort());
         QuicChannel quicChannel = null;
         QuicStreamChannel heartbeatStream = null;
@@ -199,9 +204,10 @@ public class PeerClient {
         //发送握手数据
         NetworkHandshake networkHandshake = new NetworkHandshake();
         networkHandshake.setNodeId(commonConfig.getSelf().getId());
-
-
-
+        byte[][] AKeys = generateCurve25519KeyPair();
+        byte[] aPrivateKey = AKeys[0];
+        byte[] aPublicKey = AKeys[1];
+        networkHandshake.setSharedSecret(aPublicKey);
 
         byte[] serialize = networkHandshake.serialize();
         P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), ProtocolEnum.Network_handshake_V1, serialize);
@@ -218,11 +224,26 @@ public class PeerClient {
             return null;
         }
         P2PMessage deserialize = P2PMessage.deserialize(bytes);
-        //验证签名
+        byte[] data = deserialize.getData();
+        NetworkHandshake bNetworkHandshake = NetworkHandshake.deserialize(data);
+        byte[] bPublicKey = bNetworkHandshake.getSharedSecret();
+        //协商
+        byte[] sharedSecret = generateSharedSecret(aPrivateKey, bPublicKey);
+        log.info("协商成功{}", bytesToHex(sharedSecret));
 
-
-
-
+        Peer ifPresent = ONLINE_PEER_CACHE.getIfPresent(bytesToHex(targetNodeId));
+        if (ifPresent != null) {
+            ifPresent.setSharedSecret(sharedSecret);
+            ONLINE_PEER_CACHE.put(bytesToHex(targetNodeId), ifPresent);
+        }else {
+            ONLINE_PEER_CACHE.put(bytesToHex(targetNodeId), Peer.builder()
+                    .id(targetNodeId)
+                    .sharedSecret(sharedSecret)
+                    .inetSocketAddress(remoteAddress)
+                    .isOnline(true)
+                    .lastSeen(System.currentTimeMillis())
+                    .build());
+        }
 
         QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
         quicNodeWrapper.setQuicChannel(quicChannel);
@@ -236,7 +257,7 @@ public class PeerClient {
 
     //发送任意数据
     public void sendData(byte[] nodeId, byte[] data) throws Exception {
-        String nodeIdStr = Base58.encode(nodeId);
+        String nodeIdStr = bytesToHex(nodeId);
         QuicNodeWrapper quicNodeWrapper = null;
 
         quicNodeWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdStr);
@@ -290,14 +311,14 @@ public class PeerClient {
 
     //发送协议消息
     public void sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request) throws Exception {
-        String nodeIdBase58 = Base58.encode(nodeId);
-        log.debug("向节点{}发送协议消息，协议:{}", nodeIdBase58, protocol.getProtocol());
+        String nodeIdHex = bytesToHex(nodeId);
+        log.debug("向节点{}发送协议消息，协议:{}", nodeIdHex, protocol.getProtocol());
         // 1. 获取或创建连接
-        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdBase58);
+        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdHex);
         if (wrapper == null || !wrapper.isActive()) {
             wrapper = connect(nodeId);
             if (wrapper == null) {
-                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdBase58);
+                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdHex);
             }
         }
         P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
@@ -309,14 +330,14 @@ public class PeerClient {
 
     //发送协议数据 根据协议判断有无返回值 有就返回 无就返回null
     public byte[] sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request, long timeout) throws Exception {
-        String nodeIdBase58 = Base58.encode(nodeId);
-        log.debug("向节点{}发送协议消息，协议:{}", nodeIdBase58, protocol.getProtocol());
+        String nodeIdHex = bytesToHex(nodeId);
+        log.debug("向节点{}发送协议消息，协议:{}", nodeIdHex, protocol.getProtocol());
         // 1. 获取或创建连接
-        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdBase58);
+        QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdHex);
         if (wrapper == null || !wrapper.isActive()) {
             wrapper = connect(nodeId);
             if (wrapper == null) {
-                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdBase58);
+                throw new RuntimeException("无法连接到节点，nodeId=" + nodeIdHex);
             }
         }
         P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);

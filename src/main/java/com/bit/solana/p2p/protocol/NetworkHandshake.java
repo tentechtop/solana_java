@@ -20,6 +20,11 @@ public class NetworkHandshake {
      */
     private String hardwareInfo;
 
+    /**
+     * 软件版本
+     */
+
+
     //节点ID
     private byte[] nodeId;
 
@@ -31,6 +36,10 @@ public class NetworkHandshake {
      * 作用：协商协议兼容性，低版本节点可被拒绝/降级处理
      */
     private String nodeVersion;
+
+
+    //协商加密信息 SecretKey 承载协商公钥
+    private byte[] sharedSecret;
 
     //签名
     private byte[] signature;
@@ -88,6 +97,10 @@ public class NetworkHandshake {
             builder.setNodeVersion(nodeVersion);
         }
 
+        if (sharedSecret != null && sharedSecret.length > 0) {
+            builder.setSharedSecret(ByteString.copyFrom(sharedSecret));
+        }
+
         return builder.build();
     }
 
@@ -116,6 +129,8 @@ public class NetworkHandshake {
         // 处理字符串字段
         handshake.setHardwareInfo(proto.getHardwareInfo());
         handshake.setNodeVersion(proto.getNodeVersion());
+
+        handshake.setSharedSecret(proto.getSharedSecret().toByteArray());
 
         return handshake;
     }

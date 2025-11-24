@@ -101,6 +101,15 @@ public class Peer {
      */
     private long lastSeen;
 
+
+    /**
+     * 与节点协商的共享密钥对 不需要序列化反序列化
+     */
+    private byte[] sharedSecret;
+
+
+
+
     // 衍生字段（无需序列化，通过address+port动态构建）
     private InetSocketAddress inetSocketAddress;
 

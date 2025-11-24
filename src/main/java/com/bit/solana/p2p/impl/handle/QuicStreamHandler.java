@@ -1,6 +1,6 @@
 package com.bit.solana.p2p.impl.handle;
 
-import com.bit.solana.p2p.impl.CommonConfig;
+import com.bit.solana.config.CommonConfig;
 import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.p2p.protocol.ProtocolHandler;
@@ -19,8 +19,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import static com.bit.solana.p2p.impl.CommonConfig.RESPONSE_FUTURECACHE;
-import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
+import static com.bit.solana.config.CommonConfig.RESPONSE_FUTURECACHE;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 
@@ -55,7 +54,6 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
             if (protocolHandler != null){
                 byte[] handle = protocolHandler.handle(deserialize);
                 if (handle != null){
-                    log.info("写回");
                     //用原来的流写回
                     //包装型 ByteBuf 无需释放的底层逻辑
                     //Unpooled.wrappedBuffer(handle) 创建的 UnpooledHeapByteBuf 有两个关键特性：

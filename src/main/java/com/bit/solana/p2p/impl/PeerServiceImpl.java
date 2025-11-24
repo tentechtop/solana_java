@@ -1,5 +1,6 @@
 package com.bit.solana.p2p.impl;
 
+import com.bit.solana.config.CommonConfig;
 import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
@@ -31,7 +32,7 @@ import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
-import static com.bit.solana.p2p.impl.CommonConfig.CONNECT_KEEP_ALIVE_SECONDS;
+import static com.bit.solana.config.CommonConfig.CONNECT_KEEP_ALIVE_SECONDS;
 
 @Slf4j
 @Data

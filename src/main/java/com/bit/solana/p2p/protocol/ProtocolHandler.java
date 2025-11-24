@@ -12,7 +12,7 @@ public interface ProtocolHandler {
      * @param requestParams 请求参数（protobuf反序列化后的字节数组）
      * @return 处理结果（有返回值则返回字节数组，无返回值返回null）
      */
-    byte[] handle(P2PMessage requestParams) throws IOException;
+    byte[] handle(P2PMessage requestParams) throws Exception;
 
     /**
      * 无返回值的处理器（简化Lambda使用）
@@ -33,10 +33,10 @@ public interface ProtocolHandler {
      */
     @FunctionalInterface
     interface ResultProtocolHandler extends ProtocolHandler {
-        byte[] handleResult(P2PMessage requestParams) throws IOException;
+        byte[] handleResult(P2PMessage requestParams) throws Exception;
 
         @Override
-        default byte[] handle(P2PMessage requestParams) throws IOException {
+        default byte[] handle(P2PMessage requestParams) throws Exception {
             byte[] result = handleResult(requestParams);
             if (result == null) {
                 throw new IllegalStateException("有返回值的协议处理器不能返回null");

@@ -1,15 +1,17 @@
-package com.bit.solana.p2p.impl;
+package com.bit.solana.config;
 
-import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.rocksDb.TableEnum;
+import com.bit.solana.p2p.impl.QuicNodeWrapper;
 import com.bit.solana.p2p.peer.Peer;
-import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.bit.solana.structure.key.KeyInfo;
+import com.bit.solana.util.SolanaEd25519Signer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -20,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
+import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
+import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 
 
 @Slf4j
@@ -40,9 +44,13 @@ public class CommonConfig {
             self = new Peer();
             self.setAddress("127.0.0.1");
             self.setPort(8333);
-            byte[][] aliceKeys = generateCurve25519KeyPair();
-            byte[] alicePrivateKey = aliceKeys[0];
-            byte[] alicePublicKey = aliceKeys[1];
+
+            List<String> mnemonic = generateMnemonic();
+            KeyInfo baseKey = getSolanaKeyPair(mnemonic, 0, 0);
+
+            byte[] alicePrivateKey = baseKey.getPrivateKey();
+            byte[] alicePublicKey = SolanaEd25519Signer.derivePublicKeyFromPrivateKey(alicePrivateKey);
+
             self.setId(alicePublicKey);
             self.setPrivateKey(alicePrivateKey);
 

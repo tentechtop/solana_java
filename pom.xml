@@ -244,16 +244,18 @@
 <!--        <dependency>
             <groupId>io.netty.incubator</groupId>
             <artifactId>netty-incubator-codec-native-quic</artifactId>
-            <version>0.0.34.Final</version>
+            <version>0.0.74.Final</version>
             <classifier>windows-x86_64</classifier>
         </dependency>-->
 
         <dependency>
             <groupId>io.netty.incubator</groupId>
             <artifactId>netty-incubator-codec-native-quic</artifactId>
-            <version>0.0.34.Final</version>
+            <version>0.0.74.Final</version>
             <classifier>${netty.quic.classifier}</classifier>
         </dependency>
+
+
 
         <!--去中心化消息ID-->
         <dependency>
@@ -262,9 +264,26 @@
             <version>5.1.0</version>
         </dependency>
 
+
+
+
+
     </dependencies>
 
 
+    <!-- 仓库仅保留 maven-central 即可（无需快照仓） -->
+    <repositories>
+        <repository>
+            <id>central</id>
+            <url>https://repo1.maven.org/maven2/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <build>
         <!-- 直接定义最终JAR名称，优先级最高 -->

@@ -228,4 +228,31 @@ public class ECCWithAESGCM {
         System.out.println("  - " + String.format("%.2f", avgMillis) + " 毫秒");
         System.out.println("  - " + String.format("%.2f", avgMicros) + " 微秒");
     }
+
+    //public static void main(String[] args) throws Exception {
+    //    // A节点生成自己的密钥对
+    //    byte[][] aKeys = ECCWithAESGCM.generateCurve25519KeyPair();
+    //    byte[] aPrivate = aKeys[0];
+    //    byte[] aPublic = aKeys[1];
+    //
+    //    // B节点生成自己的密钥对（模拟，实际B节点独立生成）
+    //    byte[][] bKeys = ECCWithAESGCM.generateCurve25519KeyPair();
+    //    byte[] bPrivate = bKeys[0];
+    //    byte[] bPublic = bKeys[1];
+    //
+    //    // A节点仅用自己的私钥 + B的公钥，协商共享密钥
+    //    byte[] aShared = ECCWithAESGCM.generateSharedSecret(aPrivate, bPublic);
+    //    SecretKey aAesKey = ECCWithAESGCM.deriveAesKey(aShared);
+    //
+    //    // 验证：A的AES密钥与B的AES密钥一致
+    //    byte[] bShared = ECCWithAESGCM.generateSharedSecret(bPrivate, aPublic);
+    //    SecretKey bAesKey = ECCWithAESGCM.deriveAesKey(bShared);
+    //    System.out.println("A/B AES密钥是否一致：" + Arrays.areEqual(aAesKey.getEncoded(), bAesKey.getEncoded())); // true
+    //
+    //    // A节点用协商出的AES密钥加密数据，B可解密
+    //    String msg = "A节点加密的消息";
+    //    byte[] encrypted = ECCWithAESGCM.aesGcmEncrypt(aAesKey, msg.getBytes(StandardCharsets.UTF_8));
+    //    byte[] decrypted = ECCWithAESGCM.aesGcmDecrypt(bAesKey, encrypted);
+    //    System.out.println("解密结果：" + new String(decrypted)); // 输出：A节点加密的消息
+    //}
 }

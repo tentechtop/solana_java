@@ -71,4 +71,6 @@ message ProtoNetworkHandshake {
   string node_version = 5;
   // 签名（Ed25519签名，64字节）
   bytes signature = 6;
+  // 共享密钥对
+  bytes shared_secret = 7;
 }

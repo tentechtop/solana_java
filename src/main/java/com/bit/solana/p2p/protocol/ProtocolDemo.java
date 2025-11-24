@@ -10,7 +10,7 @@ import java.util.Map;
 @Slf4j
 public class ProtocolDemo {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
 
         BlockProtocolHandler blockProtocolHandler = new BlockProtocolHandler();
 
