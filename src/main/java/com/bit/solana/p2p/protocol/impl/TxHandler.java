@@ -5,11 +5,11 @@ import com.bit.solana.p2p.protocol.ProtocolHandler;
 
 import java.io.IOException;
 
-public class BlockProtocolHandler implements ProtocolHandler.ResultProtocolHandler {
+public class TxHandler implements ProtocolHandler.VoidProtocolHandler {
 
 
     @Override
-    public byte[] handleResult(P2PMessage requestParams) throws IOException {
-        return new byte[0];
+    public void handleVoid(P2PMessage requestParams) {
+
     }
 }

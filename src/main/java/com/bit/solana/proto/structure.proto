@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-
+//cd F:\workSpace2026\blockchain\solana_java\src\main\java\com\bit\solana\proto  protoc --proto_path=. --java_out=. structure.proto
 //protoc --proto_path=. --java_out=. structure.proto
 message ProtoBlockHeader {
   bytes previous_block_hash = 1;      // 前序区块哈希（32字节）
@@ -55,4 +55,20 @@ message ProtoPeer {
   double stake_amount = 11;    // 验证者质押量（SOL）
   int32 software_version = 12; // 节点软件版本
   uint64 last_seen = 13;       // 最后访问时间（毫秒级时间戳）
+}
+
+// Solana P2P 节点握手协议消息
+message ProtoNetworkHandshake {
+  // 网络魔法值（区分主网/测试网/私有链）
+  bytes network_magic = 1;
+  // 节点硬件标识（可选，如CPU核心数/内存大小）
+  string hardware_info = 2;
+  // 节点ID（Ed25519公钥，32字节）
+  bytes node_id = 3;
+  // 随机数（UUID v7，字节数组形式）
+  bytes nonce_id = 4;
+  // 节点版本（如"1.18.17"）
+  string node_version = 5;
+  // 签名（Ed25519签名，64字节）
+  bytes signature = 6;
 }

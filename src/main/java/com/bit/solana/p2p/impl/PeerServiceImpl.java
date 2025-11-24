@@ -6,6 +6,9 @@ import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolRegistry;
+import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -46,7 +49,8 @@ public class PeerServiceImpl implements PeerService {
     private QuicConnHandler quicConnHandler;
     @Autowired
     private QuicStreamHandler quicStreamHandler;
-
+    @Autowired
+    private ProtocolRegistry protocolRegistry;
 
     // QUIC服务器通道
     private Channel quicServerChannel;
@@ -55,6 +59,9 @@ public class PeerServiceImpl implements PeerService {
     //QUIC SSL上下文
     private QuicSslContext sslContext;
     private SelfSignedCertificate selfSignedCert;
+
+    @Autowired
+    private NetworkHandshakeHandler networkHandshakeHandler;
 
 
     @PostConstruct
@@ -80,6 +87,10 @@ public class PeerServiceImpl implements PeerService {
                 Base58.encode(commonConfig.getSelf().getId())
         );
         System.out.println("地址：" + address.toRawAddress());
+
+        //注册协议
+        protocolRegistry.registerResultHandler(ProtocolEnum.Network_handshake_V1,  networkHandshakeHandler);
+
     }
 
 

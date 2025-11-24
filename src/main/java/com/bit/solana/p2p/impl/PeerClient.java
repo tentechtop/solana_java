@@ -4,6 +4,7 @@ import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
 import com.bit.solana.p2p.peer.RoutingTable;
+import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.util.MultiAddress;
@@ -28,11 +29,13 @@ import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.bit.solana.p2p.impl.CommonConfig.*;
@@ -99,7 +102,7 @@ public class PeerClient {
     /**
      * 基于路由表连接节点
      */
-    public QuicNodeWrapper connect(byte[] nodeId) throws ExecutionException, InterruptedException {
+    public QuicNodeWrapper connect(byte[] nodeId) throws ExecutionException, InterruptedException, IOException, TimeoutException {
         String nodeIdStr = Base58.encode(nodeId);
         QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdStr);
 
@@ -146,7 +149,7 @@ public class PeerClient {
     /**
      * 基于自解释型Url连接目标节点
      */
-    public QuicNodeWrapper connect(String multiAddressString) throws ExecutionException, InterruptedException {
+    public QuicNodeWrapper connect(String multiAddressString) throws ExecutionException, InterruptedException, IOException, TimeoutException {
         //不为空
         if (multiAddressString == null || multiAddressString.isEmpty()) {
             return null;
@@ -179,7 +182,8 @@ public class PeerClient {
         return existingWrapper;
     }
 
-    public QuicNodeWrapper connect(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException {
+    public QuicNodeWrapper connect(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, IOException, TimeoutException {
+        log.info("开始连接节点:{} {}", remoteAddress.getAddress(), remoteAddress.getPort());
         QuicChannel quicChannel = null;
         QuicStreamChannel heartbeatStream = null;
         quicChannel = QuicChannel.newBootstrap(datagramChannel)
@@ -188,10 +192,38 @@ public class PeerClient {
                 .remoteAddress(remoteAddress)
                 .connect()
                 .get();
+        //创建心跳流维护连接
         heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 quicStreamHandler).sync().getNow();
-        //创建心跳流 发送网络握手消息 双方确认信息
-        //TODO
+        //先用心跳流处理握手 如果不一直就返回空
+        //发送握手数据
+        NetworkHandshake networkHandshake = new NetworkHandshake();
+        networkHandshake.setNodeId(commonConfig.getSelf().getId());
+
+
+
+
+        byte[] serialize = networkHandshake.serialize();
+        P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), ProtocolEnum.Network_handshake_V1, serialize);
+        byte[] serialize1 = p2PMessage.serialize();
+
+        byte[] requestId = p2PMessage.getRequestId();
+        ByteBuf byteBuf = Unpooled.wrappedBuffer(serialize1);
+        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        RESPONSE_FUTURECACHE.put(bytesToHex(requestId), responseFuture);
+        heartbeatStream.writeAndFlush(byteBuf);
+        byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
+        if (bytes == null) {
+            log.info("节点{}连接失败", remoteAddress);
+            return null;
+        }
+        P2PMessage deserialize = P2PMessage.deserialize(bytes);
+        //验证签名
+
+
+
+
+
         QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
         quicNodeWrapper.setQuicChannel(quicChannel);
         quicNodeWrapper.setHeartbeatStream(heartbeatStream);

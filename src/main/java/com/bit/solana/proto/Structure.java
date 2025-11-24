@@ -5210,6 +5210,1116 @@ public final class Structure {
 
   }
 
+  public interface ProtoNetworkHandshakeOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:ProtoNetworkHandshake)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * 网络魔法值（区分主网/测试网/私有链）
+     * </pre>
+     *
+     * <code>bytes network_magic = 1;</code>
+     * @return The networkMagic.
+     */
+    com.google.protobuf.ByteString getNetworkMagic();
+
+    /**
+     * <pre>
+     * 节点硬件标识（可选，如CPU核心数/内存大小）
+     * </pre>
+     *
+     * <code>string hardware_info = 2;</code>
+     * @return The hardwareInfo.
+     */
+    java.lang.String getHardwareInfo();
+    /**
+     * <pre>
+     * 节点硬件标识（可选，如CPU核心数/内存大小）
+     * </pre>
+     *
+     * <code>string hardware_info = 2;</code>
+     * @return The bytes for hardwareInfo.
+     */
+    com.google.protobuf.ByteString
+        getHardwareInfoBytes();
+
+    /**
+     * <pre>
+     * 节点ID（Ed25519公钥，32字节）
+     * </pre>
+     *
+     * <code>bytes node_id = 3;</code>
+     * @return The nodeId.
+     */
+    com.google.protobuf.ByteString getNodeId();
+
+    /**
+     * <pre>
+     * 随机数（UUID v7，字节数组形式）
+     * </pre>
+     *
+     * <code>bytes nonce_id = 4;</code>
+     * @return The nonceId.
+     */
+    com.google.protobuf.ByteString getNonceId();
+
+    /**
+     * <pre>
+     * 节点版本（如"1.18.17"）
+     * </pre>
+     *
+     * <code>string node_version = 5;</code>
+     * @return The nodeVersion.
+     */
+    java.lang.String getNodeVersion();
+    /**
+     * <pre>
+     * 节点版本（如"1.18.17"）
+     * </pre>
+     *
+     * <code>string node_version = 5;</code>
+     * @return The bytes for nodeVersion.
+     */
+    com.google.protobuf.ByteString
+        getNodeVersionBytes();
+
+    /**
+     * <pre>
+     * 签名（Ed25519签名，64字节）
+     * </pre>
+     *
+     * <code>bytes signature = 6;</code>
+     * @return The signature.
+     */
+    com.google.protobuf.ByteString getSignature();
+  }
+  /**
+   * <pre>
+   * Solana P2P 节点握手协议消息
+   * </pre>
+   *
+   * Protobuf type {@code ProtoNetworkHandshake}
+   */
+  public static final class ProtoNetworkHandshake extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:ProtoNetworkHandshake)
+      ProtoNetworkHandshakeOrBuilder {
+  private static final long serialVersionUID = 0L;
+    static {
+      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+        /* major= */ 4,
+        /* minor= */ 31,
+        /* patch= */ 1,
+        /* suffix= */ "",
+        ProtoNetworkHandshake.class.getName());
+    }
+    // Use ProtoNetworkHandshake.newBuilder() to construct.
+    private ProtoNetworkHandshake(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private ProtoNetworkHandshake() {
+      networkMagic_ = com.google.protobuf.ByteString.EMPTY;
+      hardwareInfo_ = "";
+      nodeId_ = com.google.protobuf.ByteString.EMPTY;
+      nonceId_ = com.google.protobuf.ByteString.EMPTY;
+      nodeVersion_ = "";
+      signature_ = com.google.protobuf.ByteString.EMPTY;
+    }
+
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return Structure.internal_static_ProtoNetworkHandshake_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return Structure.internal_static_ProtoNetworkHandshake_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              Structure.ProtoNetworkHandshake.class, Structure.ProtoNetworkHandshake.Builder.class);
+    }
+
+    public static final int NETWORK_MAGIC_FIELD_NUMBER = 1;
+    private com.google.protobuf.ByteString networkMagic_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 网络魔法值（区分主网/测试网/私有链）
+     * </pre>
+     *
+     * <code>bytes network_magic = 1;</code>
+     * @return The networkMagic.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getNetworkMagic() {
+      return networkMagic_;
+    }
+
+    public static final int HARDWARE_INFO_FIELD_NUMBER = 2;
+    @SuppressWarnings("serial")
+    private volatile java.lang.Object hardwareInfo_ = "";
+    /**
+     * <pre>
+     * 节点硬件标识（可选，如CPU核心数/内存大小）
+     * </pre>
+     *
+     * <code>string hardware_info = 2;</code>
+     * @return The hardwareInfo.
+     */
+    @java.lang.Override
+    public java.lang.String getHardwareInfo() {
+      java.lang.Object ref = hardwareInfo_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        hardwareInfo_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * 节点硬件标识（可选，如CPU核心数/内存大小）
+     * </pre>
+     *
+     * <code>string hardware_info = 2;</code>
+     * @return The bytes for hardwareInfo.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getHardwareInfoBytes() {
+      java.lang.Object ref = hardwareInfo_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        hardwareInfo_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int NODE_ID_FIELD_NUMBER = 3;
+    private com.google.protobuf.ByteString nodeId_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 节点ID（Ed25519公钥，32字节）
+     * </pre>
+     *
+     * <code>bytes node_id = 3;</code>
+     * @return The nodeId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getNodeId() {
+      return nodeId_;
+    }
+
+    public static final int NONCE_ID_FIELD_NUMBER = 4;
+    private com.google.protobuf.ByteString nonceId_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 随机数（UUID v7，字节数组形式）
+     * </pre>
+     *
+     * <code>bytes nonce_id = 4;</code>
+     * @return The nonceId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getNonceId() {
+      return nonceId_;
+    }
+
+    public static final int NODE_VERSION_FIELD_NUMBER = 5;
+    @SuppressWarnings("serial")
+    private volatile java.lang.Object nodeVersion_ = "";
+    /**
+     * <pre>
+     * 节点版本（如"1.18.17"）
+     * </pre>
+     *
+     * <code>string node_version = 5;</code>
+     * @return The nodeVersion.
+     */
+    @java.lang.Override
+    public java.lang.String getNodeVersion() {
+      java.lang.Object ref = nodeVersion_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        nodeVersion_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * 节点版本（如"1.18.17"）
+     * </pre>
+     *
+     * <code>string node_version = 5;</code>
+     * @return The bytes for nodeVersion.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNodeVersionBytes() {
+      java.lang.Object ref = nodeVersion_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        nodeVersion_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int SIGNATURE_FIELD_NUMBER = 6;
+    private com.google.protobuf.ByteString signature_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * 签名（Ed25519签名，64字节）
+     * </pre>
+     *
+     * <code>bytes signature = 6;</code>
+     * @return The signature.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getSignature() {
+      return signature_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (!networkMagic_.isEmpty()) {
+        output.writeBytes(1, networkMagic_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(hardwareInfo_)) {
+        com.google.protobuf.GeneratedMessage.writeString(output, 2, hardwareInfo_);
+      }
+      if (!nodeId_.isEmpty()) {
+        output.writeBytes(3, nodeId_);
+      }
+      if (!nonceId_.isEmpty()) {
+        output.writeBytes(4, nonceId_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(nodeVersion_)) {
+        com.google.protobuf.GeneratedMessage.writeString(output, 5, nodeVersion_);
+      }
+      if (!signature_.isEmpty()) {
+        output.writeBytes(6, signature_);
+      }
+      getUnknownFields().writeTo(output);
+    }
+
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (!networkMagic_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(1, networkMagic_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(hardwareInfo_)) {
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(2, hardwareInfo_);
+      }
+      if (!nodeId_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(3, nodeId_);
+      }
+      if (!nonceId_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(4, nonceId_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(nodeVersion_)) {
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(5, nodeVersion_);
+      }
+      if (!signature_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(6, signature_);
+      }
+      size += getUnknownFields().getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof Structure.ProtoNetworkHandshake)) {
+        return super.equals(obj);
+      }
+      Structure.ProtoNetworkHandshake other = (Structure.ProtoNetworkHandshake) obj;
+
+      if (!getNetworkMagic()
+          .equals(other.getNetworkMagic())) return false;
+      if (!getHardwareInfo()
+          .equals(other.getHardwareInfo())) return false;
+      if (!getNodeId()
+          .equals(other.getNodeId())) return false;
+      if (!getNonceId()
+          .equals(other.getNonceId())) return false;
+      if (!getNodeVersion()
+          .equals(other.getNodeVersion())) return false;
+      if (!getSignature()
+          .equals(other.getSignature())) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + NETWORK_MAGIC_FIELD_NUMBER;
+      hash = (53 * hash) + getNetworkMagic().hashCode();
+      hash = (37 * hash) + HARDWARE_INFO_FIELD_NUMBER;
+      hash = (53 * hash) + getHardwareInfo().hashCode();
+      hash = (37 * hash) + NODE_ID_FIELD_NUMBER;
+      hash = (53 * hash) + getNodeId().hashCode();
+      hash = (37 * hash) + NONCE_ID_FIELD_NUMBER;
+      hash = (53 * hash) + getNonceId().hashCode();
+      hash = (37 * hash) + NODE_VERSION_FIELD_NUMBER;
+      hash = (53 * hash) + getNodeVersion().hashCode();
+      hash = (37 * hash) + SIGNATURE_FIELD_NUMBER;
+      hash = (53 * hash) + getSignature().hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public static Structure.ProtoNetworkHandshake parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+
+    public static Structure.ProtoNetworkHandshake parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static Structure.ProtoNetworkHandshake parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(Structure.ProtoNetworkHandshake prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * Solana P2P 节点握手协议消息
+     * </pre>
+     *
+     * Protobuf type {@code ProtoNetworkHandshake}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:ProtoNetworkHandshake)
+        Structure.ProtoNetworkHandshakeOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return Structure.internal_static_ProtoNetworkHandshake_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return Structure.internal_static_ProtoNetworkHandshake_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                Structure.ProtoNetworkHandshake.class, Structure.ProtoNetworkHandshake.Builder.class);
+      }
+
+      // Construct using Structure.ProtoNetworkHandshake.newBuilder()
+      private Builder() {
+
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        bitField0_ = 0;
+        networkMagic_ = com.google.protobuf.ByteString.EMPTY;
+        hardwareInfo_ = "";
+        nodeId_ = com.google.protobuf.ByteString.EMPTY;
+        nonceId_ = com.google.protobuf.ByteString.EMPTY;
+        nodeVersion_ = "";
+        signature_ = com.google.protobuf.ByteString.EMPTY;
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return Structure.internal_static_ProtoNetworkHandshake_descriptor;
+      }
+
+      @java.lang.Override
+      public Structure.ProtoNetworkHandshake getDefaultInstanceForType() {
+        return Structure.ProtoNetworkHandshake.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public Structure.ProtoNetworkHandshake build() {
+        Structure.ProtoNetworkHandshake result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public Structure.ProtoNetworkHandshake buildPartial() {
+        Structure.ProtoNetworkHandshake result = new Structure.ProtoNetworkHandshake(this);
+        if (bitField0_ != 0) { buildPartial0(result); }
+        onBuilt();
+        return result;
+      }
+
+      private void buildPartial0(Structure.ProtoNetworkHandshake result) {
+        int from_bitField0_ = bitField0_;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.networkMagic_ = networkMagic_;
+        }
+        if (((from_bitField0_ & 0x00000002) != 0)) {
+          result.hardwareInfo_ = hardwareInfo_;
+        }
+        if (((from_bitField0_ & 0x00000004) != 0)) {
+          result.nodeId_ = nodeId_;
+        }
+        if (((from_bitField0_ & 0x00000008) != 0)) {
+          result.nonceId_ = nonceId_;
+        }
+        if (((from_bitField0_ & 0x00000010) != 0)) {
+          result.nodeVersion_ = nodeVersion_;
+        }
+        if (((from_bitField0_ & 0x00000020) != 0)) {
+          result.signature_ = signature_;
+        }
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof Structure.ProtoNetworkHandshake) {
+          return mergeFrom((Structure.ProtoNetworkHandshake)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(Structure.ProtoNetworkHandshake other) {
+        if (other == Structure.ProtoNetworkHandshake.getDefaultInstance()) return this;
+        if (!other.getNetworkMagic().isEmpty()) {
+          setNetworkMagic(other.getNetworkMagic());
+        }
+        if (!other.getHardwareInfo().isEmpty()) {
+          hardwareInfo_ = other.hardwareInfo_;
+          bitField0_ |= 0x00000002;
+          onChanged();
+        }
+        if (!other.getNodeId().isEmpty()) {
+          setNodeId(other.getNodeId());
+        }
+        if (!other.getNonceId().isEmpty()) {
+          setNonceId(other.getNonceId());
+        }
+        if (!other.getNodeVersion().isEmpty()) {
+          nodeVersion_ = other.nodeVersion_;
+          bitField0_ |= 0x00000010;
+          onChanged();
+        }
+        if (!other.getSignature().isEmpty()) {
+          setSignature(other.getSignature());
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
+        try {
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                networkMagic_ = input.readBytes();
+                bitField0_ |= 0x00000001;
+                break;
+              } // case 10
+              case 18: {
+                hardwareInfo_ = input.readStringRequireUtf8();
+                bitField0_ |= 0x00000002;
+                break;
+              } // case 18
+              case 26: {
+                nodeId_ = input.readBytes();
+                bitField0_ |= 0x00000004;
+                break;
+              } // case 26
+              case 34: {
+                nonceId_ = input.readBytes();
+                bitField0_ |= 0x00000008;
+                break;
+              } // case 34
+              case 42: {
+                nodeVersion_ = input.readStringRequireUtf8();
+                bitField0_ |= 0x00000010;
+                break;
+              } // case 42
+              case 50: {
+                signature_ = input.readBytes();
+                bitField0_ |= 0x00000020;
+                break;
+              } // case 50
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.unwrapIOException();
+        } finally {
+          onChanged();
+        } // finally
+        return this;
+      }
+      private int bitField0_;
+
+      private com.google.protobuf.ByteString networkMagic_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 网络魔法值（区分主网/测试网/私有链）
+       * </pre>
+       *
+       * <code>bytes network_magic = 1;</code>
+       * @return The networkMagic.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getNetworkMagic() {
+        return networkMagic_;
+      }
+      /**
+       * <pre>
+       * 网络魔法值（区分主网/测试网/私有链）
+       * </pre>
+       *
+       * <code>bytes network_magic = 1;</code>
+       * @param value The networkMagic to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNetworkMagic(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        networkMagic_ = value;
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 网络魔法值（区分主网/测试网/私有链）
+       * </pre>
+       *
+       * <code>bytes network_magic = 1;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearNetworkMagic() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        networkMagic_ = getDefaultInstance().getNetworkMagic();
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object hardwareInfo_ = "";
+      /**
+       * <pre>
+       * 节点硬件标识（可选，如CPU核心数/内存大小）
+       * </pre>
+       *
+       * <code>string hardware_info = 2;</code>
+       * @return The hardwareInfo.
+       */
+      public java.lang.String getHardwareInfo() {
+        java.lang.Object ref = hardwareInfo_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          hardwareInfo_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * 节点硬件标识（可选，如CPU核心数/内存大小）
+       * </pre>
+       *
+       * <code>string hardware_info = 2;</code>
+       * @return The bytes for hardwareInfo.
+       */
+      public com.google.protobuf.ByteString
+          getHardwareInfoBytes() {
+        java.lang.Object ref = hardwareInfo_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          hardwareInfo_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * 节点硬件标识（可选，如CPU核心数/内存大小）
+       * </pre>
+       *
+       * <code>string hardware_info = 2;</code>
+       * @param value The hardwareInfo to set.
+       * @return This builder for chaining.
+       */
+      public Builder setHardwareInfo(
+          java.lang.String value) {
+        if (value == null) { throw new NullPointerException(); }
+        hardwareInfo_ = value;
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 节点硬件标识（可选，如CPU核心数/内存大小）
+       * </pre>
+       *
+       * <code>string hardware_info = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearHardwareInfo() {
+        hardwareInfo_ = getDefaultInstance().getHardwareInfo();
+        bitField0_ = (bitField0_ & ~0x00000002);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 节点硬件标识（可选，如CPU核心数/内存大小）
+       * </pre>
+       *
+       * <code>string hardware_info = 2;</code>
+       * @param value The bytes for hardwareInfo to set.
+       * @return This builder for chaining.
+       */
+      public Builder setHardwareInfoBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        checkByteStringIsUtf8(value);
+        hardwareInfo_ = value;
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString nodeId_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 节点ID（Ed25519公钥，32字节）
+       * </pre>
+       *
+       * <code>bytes node_id = 3;</code>
+       * @return The nodeId.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getNodeId() {
+        return nodeId_;
+      }
+      /**
+       * <pre>
+       * 节点ID（Ed25519公钥，32字节）
+       * </pre>
+       *
+       * <code>bytes node_id = 3;</code>
+       * @param value The nodeId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNodeId(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        nodeId_ = value;
+        bitField0_ |= 0x00000004;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 节点ID（Ed25519公钥，32字节）
+       * </pre>
+       *
+       * <code>bytes node_id = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearNodeId() {
+        bitField0_ = (bitField0_ & ~0x00000004);
+        nodeId_ = getDefaultInstance().getNodeId();
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString nonceId_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 随机数（UUID v7，字节数组形式）
+       * </pre>
+       *
+       * <code>bytes nonce_id = 4;</code>
+       * @return The nonceId.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getNonceId() {
+        return nonceId_;
+      }
+      /**
+       * <pre>
+       * 随机数（UUID v7，字节数组形式）
+       * </pre>
+       *
+       * <code>bytes nonce_id = 4;</code>
+       * @param value The nonceId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNonceId(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        nonceId_ = value;
+        bitField0_ |= 0x00000008;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 随机数（UUID v7，字节数组形式）
+       * </pre>
+       *
+       * <code>bytes nonce_id = 4;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearNonceId() {
+        bitField0_ = (bitField0_ & ~0x00000008);
+        nonceId_ = getDefaultInstance().getNonceId();
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object nodeVersion_ = "";
+      /**
+       * <pre>
+       * 节点版本（如"1.18.17"）
+       * </pre>
+       *
+       * <code>string node_version = 5;</code>
+       * @return The nodeVersion.
+       */
+      public java.lang.String getNodeVersion() {
+        java.lang.Object ref = nodeVersion_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          nodeVersion_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * 节点版本（如"1.18.17"）
+       * </pre>
+       *
+       * <code>string node_version = 5;</code>
+       * @return The bytes for nodeVersion.
+       */
+      public com.google.protobuf.ByteString
+          getNodeVersionBytes() {
+        java.lang.Object ref = nodeVersion_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          nodeVersion_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * 节点版本（如"1.18.17"）
+       * </pre>
+       *
+       * <code>string node_version = 5;</code>
+       * @param value The nodeVersion to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNodeVersion(
+          java.lang.String value) {
+        if (value == null) { throw new NullPointerException(); }
+        nodeVersion_ = value;
+        bitField0_ |= 0x00000010;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 节点版本（如"1.18.17"）
+       * </pre>
+       *
+       * <code>string node_version = 5;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearNodeVersion() {
+        nodeVersion_ = getDefaultInstance().getNodeVersion();
+        bitField0_ = (bitField0_ & ~0x00000010);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 节点版本（如"1.18.17"）
+       * </pre>
+       *
+       * <code>string node_version = 5;</code>
+       * @param value The bytes for nodeVersion to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNodeVersionBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        checkByteStringIsUtf8(value);
+        nodeVersion_ = value;
+        bitField0_ |= 0x00000010;
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString signature_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <pre>
+       * 签名（Ed25519签名，64字节）
+       * </pre>
+       *
+       * <code>bytes signature = 6;</code>
+       * @return The signature.
+       */
+      @java.lang.Override
+      public com.google.protobuf.ByteString getSignature() {
+        return signature_;
+      }
+      /**
+       * <pre>
+       * 签名（Ed25519签名，64字节）
+       * </pre>
+       *
+       * <code>bytes signature = 6;</code>
+       * @param value The signature to set.
+       * @return This builder for chaining.
+       */
+      public Builder setSignature(com.google.protobuf.ByteString value) {
+        if (value == null) { throw new NullPointerException(); }
+        signature_ = value;
+        bitField0_ |= 0x00000020;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * 签名（Ed25519签名，64字节）
+       * </pre>
+       *
+       * <code>bytes signature = 6;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearSignature() {
+        bitField0_ = (bitField0_ & ~0x00000020);
+        signature_ = getDefaultInstance().getSignature();
+        onChanged();
+        return this;
+      }
+
+      // @@protoc_insertion_point(builder_scope:ProtoNetworkHandshake)
+    }
+
+    // @@protoc_insertion_point(class_scope:ProtoNetworkHandshake)
+    private static final Structure.ProtoNetworkHandshake DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new Structure.ProtoNetworkHandshake();
+    }
+
+    public static Structure.ProtoNetworkHandshake getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ProtoNetworkHandshake>
+        PARSER = new com.google.protobuf.AbstractParser<ProtoNetworkHandshake>() {
+      @java.lang.Override
+      public ProtoNetworkHandshake parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
+      }
+    };
+
+    public static com.google.protobuf.Parser<ProtoNetworkHandshake> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ProtoNetworkHandshake> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public Structure.ProtoNetworkHandshake getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_ProtoBlockHeader_descriptor;
   private static final 
@@ -5230,6 +6340,11 @@ public final class Structure {
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_ProtoPeer_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_ProtoNetworkHandshake_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_ProtoNetworkHandshake_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -5260,7 +6375,11 @@ public final class Structure {
       "\005\022\021\n\tis_online\030\010 \001(\010\022\023\n\013latest_slot\030\t \001(" +
       "\004\022\024\n\014is_validator\030\n \001(\010\022\024\n\014stake_amount\030" +
       "\013 \001(\001\022\030\n\020software_version\030\014 \001(\005\022\021\n\tlast_" +
-      "seen\030\r \001(\004b\006proto3"
+      "seen\030\r \001(\004\"\221\001\n\025ProtoNetworkHandshake\022\025\n\r" +
+      "network_magic\030\001 \001(\014\022\025\n\rhardware_info\030\002 \001" +
+      "(\t\022\017\n\007node_id\030\003 \001(\014\022\020\n\010nonce_id\030\004 \001(\014\022\024\n" +
+      "\014node_version\030\005 \001(\t\022\021\n\tsignature\030\006 \001(\014b\006" +
+      "proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -5290,6 +6409,12 @@ public final class Structure {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ProtoPeer_descriptor,
         new java.lang.String[] { "Id", "PrivateKey", "Address", "Port", "Multiaddr", "ProtocolVersion", "NodeType", "IsOnline", "LatestSlot", "IsValidator", "StakeAmount", "SoftwareVersion", "LastSeen", });
+    internal_static_ProtoNetworkHandshake_descriptor =
+      getDescriptor().getMessageTypes().get(4);
+    internal_static_ProtoNetworkHandshake_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_ProtoNetworkHandshake_descriptor,
+        new java.lang.String[] { "NetworkMagic", "HardwareInfo", "NodeId", "NonceId", "NodeVersion", "Signature", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

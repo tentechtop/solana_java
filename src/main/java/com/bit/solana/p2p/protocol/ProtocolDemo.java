@@ -1,14 +1,16 @@
 package com.bit.solana.p2p.protocol;
 
 import com.bit.solana.p2p.protocol.impl.BlockProtocolHandler;
+import com.bit.solana.p2p.protocol.impl.TxHandler;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.Map;
 
 @Slf4j
 public class ProtocolDemo {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         BlockProtocolHandler blockProtocolHandler = new BlockProtocolHandler();
 
@@ -26,13 +28,16 @@ public class ProtocolDemo {
             return new byte[]{};
         });
 
+        TxHandler txHandler = new TxHandler();
+        protocolRegistry.registerVoidHandler(ProtocolEnum.zero_V1, txHandler);
+
         // 4. 调用有返回值的协议
-        byte[] chainRequest = new byte[]{1,2,3}; // 模拟请求参数
+        P2PMessage chainRequest = new P2PMessage();// 模拟请求参数
         byte[] chainResult = protocolRegistry.handle(ProtocolEnum.CHAIN_V1, chainRequest);
         log.info("链查询处理结果：{}", chainResult);
 
         // 5. 调用无返回值的协议
-        byte[] blockRequest = new byte[]{4,5,6}; // 模拟请求参数
+        P2PMessage blockRequest = new P2PMessage();
         byte[] blockResult = protocolRegistry.handle(ProtocolEnum.BLOCK_V1, blockRequest);
         log.info("区块处理结果（无返回值）：{}", blockResult); // 输出null
 
@@ -42,8 +47,11 @@ public class ProtocolDemo {
 
         Map<ProtocolEnum, ProtocolHandler> handlerMap = protocolRegistry.getHandlerMap();
         ProtocolHandler protocolHandler = handlerMap.get(ProtocolEnum.CHAIN_V1);
-        byte[] handle = protocolHandler.handle(new byte[0]);
+        byte[] handle = protocolHandler.handle(new P2PMessage());
         log.info("BlockHeader反序列化结果：{}", handle);
+
+        ProtocolHandler protocolHandler1 = handlerMap.get(ProtocolEnum.zero_V1);
+        byte[] handle1 = protocolHandler1.handle(new P2PMessage());
     }
 
     // 模拟BlockHeader类（贴合你的代码）

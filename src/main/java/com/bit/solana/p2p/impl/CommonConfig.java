@@ -97,20 +97,6 @@ public class CommonConfig {
     public static Cache<String, QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
-            // 改为同步执行（避免调度器延迟），或限制监听器执行超时
-            .removalListener((String nodeId, QuicNodeWrapper node, RemovalCause cause) -> {
-                if (node != null) {
-                    log.info("Node {} removed from cache (cause: {}), closing resources", nodeId, cause);
-                    // 同步关闭，设置超时
-                    try {
-                        CompletableFuture.runAsync(node::close, Executors.newSingleThreadExecutor())
-                                .get(5, TimeUnit.SECONDS); // 5秒超时，避免阻塞
-                    } catch (Exception e) {
-                        log.error("Close node {} failed in removal listener", nodeId, e);
-                        node.close(); // 兜底同步关闭
-                    }
-                }
-            })
             .recordStats()
             .build();
 
