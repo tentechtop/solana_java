@@ -21,6 +21,7 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
         log.info("流处理收到数据: {}", msg);
 
+        //    CompletableFuture<byte[]> removedFuture = RESPONSE_FUTURECACHE.asMap().remove(p2PMessage.getRequestId());
 
 
     }

@@ -257,6 +257,9 @@ public class PeerClient {
         byte[] serialize = p2PMessage.serialize();
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(p2PMessage.getRequestId(), responseFuture);
+
+
+
         try {
             sendData(wrapper, serialize);
             return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
