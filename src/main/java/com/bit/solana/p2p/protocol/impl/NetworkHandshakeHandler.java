@@ -18,8 +18,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 
-import static com.bit.solana.config.CommonConfig.ONLINE_PEER_CACHE;
-import static com.bit.solana.config.CommonConfig.PEER_CONNECT_CACHE;
+import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.protocol.P2PMessage.newResponseMessage;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
@@ -61,6 +60,22 @@ public class NetworkHandshakeHandler implements ProtocolHandler.ResultProtocolHa
                     .isOnline(true)
                     .lastSeen(System.currentTimeMillis())
                     .build());
+        }
+        QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(encode);
+        if (existingWrapper != null) {
+            existingWrapper.setQuicChannel(requestParams.getQuicChannel());
+            existingWrapper.setActive(true);
+            existingWrapper.updateLastSeen();
+            existingWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());
+            PEER_CONNECT_CACHE.put(encode, existingWrapper);
+        }else {
+            QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
+            quicNodeWrapper.setNodeId(senderId);
+            quicNodeWrapper.setQuicChannel(requestParams.getQuicChannel());
+            quicNodeWrapper.setActive(true);
+            quicNodeWrapper.updateLastSeen();
+            quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());
+            PEER_CONNECT_CACHE.put(bytesToHex(senderId), quicNodeWrapper);
         }
 
         NetworkHandshake networkHandshake = new NetworkHandshake();

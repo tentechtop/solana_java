@@ -19,6 +19,7 @@ public class SystemConfig {
     private String username;
     private String password;
     private Integer maxSize;//最大内存占用大小 MB
+    private Integer quicPort;
 
     @Autowired
     private DataBase dataBase;
@@ -26,6 +27,7 @@ public class SystemConfig {
 
     @PostConstruct
     public void init() {
+        log.info("端口{}",quicPort);
         log.info("系统数据路径:{}",path);
         boolean database = dataBase.createDatabase(this);
         if (!database) {

@@ -61,13 +61,6 @@
             <version>1.78</version>
         </dependency>
 
-        <!--在 Java 里读取 application.yml 文件-->
-        <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <version>2.2</version>
-        </dependency>
-
         <dependency>
             <groupId>org.bitcoinj</groupId>
             <artifactId>bitcoinj-core</artifactId>
@@ -109,23 +102,7 @@
             <artifactId>netty-handler</artifactId>
             <version>4.1.66.Final</version>
         </dependency>
-        <!--JSON 与 Java 对象的相互转换 对象序列化框架  API 接口、配置文件、数据存储 数据序列化与反序列化-->
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.8.8</version> <!-- 使用最新版本 -->
-        </dependency>
-        <!--二进制序列化框架  对象序列化/反序列化框架 -->
-        <dependency>
-            <groupId>com.esotericsoftware</groupId>
-            <artifactId>kryo</artifactId>
-            <version>5.5.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.objenesis</groupId>
-            <artifactId>objenesis</artifactId>
-            <version>3.3</version> <!-- 最新稳定版 -->
-        </dependency>
+
         <!--集合增强、并发工具、缓存、限流等 高性能编程、复杂数据结构处理	-->
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -133,50 +110,15 @@
             <version>32.0.0-jre</version>
         </dependency>
 
-
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- 添加网络发现库 -->
-        <dependency>
-            <groupId>org.jmdns</groupId>
-            <artifactId>jmdns</artifactId>
-            <version>3.6.0</version>
-        </dependency>
+
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-transport</artifactId>
-        </dependency>
-        <!--并行事件处理-->
-        <dependency>
-            <groupId>com.lmax</groupId>
-            <artifactId>disruptor</artifactId>
-            <version>3.4.4</version> <!-- 使用最新稳定版本 -->
-        </dependency>
-        <!--GPU参与运算-->
-        <!--OpenCL 的 Java 绑定-->
-        <dependency>
-            <groupId>org.jocl</groupId>
-            <artifactId>jocl</artifactId>
-            <version>2.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.jcuda</groupId>
-            <artifactId>jcuda</artifactId>
-            <version>12.6.0</version> <!-- 与 CUDA 匹配 -->
-        </dependency>
-        <dependency>
-            <groupId>org.jcuda</groupId>
-            <artifactId>jcuda-natives</artifactId>
-            <version>12.6.0</version> <!-- 保持版本一致 -->
-        </dependency>
-
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm</artifactId>
-            <version>9.5</version>
         </dependency>
 
         <!-- 系统信息监控库 -->
@@ -201,30 +143,17 @@
         </dependency>
 
         <!-- 若需要控制台监控（可选） -->
-        <dependency>
+<!--        <dependency>
             <groupId>com.alibaba.csp</groupId>
             <artifactId>sentinel-transport-simple-http</artifactId>
             <version>1.8.6</version>
-        </dependency>
+        </dependency>-->
 
         <!--不入侵代码-->
         <dependency>
             <groupId>com.alibaba.csp</groupId>
             <artifactId>sentinel-annotation-aspectj</artifactId>
             <version>1.8.6</version>
-        </dependency>
-
-
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-core</artifactId>
-            <version>1.36</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-generator-annprocess</artifactId>
-            <version>1.36</version>
-            <scope>provided</scope>
         </dependency>
 
         <!-- Protocol Buffers 核心依赖 -->
@@ -256,17 +185,12 @@
         </dependency>
 
 
-
         <!--去中心化消息ID-->
         <dependency>
             <groupId>com.fasterxml.uuid</groupId>
             <artifactId>java-uuid-generator</artifactId>
             <version>5.1.0</version>
         </dependency>
-
-
-
-
 
     </dependencies>
 

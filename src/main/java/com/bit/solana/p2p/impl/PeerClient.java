@@ -131,7 +131,7 @@ public class PeerClient {
         quicNodeWrapper.setAddress(node.getAddress());
         quicNodeWrapper.setPort(node.getPort());
         PEER_CONNECT_CACHE.put(nodeIdStr, quicNodeWrapper);
-        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
+        quicNodeWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());//开启心跳维护这个连接
         return quicNodeWrapper;
     }
 
@@ -182,7 +182,7 @@ public class PeerClient {
         existingWrapper.setAddress(ipAddress1);
         existingWrapper.setPort(port);
         PEER_CONNECT_CACHE.put(nodeIdStr, existingWrapper);
-        existingWrapper.startHeartbeat(HEARTBEAT_INTERVAL);//开启心跳维护这个连接
+        existingWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());//开启心跳维护这个连接
 
         return existingWrapper;
     }
@@ -218,6 +218,8 @@ public class PeerClient {
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(bytesToHex(requestId), responseFuture);
         heartbeatStream.writeAndFlush(byteBuf);
+
+
         byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
         if (bytes == null) {
             log.info("节点{}连接失败", remoteAddress);

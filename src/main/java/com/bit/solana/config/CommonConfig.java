@@ -43,7 +43,7 @@ public class CommonConfig {
         if (bytes == null) {
             self = new Peer();
             self.setAddress("127.0.0.1");
-            self.setPort(8333);
+            self.setPort(config.getQuicPort());
 
             List<String> mnemonic = generateMnemonic();
             KeyInfo baseKey = getSolanaKeyPair(mnemonic, 0, 0);
@@ -60,6 +60,8 @@ public class CommonConfig {
         } else {
             //反序列化
             self = Peer.deserialize(bytes);
+            self.setPort(config.getQuicPort());
+            dataBase.update(TableEnum.PEER, PEER_KEY, self.serialize());
         }
         byte[] selfNodeId = self.getId();
         log.info("本地节点初始化完成，ID: {}, 监听端口: {}", Base58.encode(selfNodeId), self.getPort());

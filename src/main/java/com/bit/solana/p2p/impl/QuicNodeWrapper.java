@@ -1,15 +1,24 @@
 package com.bit.solana.p2p.impl;
 
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
+import com.bit.solana.p2p.protocol.P2PMessage;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import io.netty.incubator.codec.quic.QuicStreamType;
+import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.*;
+
+import static com.bit.solana.config.CommonConfig.RESPONSE_FUTURECACHE;
+import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
+import static com.bit.solana.p2p.protocol.ProtocolEnum.PING_V1;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 /**
  * 随用随建是其最优使用方式
@@ -29,7 +38,7 @@ public class QuicNodeWrapper {
     //最后更新时间
     private long lastSeen;
     // 连接过期阈值（秒）：默认5秒，无活动则判定为过期
-    private int expireSeconds = 5;
+    private int expireSeconds = 300;
 
 
     //衍生
@@ -50,14 +59,87 @@ public class QuicNodeWrapper {
         throw new UnsupportedOperationException("必须注入全局调度器，禁止无参构造");
     }
 
-    public void startHeartbeat(long intervalSeconds) {
-        // 取消原有任务（避免重复调度）
-        if (heartbeatTask != null && !heartbeatTask.isCancelled()) {
-            heartbeatTask.cancel(false);
+    public void startHeartbeat(long intervalSeconds,byte[] localId) {
+        try {
+            // 1. 取消原有任务（避免重复调度）
+            stopHeartbeat();
+            // 3. 提交周期性心跳任务到全局调度器
+            heartbeatTask = globalScheduler.scheduleAtFixedRate(
+                    () -> executeHeartbeat(localId), // 心跳执行逻辑
+                    0, // 初始延迟：立即执行第一次
+                    intervalSeconds, // 周期间隔
+                    TimeUnit.SECONDS // 时间单位
+            );
+
+            log.info("节点{}心跳任务已启动，间隔{}秒，调度器：{}",
+                    bytesToHex(nodeId), intervalSeconds, globalScheduler);
+        }catch (Exception e){
+            throw new RuntimeException("心跳发生错误",e);
         }
-
-
     }
+
+
+    /**
+     * 执行单次心跳逻辑（封装为独立方法，便于调度执行）
+     * @param localId 本地节点ID
+     */
+    private void executeHeartbeat(byte[] localId) {
+        try {
+            // 前置检查：连接是否活跃
+            if (!isActive()) {
+                log.warn("节点{}连接已失效（非活跃/过期），停止心跳任务", bytesToHex(nodeId));
+                stopHeartbeat();
+                return;
+            }
+
+            // 1. 获取/创建心跳流
+            QuicStreamChannel heartbeatStream = getOrCreateHeartbeatStream();
+            if (heartbeatStream == null || !heartbeatStream.isActive()) {
+                log.error("节点{}无法获取有效心跳流，本次心跳失败", bytesToHex(nodeId));
+                return;
+            }
+
+            // 2. 构建心跳消息
+            P2PMessage p2PMessage = newRequestMessage(localId, PING_V1, new byte[]{0x01});
+            byte[] requestId = p2PMessage.getRequestId();
+            byte[] serialize = p2PMessage.serialize();
+
+            // 3. 发送心跳请求
+            ByteBuf byteBuf = Unpooled.wrappedBuffer(serialize);
+            CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+            RESPONSE_FUTURECACHE.put(bytesToHex(requestId), responseFuture);
+
+            heartbeatStream.writeAndFlush(byteBuf).addListener(future -> {
+                if (!future.isSuccess()) {
+                    log.error("节点{}心跳消息发送失败", bytesToHex(nodeId), future.cause());
+                    // 移除缓存的future，避免内存泄漏
+                    RESPONSE_FUTURECACHE.asMap().remove(bytesToHex(requestId));
+                }
+            });
+            // 4. 等待心跳响应
+            byte[] responseBytes = responseFuture.get(3, TimeUnit.SECONDS); // 响应超时设为3秒（小于心跳间隔）
+            if (responseBytes == null || responseBytes.length == 0) {
+                log.warn("节点{}心跳响应为空", bytesToHex(nodeId));
+            } else {
+                // 更新最后活动时间
+                updateLastSeen();
+                log.debug("节点{}心跳成功，响应长度：{}字节", bytesToHex(nodeId), responseBytes.length);
+            }
+
+        } catch (TimeoutException e) {
+            log.warn("节点{}心跳响应超时（3秒），可能连接不稳定", bytesToHex(nodeId));
+            // 超时不立即停止心跳，仅记录日志
+        } catch (ExecutionException e) {
+            log.error("节点{}心跳执行异常", bytesToHex(nodeId), e.getCause());
+        } catch (InterruptedException e) {
+            log.warn("节点{}心跳任务被中断", bytesToHex(nodeId));
+            Thread.currentThread().interrupt(); // 恢复中断状态
+            stopHeartbeat(); // 中断后停止心跳任务
+        } catch (Exception e) {
+            log.error("节点{}心跳发生未知异常", bytesToHex(nodeId), e);
+        }
+    }
+
 
 
     // 关闭连接
@@ -128,6 +210,7 @@ public class QuicNodeWrapper {
     public boolean isActive() {
         boolean channelActive = quicChannel != null && quicChannel.isActive();
         if (!channelActive) {
+            log.warn("节点{}已断开连接", nodeId);
             return false;
         }
         // 2. 再检查是否过期（核心：结合lastSeen判断）
@@ -168,7 +251,9 @@ public class QuicNodeWrapper {
         }
         // 计算超时时间：当前时间 - 最后更新时间 > 过期阈值（毫秒）
         long expireMillis = expireSeconds * 1000L;
-        return (System.currentTimeMillis() - lastSeen) > expireMillis;
+        boolean b = (System.currentTimeMillis() - lastSeen) > expireMillis;
+        log.info("节点{}已过期", b);
+        return b;
     }
 
     /**

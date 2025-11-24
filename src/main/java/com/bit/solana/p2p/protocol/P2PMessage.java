@@ -5,6 +5,8 @@ import com.bit.solana.proto.Structure;
 import com.bit.solana.util.ByteUtils;
 import com.bit.solana.util.UUIDv7Generator;
 import com.google.protobuf.ByteString;
+import io.netty.incubator.codec.quic.QuicChannel;
+import io.netty.incubator.codec.quic.QuicStreamChannel;
 import lombok.Data;
 import lombok.ToString;
 import org.bitcoinj.core.Base58;
@@ -30,7 +32,6 @@ import static com.bit.solana.util.ByteUtils.bytesToHex;
  * - data：protobuf序列化后的业务数据
  */
 @Data
-@ToString(exclude = "data") // toString排除大体积data字段，避免日志冗余
 public class P2PMessage {
     // ===================== 常量定义（公开，方便外部使用） =====================
     /** 最小协议版本号（从1开始，0代表未初始化） */
@@ -55,6 +56,11 @@ public class P2PMessage {
     private int length;            // data字段长度（protobuf序列化后）
     private short version = 1;     // 协议版本（默认1，防篡改）
     private byte[] data;           // 业务数据（protobuf序列化，JVM数组长度为int）
+
+
+    // ===================== 非核心字段 无需序列化反序列化 用于转移数据 =====================
+    private QuicChannel quicChannel;
+
 
     // ===================== 核心逻辑方法（修复+优化） =====================
     /**

@@ -15,6 +15,8 @@ public enum ProtocolEnum {
 
     CHAIN_V1(1, "/chain/1.0.0",true),//需要返回chain
     BLOCK_V1(2, "/block/1.0.0",true),//需要返回block
+
+
     PING_V1(3, "/ping/1.0.0",true),//需要返回pong
 
     Network_handshake_V1(4, "/networkHandshake/1.0.0",true),
