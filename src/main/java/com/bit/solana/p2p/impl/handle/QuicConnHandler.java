@@ -22,7 +22,6 @@ public class QuicConnHandler extends SimpleChannelInboundHandler<ByteBuf> {
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         log.info("连接处理: {}", ctx.channel().remoteAddress());
-        log.info("连接处理: {}", ctx.channel().localAddress());
     }
 
     @Override
