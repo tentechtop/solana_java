@@ -173,6 +173,7 @@ public class PeerClient {
             log.info("节点{}已处于活跃连接状态，直接返回", multiAddressString);
             return existingWrapper;
         }
+        log.info("缓存不存在");
         String ipAddress1 = multiAddress.getIpAddress();
         int port = multiAddress.getPort();
         InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress1, port);

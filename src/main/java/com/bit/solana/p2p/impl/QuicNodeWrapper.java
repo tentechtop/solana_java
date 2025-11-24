@@ -40,7 +40,6 @@ public class QuicNodeWrapper {
     // 连接过期阈值（秒）：默认5秒，无活动则判定为过期
     private int expireSeconds = 300;
 
-
     //衍生
     private InetSocketAddress inetSocketAddress;
 

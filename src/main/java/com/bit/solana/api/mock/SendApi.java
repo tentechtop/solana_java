@@ -49,7 +49,7 @@ public class SendApi {
     public String connect(String url) throws Exception {
         //节点回复反转换后的数据
         QuicNodeWrapper connect = peerClient.connect(url);
-        log.info("节点连接成功：{}", connect.getInetSocketAddress());
+        log.info("节点连接成功：{}", connect);
         return "";
     }
 

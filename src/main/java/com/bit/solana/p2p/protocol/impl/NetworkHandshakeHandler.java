@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 
 import static com.bit.solana.config.CommonConfig.*;
@@ -49,6 +51,7 @@ public class NetworkHandshakeHandler implements ProtocolHandler.ResultProtocolHa
 
         //记录并保存
         String encode = bytesToHex(senderId);
+        //在线节点缓存
         Peer ifPresent = ONLINE_PEER_CACHE.getIfPresent(encode);
         if (ifPresent != null) {
             ifPresent.setSharedSecret(sharedSecret);
@@ -61,16 +64,36 @@ public class NetworkHandshakeHandler implements ProtocolHandler.ResultProtocolHa
                     .lastSeen(System.currentTimeMillis())
                     .build());
         }
+        //连接缓存
         QuicNodeWrapper existingWrapper = PEER_CONNECT_CACHE.getIfPresent(encode);
+
+        String hostAddress = "127.0.0.1";
+        int port = 8333;
+        SocketAddress remoteSocketAddress = requestParams.getQuicChannel().remoteSocketAddress();
+        if (remoteSocketAddress instanceof InetSocketAddress) {
+            InetSocketAddress inetAddr = (InetSocketAddress) remoteSocketAddress;
+            // 获取IP地址字符串（排除方括号/端口，纯IP）
+            hostAddress = inetAddr.getAddress().getHostAddress();
+            port = inetAddr.getPort();
+            log.info("远程IP: {}", hostAddress);
+            log.info("远程端口: {}", port);
+        }
+
         if (existingWrapper != null) {
+            log.info("连接缓存已存在，更新连接信息");
             existingWrapper.setQuicChannel(requestParams.getQuicChannel());
             existingWrapper.setActive(true);
+            existingWrapper.setAddress(hostAddress);
+            existingWrapper.setPort(port);
             existingWrapper.updateLastSeen();
             existingWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());
             PEER_CONNECT_CACHE.put(encode, existingWrapper);
         }else {
+            log.info("连接缓存不存在，新增连接信息");
             QuicNodeWrapper quicNodeWrapper = new QuicNodeWrapper(GLOBAL_SCHEDULER);
             quicNodeWrapper.setNodeId(senderId);
+            quicNodeWrapper.setAddress(hostAddress);
+            quicNodeWrapper.setPort(port);
             quicNodeWrapper.setQuicChannel(requestParams.getQuicChannel());
             quicNodeWrapper.setActive(true);
             quicNodeWrapper.updateLastSeen();
