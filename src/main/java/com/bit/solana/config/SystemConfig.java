@@ -9,6 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Slf4j
 @Data
 @Component
@@ -20,6 +22,10 @@ public class SystemConfig {
     private String password;
     private Integer maxSize;//最大内存占用大小 MB
     private Integer quicPort;
+    private Boolean isStun;
+    private Integer stunPort;
+    private List<String> stunAddress;
+
 
     @Autowired
     private DataBase dataBase;

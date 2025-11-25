@@ -9,6 +9,10 @@ system:
   db-cache-size: 500
   #节点与节点之间的通信 TCP通信 支持P2P网络
   quic-port: 8335
+  is-stun: false
+  stun-port: 3479
+  stun-address:
+    - '127.0.0.1:3479'
   web-socket: 28335
   #用户在启动时可以配置公钥 对于隐私接口必须签名才能访问 也就是节点所有者
   server-pubkey:

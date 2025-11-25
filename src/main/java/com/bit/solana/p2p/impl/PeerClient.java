@@ -67,12 +67,17 @@ public class PeerClient {
     private QuicConnHandler quicConnHandler;
     @Autowired
     private QuicStreamHandler quicStreamHandler;
+    @Autowired
+    private PeerServiceImpl peerService;
+
 
     // 全局锁（避免重复连接）
     private final ReentrantLock connectLock = new ReentrantLock();
 
 
     private NioEventLoopGroup eventLoopGroup;
+
+
     private Bootstrap bootstrap;
     private QuicSslContext sslContext;
     private ChannelHandler codec;
