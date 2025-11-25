@@ -15,9 +15,9 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelOption;
+import io.netty.channel.*;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -33,6 +33,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -102,13 +103,14 @@ public class PeerClient {
         bootstrap = new Bootstrap();
         datagramChannel = bootstrap.group(eventLoopGroup)
                 .channel(NioDatagramChannel.class)
-                .option(ChannelOption.SO_REUSEADDR, true) // 复用端口
-                .option(ChannelOption.SO_RCVBUF, 1024 * 1024) // 接收缓冲区 1MB
-                .option(ChannelOption.SO_SNDBUF, 1024 * 1024) // 发送缓冲区 1MB
+                .option(ChannelOption.SO_REUSEADDR, true)
+                .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
+                .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
                 .handler(codec)
                 .bind(0) // 随机绑定可用端口
                 .sync()
                 .channel();
+
         log.info("PeerClient 初始化完成，绑定UDP端口:{}", datagramChannel.localAddress());
     }
 
