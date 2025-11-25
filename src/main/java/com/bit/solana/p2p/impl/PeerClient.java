@@ -8,7 +8,6 @@ import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
-import com.bit.solana.util.ECCWithAESGCM;
 import com.bit.solana.util.MultiAddress;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -16,8 +15,6 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
-import io.netty.channel.epoll.Epoll;
-import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -31,13 +28,9 @@ import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -46,7 +39,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
-import static com.bit.solana.p2p.protocol.ProtocolEnum.PING_V1;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
@@ -195,7 +187,6 @@ public class PeerClient {
         existingWrapper.setPort(port);
         PEER_CONNECT_CACHE.put(nodeIdStr, existingWrapper);
         existingWrapper.startHeartbeat(HEARTBEAT_INTERVAL,commonConfig.getSelf().getId());//开启心跳维护这个连接
-
         return existingWrapper;
     }
 
@@ -286,10 +277,8 @@ public class PeerClient {
             quicNodeWrapper = connect(nodeId);
         }
         sendData(quicNodeWrapper, data);
-
-
-
     }
+
     public void sendData(QuicNodeWrapper wrapper, byte[] data) throws Exception {
         QuicStreamChannel tempStream = wrapper.createTempStream();
         if (tempStream == null || !tempStream.isActive()) {
@@ -297,33 +286,13 @@ public class PeerClient {
             return;
         }
         ByteBuf buf = Unpooled.copiedBuffer(data);
-        tempStream.writeAndFlush(buf)
-                .addListener((GenericFutureListener<Future<Void>>) future -> {
-                    if (buf.refCnt() > 0) {
-                        buf.release(); // 操作完成后释放
-                    }
-                    if (future.isSuccess()) {
-                        wrapper.setLastSeen(System.currentTimeMillis());
-                        tempStream.close().sync();
-                    } else {
-                        log.error("临时流发送失败", future.cause());
-                        // 关闭流并清理
-                        try {
-                            if (tempStream.isActive()) {
-                                tempStream.close().sync();
-                            }
-                        } catch (InterruptedException e) {
-                            log.warn("节点临时流异常关闭失败", e);
-                        }
-                        //标记连接不可用
-                        wrapper.setActive(false);
-                    }
-                });
+        tempStream.writeAndFlush(buf);
+        tempStream.close().sync();
     }
 
 
     //发送协议消息
-    public void sendData(byte[] nodeId,ProtocolEnum protocol, byte[] request) throws Exception {
+    public QuicNodeWrapper sendData(byte[] nodeId, ProtocolEnum protocol, byte[] request) throws Exception {
         String nodeIdHex = bytesToHex(nodeId);
         log.debug("向节点{}发送协议消息，协议:{}", nodeIdHex, protocol.getProtocol());
         // 1. 获取或创建连接
@@ -337,6 +306,7 @@ public class PeerClient {
         P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
         byte[] serialize = p2PMessage.serialize();
         sendData(wrapper, serialize);
+        return wrapper;
     }
 
 
@@ -347,6 +317,11 @@ public class PeerClient {
         log.debug("向节点{}发送协议消息，协议:{}", nodeIdHex, protocol.getProtocol());
         // 1. 获取或创建连接
         QuicNodeWrapper wrapper = PEER_CONNECT_CACHE.getIfPresent(nodeIdHex);
+
+        log.info("全部的数据{}",PEER_CONNECT_CACHE.asMap());
+        if (wrapper == null){
+            log.info("节点未连接");
+        }
         if (wrapper == null || !wrapper.isActive()) {
             wrapper = connect(nodeId);
             if (wrapper == null) {
@@ -355,14 +330,20 @@ public class PeerClient {
         }
         P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
         byte[] serialize = p2PMessage.serialize();
+        ByteBuf byteBuf = Unpooled.wrappedBuffer(serialize);
+
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(bytesToHex(p2PMessage.getRequestId()), responseFuture);
-        try {
-            sendData(wrapper, serialize);
-            return responseFuture.get(timeout, TimeUnit.MILLISECONDS);
-        } finally {
-            RESPONSE_FUTURECACHE.invalidate(bytesToHex(p2PMessage.getRequestId()));
-        }
+
+        QuicStreamChannel tempStream = wrapper.createTempStream();
+        tempStream.writeAndFlush(byteBuf).addListener(future -> {
+            if (!future.isSuccess()) {
+                log.error("节点{}心跳消息发送失败", bytesToHex(nodeId), future.cause());
+                // 移除缓存的future，避免内存泄漏
+                RESPONSE_FUTURECACHE.asMap().remove(bytesToHex(p2PMessage.getRequestId()));
+            }
+        });
+        return responseFuture.get(timeout, TimeUnit.SECONDS);
     }
 
 

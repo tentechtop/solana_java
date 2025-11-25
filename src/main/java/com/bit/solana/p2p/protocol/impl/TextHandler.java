@@ -1,0 +1,30 @@
+package com.bit.solana.p2p.protocol.impl;
+
+import com.bit.solana.config.CommonConfig;
+import com.bit.solana.p2p.protocol.P2PMessage;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolHandler;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import static com.bit.solana.p2p.protocol.P2PMessage.newResponseMessage;
+
+@Slf4j
+@Component
+public class TextHandler implements ProtocolHandler.ResultProtocolHandler{
+
+    @Autowired
+    private CommonConfig commonConfig;
+
+    @Override
+    public byte[] handleResult(P2PMessage requestParams) throws Exception {
+
+        log.info("收到文本消息");
+        String text = "我已经收到回复";
+
+        P2PMessage p2PMessage = newResponseMessage(commonConfig.getSelf().getId(), ProtocolEnum.TEXT_V1,requestParams.getRequestId(), text.getBytes());
+
+        return p2PMessage.serialize();
+    }
+}

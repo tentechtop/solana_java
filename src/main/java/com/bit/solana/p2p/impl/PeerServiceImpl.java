@@ -11,6 +11,7 @@ import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
+import com.bit.solana.p2p.protocol.impl.TextHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
@@ -72,7 +73,8 @@ public class PeerServiceImpl implements PeerService {
     private NetworkHandshakeHandler networkHandshakeHandler;
     @Autowired
     private PingHandler pingHandler;
-
+    @Autowired
+    private TextHandler textHandler;
 
 
 
@@ -106,6 +108,8 @@ public class PeerServiceImpl implements PeerService {
         //注册协议
         protocolRegistry.registerResultHandler(ProtocolEnum.Network_handshake_V1,  networkHandshakeHandler);
         protocolRegistry.registerResultHandler(ProtocolEnum.PING_V1,  pingHandler);
+
+        protocolRegistry.registerResultHandler(ProtocolEnum.TEXT_V1,  textHandler);
     }
 
 

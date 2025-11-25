@@ -22,6 +22,8 @@ public enum ProtocolEnum {
     Network_handshake_V1(4, "/networkHandshake/1.0.0",true),
 
 
+    TEXT_V1(5, "/text/1.0.0",true),
+
     ;
 
     // Getter

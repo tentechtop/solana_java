@@ -4,11 +4,13 @@ import com.bit.solana.p2p.impl.PeerClient;
 import com.bit.solana.p2p.impl.QuicNodeWrapper;
 import lombok.extern.slf4j.Slf4j;
 
+import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
 
 
 @Slf4j
@@ -52,5 +54,14 @@ public class SendApi {
         log.info("节点连接成功：{}", connect);
         return "";
     }
+
+    @GetMapping("/sendMsg")
+    public String sendMsg(String nodeId) throws Exception {
+        //节点回复反转换后的数据
+        byte[] bytes = peerClient.sendData(Base58.decode(nodeId), TEXT_V1, new byte[]{0x01}, 5);
+        log.info("节点回复：{}", new String(bytes));
+        return new String(bytes);
+    }
+
 
 }
