@@ -205,6 +205,7 @@ public class PeerClient {
         //创建心跳流维护连接
         heartbeatStream = quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 quicStreamHandler).sync().getNow();
+
         //先用心跳流处理握手 如果不一直就返回空
         //发送握手数据
         NetworkHandshake networkHandshake = new NetworkHandshake();
