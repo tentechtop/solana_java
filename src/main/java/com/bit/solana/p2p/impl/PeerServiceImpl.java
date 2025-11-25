@@ -176,7 +176,7 @@ public class PeerServiceImpl implements PeerService {
                 clientBootstrap.localAddress(new InetSocketAddress(8333)); // 正确！
                 log.info("TCP客户端已启动，端口: {}", 8333);
 
-                InetSocketAddress stunAddress = new InetSocketAddress("127.0.0.1", 3479);
+                InetSocketAddress stunAddress = new InetSocketAddress("101.35.87.31", 3479);
                 ChannelFuture connectFuture = clientBootstrap.connect(stunAddress);
                 //发送 0x01数据给服务端
                 // 2. 同步等待连接成功（也可用addListener异步处理）
@@ -305,12 +305,70 @@ public class PeerServiceImpl implements PeerService {
      */
     @PreDestroy
     public void shutdown() throws InterruptedException {
+        stopPeriodicSendTask();
+        // 2. 关闭STUN Channel连接（TCP客户端）
+        if (stunChannel != null) {
+            try {
+                stunChannel.close().sync();
+                log.info("STUN客户端Channel已关闭");
+            } catch (InterruptedException e) {
+                log.warn("关闭STUN Channel时线程中断", e);
+                Thread.currentThread().interrupt(); // 恢复中断状态
+            } finally {
+                stunChannel = null;
+            }
+        }
+        // 3. 关闭TCP客户端线程组
+        if (clientGroup != null) {
+            clientGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS)
+                    .addListener(future -> log.info("TCP客户端EventLoopGroup已关闭"));
+            clientGroup = null;
+        }
+        // 4. 关闭TCP服务端（STUN服务器模式）
+        if (tcpBindFuture != null && tcpBindFuture.channel() != null) {
+            try {
+                tcpBindFuture.channel().close().sync();
+                log.info("STUN服务器(TCP)Channel已关闭");
+            } catch (InterruptedException e) {
+                log.warn("关闭TCP服务器Channel时线程中断", e);
+                Thread.currentThread().interrupt();
+            } finally {
+                tcpBindFuture = null;
+            }
+        }
+        // 5. 关闭TCP服务端线程组（boss/worker）
+        if (bossGroup != null) {
+            bossGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS)
+                    .addListener(future -> log.info("TCP服务器BossGroup已关闭"));
+            bossGroup = null;
+        }
+        if (workerGroup != null) {
+            workerGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS)
+                    .addListener(future -> log.info("TCP服务器WorkerGroup已关闭"));
+            workerGroup = null;
+        }
+
+
+        // 6. 关闭QUIC服务器Channel
         if (quicServerChannel != null) {
-            quicServerChannel.closeFuture().sync();
+            try {
+                quicServerChannel.close().sync();
+                log.info("QUIC服务器Channel已关闭");
+            } catch (InterruptedException e) {
+                log.warn("关闭QUIC Channel时线程中断", e);
+                Thread.currentThread().interrupt();
+            } finally {
+                quicServerChannel = null;
+            }
         }
+
+        // 7. 关闭QUIC EventLoopGroup
         if (eventLoopGroup != null) {
-            eventLoopGroup.shutdownGracefully();
+            eventLoopGroup.shutdownGracefully(1, 5, TimeUnit.SECONDS)
+                    .addListener(future -> log.info("QUIC EventLoopGroup已关闭"));
+            eventLoopGroup = null;
         }
-        log.info("QUIC服务器已关闭");
+
+
     }
 }
