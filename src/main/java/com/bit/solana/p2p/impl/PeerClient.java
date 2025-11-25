@@ -34,7 +34,9 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +45,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
+import static com.bit.solana.p2p.protocol.ProtocolEnum.PING_V1;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
@@ -88,7 +91,8 @@ public class PeerClient {
                 .initialMaxData(50 * 1024 * 1024)
                 .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
                 .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
-                .initialMaxStreamsBidirectional(200)
+                .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
+                .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
                 .build();
         bootstrap = new Bootstrap();
         datagramChannel = bootstrap.group(eventLoopGroup)
@@ -219,8 +223,6 @@ public class PeerClient {
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(bytesToHex(requestId), responseFuture);
         heartbeatStream.writeAndFlush(byteBuf);
-
-
         byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
         if (bytes == null) {
             log.info("节点{}连接失败", remoteAddress);

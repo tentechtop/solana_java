@@ -117,6 +117,8 @@ public class QuicNodeWrapper {
             });
             // 4. 等待心跳响应
             byte[] responseBytes = responseFuture.get(3, TimeUnit.SECONDS); // 响应超时设为3秒（小于心跳间隔）
+            P2PMessage deserialize = P2PMessage.deserialize(responseBytes);
+            log.debug("节点{}收到心跳响应：{}", bytesToHex(nodeId), deserialize);
             if (responseBytes == null || responseBytes.length == 0) {
                 log.warn("节点{}心跳响应为空", bytesToHex(nodeId));
             } else {
@@ -201,7 +203,7 @@ public class QuicNodeWrapper {
             log.error("Node {} QUIC connection inactive, cannot create block sync stream", nodeId);
             return null;
         }
-        return quicChannel.createStream(QuicStreamType.UNIDIRECTIONAL,
+        return quicChannel.createStream(QuicStreamType.BIDIRECTIONAL,
                 new QuicStreamHandler()).sync().get();
     }
 
@@ -250,9 +252,7 @@ public class QuicNodeWrapper {
         }
         // 计算超时时间：当前时间 - 最后更新时间 > 过期阈值（毫秒）
         long expireMillis = expireSeconds * 1000L;
-        boolean b = (System.currentTimeMillis() - lastSeen) > expireMillis;
-        log.info("节点{}已过期", b);
-        return b;
+        return (System.currentTimeMillis() - lastSeen) > expireMillis;
     }
 
     /**

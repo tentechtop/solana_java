@@ -85,6 +85,8 @@ public class CommonConfig {
     public static final int DEFAULT_TIMEOUT = 5000;
     // 本地节点标识
     public static final byte[] PEER_KEY = "LOCAL_PEER".getBytes();
+    //最大流数量
+    public static final int MAX_STREAM_COUNT = 10000;
 
     /**
      * 全局调度器：固定4个核心线程，轻量处理定时任务（监控、清理、心跳等）

@@ -34,6 +34,7 @@ import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.config.CommonConfig.CONNECT_KEEP_ALIVE_SECONDS;
+import static com.bit.solana.config.CommonConfig.MAX_STREAM_COUNT;
 
 @Slf4j
 @Data
@@ -113,7 +114,9 @@ public class PeerServiceImpl implements PeerService {
                     .initialMaxData(50 * 1024 * 1024)
                     .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
                     .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
-                    .initialMaxStreamsBidirectional(200)
+                    // 这里设置「双向流」的初始最大数量上限
+                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
+                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
                     .tokenHandler(InsecureQuicTokenHandler.INSTANCE) // 生产环境需自定义安全token处理器
                     .handler(quicConnHandler)//代表一个 QUIC 连接（连接级），管理连接的建立 / 关闭、全局流量控制、握手等
                     .streamHandler(new ChannelInitializer<QuicStreamChannel>() {
