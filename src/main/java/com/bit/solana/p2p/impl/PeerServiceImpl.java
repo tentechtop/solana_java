@@ -14,6 +14,7 @@ import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -122,6 +123,21 @@ public class PeerServiceImpl implements PeerService {
     public void startQuicServer() throws CertificateException {
         eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         try {
+/*            clientSslContext = QuicSslContextBuilder.forClient()
+                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                    .applicationProtocols("solana-p2p")
+                    .build();
+
+            clientCodec = new QuicClientCodecBuilder()
+                    .sslContext(clientSslContext)
+                    .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
+                    .initialMaxData(50 * 1024 * 1024)
+                    .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
+                    .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
+                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
+                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
+                    .build();*/
+
             // 生产环境建议替换为CA签名证书，此处保留自签名用于开发
             selfSignedCert = new SelfSignedCertificate();
             // 构建QUIC SSL上下文（与PeerClient保持协议一致）
@@ -150,20 +166,7 @@ public class PeerServiceImpl implements PeerService {
                     })
                     .build();
 
-            clientSslContext = QuicSslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .applicationProtocols("solana-p2p")
-                    .build();
 
-            clientCodec = new QuicClientCodecBuilder()
-                    .sslContext(clientSslContext)
-                    .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
-                    .initialMaxData(50 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
-                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
-                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
-                    .build();
 
             // 绑定端口启动服务器
             bootstrap = new Bootstrap();
@@ -174,7 +177,6 @@ public class PeerServiceImpl implements PeerService {
                     .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                     .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
                     .handler(serviceCodec)
-                    .handler(clientCodec)
                     .bind(commonConfig.getSelf().getPort())
                     .sync()
                     .channel();
