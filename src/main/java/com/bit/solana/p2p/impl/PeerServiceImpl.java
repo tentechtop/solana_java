@@ -18,6 +18,7 @@ import io.netty.channel.*;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 import io.netty.incubator.codec.quic.*;
@@ -58,14 +59,17 @@ public class PeerServiceImpl implements PeerService {
     @Autowired
     private ProtocolRegistry protocolRegistry;
 
-    // QUIC服务器通道 （共享给客户端）
+    // QUIC服务器通道
     private Channel quicServerChannel;
-    // 事件循环组 （客户端复用）
+    // 事件循环组
     private NioEventLoopGroup eventLoopGroup;
     //QUIC SSL上下文
-    private QuicSslContext sslContext;
+    private QuicSslContext serviceSslContext;
+    private QuicSslContext clientSslContext;
+
     private SelfSignedCertificate selfSignedCert;
-    private ChannelHandler quicCodec;
+    private ChannelHandler serviceCodec;
+    private ChannelHandler clientCodec;
 
     private Bootstrap bootstrap;
 
@@ -121,13 +125,13 @@ public class PeerServiceImpl implements PeerService {
             // 生产环境建议替换为CA签名证书，此处保留自签名用于开发
             selfSignedCert = new SelfSignedCertificate();
             // 构建QUIC SSL上下文（与PeerClient保持协议一致）
-            sslContext = QuicSslContextBuilder.forServer(
+            serviceSslContext = QuicSslContextBuilder.forServer(
                             selfSignedCert.privateKey(), null, selfSignedCert.certificate())
                     .applicationProtocols("solana-p2p")
                     .build();
 
-            quicCodec = new QuicServerCodecBuilder()
-                    .sslContext(sslContext)
+            serviceCodec = new QuicServerCodecBuilder()
+                    .sslContext(serviceSslContext)
                     .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS)
                     .initialMaxData(50 * 1024 * 1024)
                     .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
@@ -145,14 +149,32 @@ public class PeerServiceImpl implements PeerService {
                         }
                     })
                     .build();
+
+            clientSslContext = QuicSslContextBuilder.forClient()
+                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                    .applicationProtocols("solana-p2p")
+                    .build();
+
+            clientCodec = new QuicClientCodecBuilder()
+                    .sslContext(clientSslContext)
+                    .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
+                    .initialMaxData(50 * 1024 * 1024)
+                    .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
+                    .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
+                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
+                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
+                    .build();
+
             // 绑定端口启动服务器
             bootstrap = new Bootstrap();
-            quicServerChannel = bootstrap.group(eventLoopGroup)
+            quicServerChannel = bootstrap
+                    .group(eventLoopGroup)
                     .channel(NioDatagramChannel.class)
                     .option(ChannelOption.SO_REUSEADDR, true)
                     .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                     .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
-                    .handler(quicCodec)
+                    .handler(serviceCodec)
+                    .handler(clientCodec)
                     .bind(commonConfig.getSelf().getPort())
                     .sync()
                     .channel();

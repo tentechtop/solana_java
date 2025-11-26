@@ -66,11 +66,7 @@ public class PeerClient {
 
     // 全局锁（避免重复连接）
     private final ReentrantLock connectLock = new ReentrantLock();
-
-
     private NioEventLoopGroup eventLoopGroup;
-
-
     private Bootstrap bootstrap;
     private QuicSslContext sslContext;
     private ChannelHandler codec;
@@ -78,7 +74,7 @@ public class PeerClient {
 
     @PostConstruct
     public void init() throws InterruptedException, ExecutionException {
-        eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
+/*        eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         sslContext = QuicSslContextBuilder.forClient()
                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
                 .applicationProtocols("solana-p2p")
@@ -91,9 +87,9 @@ public class PeerClient {
                 .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
                 .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
                 .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
-                .build();
-        bootstrap = new Bootstrap();
-        datagramChannel = bootstrap.group(eventLoopGroup)
+                .build();*/
+        /*bootstrap = new Bootstrap();*/
+/*        datagramChannel = bootstrap.group(eventLoopGroup)
                 .channel(NioDatagramChannel.class)
                 .option(ChannelOption.SO_REUSEADDR, true)
                 .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
@@ -101,8 +97,10 @@ public class PeerClient {
                 .handler(codec)
                 .bind(0) // 随机绑定可用端口
                 .sync()
-                .channel();
+                .channel();*/
 
+        //复用服务端Channel 实现一个端口
+        datagramChannel = peerService.getQuicServerChannel();
         log.info("PeerClient 初始化完成，绑定UDP端口:{}", datagramChannel.localAddress());
     }
 
