@@ -66,6 +66,11 @@ public class PlainUdpHandler extends ChannelInboundHandlerAdapter {
                 log.info("收到普通 UDP 数据包 | 来源：{} | 长度：{} | 内容：{}",
                         sender, readableBytes, bytesToHex(data));
 
+
+                //去除掉标志 并反序列化
+                //请求或者回复 或者 普通消息
+
+
                 // 手动释放普通包（处理完成，无需透传）
                 ReferenceCountUtil.release(packet);
             } else {

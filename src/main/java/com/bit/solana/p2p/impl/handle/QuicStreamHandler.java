@@ -101,10 +101,5 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }else {
             log.info("收到普通消息: {}", deserialize);
         }
-
-
-
-
-
     }
 }
