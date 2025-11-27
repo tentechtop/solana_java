@@ -3,6 +3,7 @@ package com.bit.solana.p2p.impl;
 import com.bit.solana.config.CommonConfig;
 import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
+import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
@@ -15,9 +16,12 @@ import com.bit.solana.p2p.protocol.impl.TextHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -33,10 +37,12 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.config.CommonConfig.*;
+import static com.bit.solana.p2p.impl.handle.PlainUdpHandler.PLAIN_UDP_FIXED_PREFIX;
 
 @Slf4j
 @Data
@@ -80,6 +86,9 @@ public class PeerServiceImpl implements PeerService {
     private PingHandler pingHandler;
     @Autowired
     private TextHandler textHandler;
+
+    @Autowired
+    private PlainUdpHandler plainUdpHandler;
 
 
 
@@ -176,12 +185,36 @@ public class PeerServiceImpl implements PeerService {
                     .option(ChannelOption.SO_REUSEADDR, true)
                     .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                     .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
-                    .handler(serviceCodec)
+                    // ========== 关键：Pipeline 顺序 ==========
+                    .handler(new ChannelInitializer<NioDatagramChannel>() {
+                        @Override
+                        protected void initChannel(NioDatagramChannel ch) throws Exception {
+                            ChannelPipeline pipeline = ch.pipeline();
+                            // 1. 先添加普通 UDP 处理器（优先拦截普通数据包）
+                            pipeline.addLast("plainUdpHandler", plainUdpHandler);
+                            // 2. 再添加 QUIC 服务器编解码器（处理 QUIC 流量）
+                            pipeline.addLast("quicServerCodec", serviceCodec);
+                        }
+                    })
                     .bind(commonConfig.getSelf().getPort())
                     .sync()
                     .channel();
-
             log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
+
+
+            if (config.getIsStun()){
+
+            }else {
+                //可以主动出站 节点的请求
+                InetSocketAddress targetAddr = new InetSocketAddress("127.0.0.1", 8333);
+                ByteBuf buf = Unpooled.wrappedBuffer(PLAIN_UDP_FIXED_PREFIX); // 4(类型) + 4(网络版本) + 4(内容长)
+                DatagramPacket datagramPacket = new DatagramPacket(buf, targetAddr);
+                quicServerChannel.writeAndFlush(datagramPacket);
+                //再http请求 拿到缓存
+            }
+
+
+
         }catch (Exception e) {
             log.error("启动QUIC服务器失败", e);
             throw new RuntimeException("QUIC服务器启动失败", e);
