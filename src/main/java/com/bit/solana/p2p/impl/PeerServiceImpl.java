@@ -118,7 +118,6 @@ public class PeerServiceImpl implements PeerService {
         //注册协议
         protocolRegistry.registerResultHandler(ProtocolEnum.Network_handshake_V1,  networkHandshakeHandler);
         protocolRegistry.registerResultHandler(ProtocolEnum.PING_V1,  pingHandler);
-
         protocolRegistry.registerResultHandler(ProtocolEnum.TEXT_V1,  textHandler);
     }
 
