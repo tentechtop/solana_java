@@ -156,16 +156,7 @@ public class PeerServiceImpl implements PeerService {
             log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
 
 
-            if (config.getIsStun()){
 
-            }else {
-                //可以主动出站 节点的请求
-                InetSocketAddress targetAddr = new InetSocketAddress("127.0.0.1", 8333);
-                ByteBuf buf = Unpooled.wrappedBuffer(PLAIN_UDP_FIXED_PREFIX); // 4(类型) + 4(网络版本) + 4(内容长)
-                DatagramPacket datagramPacket = new DatagramPacket(buf, targetAddr);
-                quicServerChannel.writeAndFlush(datagramPacket);
-                //再http请求 拿到缓存
-            }
 
 
         }catch (Exception e) {
