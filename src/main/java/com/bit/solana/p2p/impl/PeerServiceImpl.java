@@ -26,7 +26,7 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
-import io.netty.incubator.codec.quic.*;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Data;
@@ -70,9 +70,6 @@ public class PeerServiceImpl implements PeerService {
     private Channel quicServerChannel;
     // 事件循环组
     private NioEventLoopGroup eventLoopGroup;
-    //QUIC SSL上下文
-    private QuicSslContext serviceSslContext;
-    private QuicSslContext clientSslContext;
 
     private SelfSignedCertificate selfSignedCert;
     private ChannelHandler serviceCodec;
@@ -96,7 +93,6 @@ public class PeerServiceImpl implements PeerService {
     @Override
     public void init() throws IOException, CertificateException {
         //在项目启动前 用socket 且用8333端口去访问STUN服务器 或者中转服务器 让他们返回 你的公网IP和映射地址 然后再去连接 并主动上报
-
 
         // 启动QUIC服务器
         startQuicServer();
@@ -132,49 +128,6 @@ public class PeerServiceImpl implements PeerService {
     public void startQuicServer() throws CertificateException {
         eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         try {
-/*            clientSslContext = QuicSslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .applicationProtocols("solana-p2p")
-                    .build();
-
-            clientCodec = new QuicClientCodecBuilder()
-                    .sslContext(clientSslContext)
-                    .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS) // 延长空闲超时，适配持续发送
-                    .initialMaxData(50 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
-                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
-                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
-                    .build();*/
-
-            // 生产环境建议替换为CA签名证书，此处保留自签名用于开发
-            selfSignedCert = new SelfSignedCertificate();
-            // 构建QUIC SSL上下文（与PeerClient保持协议一致）
-            serviceSslContext = QuicSslContextBuilder.forServer(
-                            selfSignedCert.privateKey(), null, selfSignedCert.certificate())
-                    .applicationProtocols("solana-p2p")
-                    .build();
-
-            serviceCodec = new QuicServerCodecBuilder()
-                    .sslContext(serviceSslContext)
-                    .maxIdleTimeout(CONNECT_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS)
-                    .initialMaxData(50 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalLocal(5 * 1024 * 1024)
-                    .initialMaxStreamDataBidirectionalRemote(5 * 1024 * 1024)
-                    // 这里设置「双向流」的初始最大数量上限
-                    .initialMaxStreamsBidirectional(MAX_STREAM_COUNT)
-                    .initialMaxStreamsUnidirectional(MAX_STREAM_COUNT)
-                    .tokenHandler(InsecureQuicTokenHandler.INSTANCE) // 生产环境需自定义安全token处理器
-                    .handler(quicConnHandler)//代表一个 QUIC 连接（连接级），管理连接的建立 / 关闭、全局流量控制、握手等
-                    .streamHandler(new ChannelInitializer<QuicStreamChannel>() {
-                        @Override
-                        protected void initChannel(QuicStreamChannel ch) throws Exception {
-                            //向pipeline添加QuicStreamHandler
-                            ch.pipeline().addLast(quicStreamHandler);//代表 QUIC 连接内的一个流（流级），每个连接可以创建多个流，流负责具体的数据读写。
-                        }
-                    })
-                    .build();
-
 
 
             // 绑定端口启动服务器
@@ -190,10 +143,12 @@ public class PeerServiceImpl implements PeerService {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-                            // 1. 先添加普通 UDP 处理器（优先拦截普通数据包）
-                            pipeline.addLast("plainUdpHandler", plainUdpHandler);
-                            // 2. 再添加 QUIC 服务器编解码器（处理 QUIC 流量）
-                            pipeline.addLast("quicServerCodec", serviceCodec);
+
+
+
+
+
+
                         }
                     })
                     .bind(commonConfig.getSelf().getPort())
@@ -212,7 +167,6 @@ public class PeerServiceImpl implements PeerService {
                 quicServerChannel.writeAndFlush(datagramPacket);
                 //再http请求 拿到缓存
             }
-
 
 
         }catch (Exception e) {

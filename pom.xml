@@ -171,19 +171,7 @@
             <version>4.31.1</version>
         </dependency>
 
-<!--        <dependency>
-            <groupId>io.netty.incubator</groupId>
-            <artifactId>netty-incubator-codec-native-quic</artifactId>
-            <version>0.0.74.Final</version>
-            <classifier>windows-x86_64</classifier>
-        </dependency>-->
 
-        <dependency>
-            <groupId>io.netty.incubator</groupId>
-            <artifactId>netty-incubator-codec-native-quic</artifactId>
-            <version>0.0.74.Final</version>
-            <classifier>${netty.quic.classifier}</classifier>
-        </dependency>
 
 
         <!--去中心化消息ID-->
@@ -197,19 +185,6 @@
     </dependencies>
 
 
-    <!-- 仓库仅保留 maven-central 即可（无需快照仓） -->
-    <repositories>
-        <repository>
-            <id>central</id>
-            <url>https://repo1.maven.org/maven2/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
         <!-- 直接定义最终JAR名称，优先级最高 -->
@@ -267,49 +242,6 @@
         </plugins>
     </build>
 
-    <!-- 定义多环境 Profile -->
-    <profiles>
-        <!-- Windows 开发环境 -->
-        <profile>
-            <id>windows</id>
-            <activation>
-                <activeByDefault>true</activeByDefault> <!-- 默认激活Windows -->
-                <os>
-                    <family>windows</family>
-                </os>
-            </activation>
-            <properties>
-                <netty.quic.classifier>windows-x86_64</netty.quic.classifier>
-            </properties>
-        </profile>
 
-        <!-- Linux x86_64 服务器环境 -->
-        <profile>
-            <id>linux-x86_64</id>
-            <activation>
-                <os>
-                    <family>linux</family>
-                    <arch>amd64</arch>
-                </os>
-            </activation>
-            <properties>
-                <netty.quic.classifier>linux-x86_64</netty.quic.classifier>
-            </properties>
-        </profile>
-
-        <!-- macOS 开发环境 -->
-        <profile>
-            <id>macos</id>
-            <activation>
-                <os>
-                    <family>mac</family>
-                </os>
-            </activation>
-            <properties>
-                <netty.quic.classifier>osx-aarch64</netty.quic.classifier> <!-- M系列芯片 -->
-                <!-- Intel芯片用：osx-x86_64 -->
-            </properties>
-        </profile>
-    </profiles>
 
 </project>

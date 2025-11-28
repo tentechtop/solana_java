@@ -4,8 +4,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.incubator.codec.quic.QuicChannel;
-import io.netty.incubator.codec.quic.QuicConnectionAddress;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
@@ -26,16 +24,6 @@ public class QuicConnHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        //远程地址
-        log.info("连接处理: {} {}", ctx.channel().remoteAddress(), ctx.channel().id());
-        QuicChannel quicChannel = (QuicChannel) ctx.channel();
-        SocketAddress socketAddress = quicChannel.remoteSocketAddress();
-        log.info("远程地址: {}", socketAddress);
-        SocketAddress localSocketAddress = quicChannel.localSocketAddress();
-        log.info("本地地址: {}", localSocketAddress);
-
-        //保存这个节点
-
 
 
     }
