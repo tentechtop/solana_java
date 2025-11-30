@@ -5,8 +5,6 @@ import com.bit.solana.proto.Structure;
 import com.bit.solana.util.ByteUtils;
 import com.bit.solana.util.UUIDv7Generator;
 import com.google.protobuf.ByteString;
-import io.netty.incubator.codec.quic.QuicChannel;
-import io.netty.incubator.codec.quic.QuicStreamChannel;
 import lombok.Data;
 import lombok.ToString;
 import org.bitcoinj.core.Base58;
@@ -59,7 +57,7 @@ public class P2PMessage {
 
 
     // ===================== 非核心字段 无需序列化反序列化 用于转移数据 =====================
-    private QuicChannel quicChannel;
+
 
 
     // ===================== 核心逻辑方法（修复+优化） =====================

@@ -44,24 +44,6 @@ public class SendApi {
     }
 
 
-    /**
-     * 连接节点
-     */
-    @GetMapping("/connect")
-    public String connect(String url) throws Exception {
-        //节点回复反转换后的数据
-        QuicNodeWrapper connect = peerClient.connect(url);
-        log.info("节点连接成功：{}", connect);
-        return "";
-    }
-
-    @GetMapping("/sendMsg")
-    public String sendMsg(String nodeId) throws Exception {
-        //节点回复反转换后的数据
-        byte[] bytes = peerClient.sendData(Base58.decode(nodeId), TEXT_V1, new byte[]{0x01}, 5);
-        log.info("节点回复：{}", new String(bytes));
-        return new String(bytes);
-    }
 
 
 }
