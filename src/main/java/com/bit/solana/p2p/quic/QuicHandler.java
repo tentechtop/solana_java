@@ -3,15 +3,15 @@ package com.bit.solana.p2p.quic;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.channel.socket.DatagramPacket;
-import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 
 /**
- * 客户端处理器
+ * 服务器处理器
  */
-public class QuicClientHandler extends SimpleChannelInboundHandler<DatagramPacket> {
+@Slf4j
+public class QuicHandler extends SimpleChannelInboundHandler<QuicFrame> {
     private final QuicMetrics metrics = new QuicMetrics();
     private QuicConnection connection;
 
@@ -24,10 +24,17 @@ public class QuicClientHandler extends SimpleChannelInboundHandler<DatagramPacke
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws Exception {
-        QuicFrame frame = QuicFrame.decode(packet.content().retain(), packet.sender());
-        connection.handleFrame(frame);
+    protected void channelRead0(ChannelHandlerContext ctx, QuicFrame quicFrame) throws Exception {
+        log.info("收到数据包:{}", quicFrame);
+        InetSocketAddress local = (InetSocketAddress) ctx.channel().localAddress();
+        InetSocketAddress remote = quicFrame.getRemoteAddress();
+        // 获取或创建连接
+        connection = QuicConnectionManager.getOrCreateConnection(
+                (DatagramChannel) ctx.channel(), local, remote, metrics);
+        connection.handleFrame(quicFrame);
     }
+
+
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {

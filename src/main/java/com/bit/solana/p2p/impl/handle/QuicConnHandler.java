@@ -13,9 +13,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 @Slf4j
-@Component
-@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
-@ChannelHandler.Sharable
 public class QuicConnHandler extends SimpleChannelInboundHandler<ByteBuf> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
@@ -24,7 +21,6 @@ public class QuicConnHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-
 
     }
 

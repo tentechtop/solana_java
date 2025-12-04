@@ -13,20 +13,18 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
+import com.bit.solana.p2p.quic.QuicConstants;
 import com.bit.solana.p2p.quic.QuicFrameDecoder;
 import com.bit.solana.p2p.quic.QuicFrameEncoder;
-import com.bit.solana.p2p.quic.QuicServerHandler;
+import com.bit.solana.p2p.quic.QuicHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
-import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 
@@ -41,11 +39,9 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
-
-import static com.bit.solana.config.CommonConfig.*;
-import static com.bit.solana.p2p.impl.handle.PlainUdpHandler.PLAIN_UDP_FIXED_PREFIX;
 
 @Slf4j
 @Data
@@ -60,8 +56,6 @@ public class PeerServiceImpl implements PeerService {
     private CommonConfig commonConfig;
     @Autowired
     private RoutingTable routingTable;
-    @Autowired
-    private QuicConnHandler quicConnHandler;
     @Autowired
     private QuicStreamHandler quicStreamHandler;
 
@@ -135,25 +129,26 @@ public class PeerServiceImpl implements PeerService {
             quicServerChannel = bootstrap
                     .group(eventLoopGroup)
                     .channel(NioDatagramChannel.class)
-                    .option(ChannelOption.SO_REUSEADDR, true)
-                    .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
-                    .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
-                    // ========== 关键：Pipeline 顺序 ==========
+                    .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 池化内存分配（减少GC）
+                    .option(ChannelOption.SO_RCVBUF, 64*1024*1024) // 接收缓冲区
+                    .option(ChannelOption.SO_REUSEADDR, true) // 允许端口复用（多线程共享端口）
+                    .option(ChannelOption.SO_BROADCAST, true) // 支持广播（按需开启）
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000) // UDP无连接，超时设短（1秒）
+                    .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024 * 64)) // 固定接收缓冲区大小（64KB，减少动态调整开销）
                     .handler(new ChannelInitializer<NioDatagramChannel>() {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-                            pipeline.addLast("frameDecoder", new QuicFrameDecoder()); // 解码UDP包为QuicFrame
-                            pipeline.addLast("frameEncoder", new QuicFrameEncoder()); // 编码QuicFrame为UDP包
-                            pipeline.addLast("serverHandler", new QuicServerHandler()); // 处理业务逻辑（ACK、重传等）
-
+                            pipeline.addLast(new UdpHandler());
+                            pipeline.addLast(new QuicFrameDecoder());
+                            pipeline.addLast(new QuicFrameEncoder());
+                            pipeline.addLast(new QuicHandler());
                         }
                     })
                     .bind(commonConfig.getSelf().getPort())
                     .sync()
                     .channel();
             log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
-
         }catch (Exception e) {
             log.error("启动QUIC服务器失败", e);
             throw new RuntimeException("QUIC服务器启动失败", e);

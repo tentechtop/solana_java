@@ -45,7 +45,7 @@ public class QuicStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
-
+        log.info("收到数据: {}", msg);
 
 
     }

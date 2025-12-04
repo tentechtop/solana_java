@@ -6,6 +6,7 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.Timeout;
 import io.netty.util.TimerTask;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 低延迟握手 支持 0-RTT（复用会话）、1-RTT（首次握手）
  * 前向兼容与版本协商
  */
+@Slf4j
 @Data
 public class QuicConnection {
     private  long connectionId;// 连接ID
@@ -196,13 +198,9 @@ public class QuicConnection {
         // 更新最后活动时间
         lastActiveTime.set(System.currentTimeMillis());
 
-        // 编码帧
-        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-        frame.encode(buf);
-
         // 发送数据包
-        DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
-        channel.writeAndFlush(packet).addListener(future -> {
+        //DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
+        channel.writeAndFlush(frame).addListener(future -> {
             if (!future.isSuccess()) {
                 metrics.incrementSendFailCount();
             }
