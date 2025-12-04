@@ -47,13 +47,13 @@ public class PeerClient {
 
     private Channel channel;
 
-    @PostConstruct
+/*    @PostConstruct
     public void init() throws InterruptedException, ExecutionException {
         eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         bootstrap = new Bootstrap();
         channel = peerService.getQuicServerChannel();
         log.info("PeerClient 初始化完成，绑定UDP端口:{}", channel.localAddress());
-    }
+    }*/
 
 
 

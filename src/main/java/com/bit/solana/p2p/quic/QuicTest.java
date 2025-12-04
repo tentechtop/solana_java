@@ -1,113 +1,120 @@
 package com.bit.solana.p2p.quic;
 
+import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.buffer.ByteBuf;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class QuicTest {
     private static final int PORT1 = 8333;
     private static final String SERVER_HOST = "localhost";
+    private static final int SEND_INTERVAL_MS = 5000; // 定时发送间隔（1秒）
+    private static final int TOTAL_SEND_COUNT = 10000000; // 总发送次数（便于观察ACK）
 
 
-    private static Channel channel1;
     private static Channel clientChannel;
-
-    private static Bootstrap bootstrap1;
+    private static EventLoopGroup bossGroup;
+    private static EventLoopGroup clientGroup;
+    private static ScheduledFuture<?> sendTask; // 定时任务引用，用于取消
 
 
     public static void main(String[] args) throws InterruptedException {
-        // 启动服务端
-/*        startServer();*/
+        cleanup();
 
-
-/*        // 等待服务端启动
-        Thread.sleep(1000);*/
-
-        //创建Quic连接 创建流 发送数据
-        // 启动客户端（连接到服务端8333端口）
+        Thread.sleep(1000); // 等待服务端启动
         startClient();
-        Thread.sleep(500); // 等待客户端连接完成
-
-        // 执行QUIC通信测试
+        Thread.sleep(2000); // 等待客户端连接
         performQuicCommunication();
-
     }
 
-    private static void startServer() throws InterruptedException {
-        EventLoopGroup bossGroup = new NioEventLoopGroup();
+    private static void cleanup() {
+        log.info("开始清理资源...");
 
-        try {
-            bootstrap1 = new Bootstrap();
-            bootstrap1.group(bossGroup)
-                    .channel(NioDatagramChannel.class)
-                    .option(ChannelOption.SO_BROADCAST, true)
-                    .localAddress(new InetSocketAddress(PORT1))
-                    .handler(new ChannelInitializer<NioDatagramChannel>() {
-                        @Override
-                        protected void initChannel(NioDatagramChannel ch) {
-                            ch.pipeline()
-                                    .addLast(new QuicFrameDecoder())
-                                    .addLast(new QuicFrameEncoder())
-                                    .addLast(new QuicHandler());
-                        }
-                    });
-
-            ChannelFuture f = bootstrap1.bind().sync();
-            System.out.println("QUIC服务端已启动，监听端口: " + PORT1);
-
-            channel1 = f.channel();
-
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            bossGroup.shutdownGracefully();
+        // 取消定时任务（如果存在）
+        if (sendTask != null && !sendTask.isCancelled()) {
+            sendTask.cancel(false);
+            log.info("定时发送任务已取消");
         }
+
+
+
     }
 
 
     /**
-     * 执行QUIC通信测试：创建连接、创建流、发送数据
+     * 执行QUIC通信测试：创建流并定时发送数据帧
      */
     private static void performQuicCommunication() {
-        if (clientChannel  == null || !clientChannel .isActive()) {
-            log.error("客户端通道未激活，无法进行通信");
-            return;
-        }
-
         try {
-            // 从客户端通道获取处理器
-            QuicHandler clientHandler = clientChannel .pipeline().get(QuicHandler.class);
-            if (clientHandler == null) {
-                log.error("获取QuicClientHandler失败");
+            if (clientChannel.isActive()){
+                log.info("客户端已连接");
+            }else {
+                log.info("客户端已断开");
                 return;
             }
 
-            // 等待连接初始化完成
-            Thread.sleep(500);
 
-            // 创建流（流ID=1，优先级=3，无QPS限制）
-            int streamId = 1;
-            byte priority = 3;
-            long qpsLimit = 0;
-            QuicStream stream = clientHandler.createStream(streamId, priority, qpsLimit);
-            System.out.println("创建QUIC流成功，流ID: " + streamId);
+            //创建连接
+            QuicConnection connection = QuicConnectionManager.getOrCreateConnection((DatagramChannel)clientChannel,
+                    new InetSocketAddress(SERVER_HOST, PORT1));
 
-            // 发送测试数据
-            for (int i = 0; i < 5; i++) {
-                sendTestData(stream, i);
-                Thread.sleep(1000); // 间隔1秒发送一次
+
+            DatagramChannel channel = connection.getChannel();
+            if (channel != null){
+                log.info("连接不是空");
+                //是否可用
+                if (channel.isActive()) {
+                    log.info("客户端已连接");
+                }else {
+                    log.info("客户端已断开");
+                }
+            }else {
+                log.info("客户端未连接");
             }
 
-            System.out.println("测试数据发送完成");
+
+            QuicStream newStream = connection.createNewStream();
+
+
+            // 初始化发送计数器
+            AtomicInteger sendCount = new AtomicInteger(0);
+
+            // 获取客户端Channel的EventLoop，用于调度定时任务（符合Netty线程模型）
+            EventLoop eventLoop = clientChannel.eventLoop();
+
+            // 调度定时发送任务
+            sendTask = eventLoop.scheduleAtFixedRate(() -> {
+                try {
+                    int index = sendCount.getAndIncrement();
+                    if (index >= TOTAL_SEND_COUNT) {
+                        // 达到发送次数，取消任务
+                        sendTask.cancel(false);
+                        log.info("已完成{}次发送，定时任务取消", TOTAL_SEND_COUNT);
+                        return;
+                    }
+                    // 发送数据帧
+                    sendTestData(newStream, index);
+                } catch (Exception e) {
+                    log.error("定时发送任务异常", e);
+                    sendTask.cancel(false); // 异常时取消任务
+                }
+            }, 0, SEND_INTERVAL_MS, TimeUnit.MILLISECONDS); // 立即开始，间隔1秒
 
         } catch (Exception e) {
-            log.error("QUIC通信过程发生异常", e);
+            log.error("QUIC通信过程异常", e);
+            if (sendTask != null) {
+                sendTask.cancel(false);
+            }
         }
     }
 
@@ -115,35 +122,38 @@ public class QuicTest {
      * 向指定流发送测试数据
      */
     private static void sendTestData(QuicStream stream, int index) {
-        // 从对象池获取帧
         QuicFrame frame = QuicFrame.acquire();
 
-        // 设置帧基本信息
+        // 设置帧信息
         frame.setFrameType(QuicConstants.FRAME_TYPE_DATA);
         frame.setStreamId(stream.getStreamId());
         frame.setConnectionId(stream.getConnection().getConnectionId());
         frame.setSequence(stream.getSendSequence().getAndIncrement());
 
-        // 设置测试数据载荷
+        // 测试数据载荷
         ByteBuf payload = QuicConstants.ALLOCATOR.buffer();
         String message = "Hello QUIC! This is test message " + index;
         payload.writeBytes(message.getBytes());
         frame.setPayload(payload);
 
-        // 设置远程地址（目标服务端地址）
+        // 目标地址
         frame.setRemoteAddress(stream.getConnection().getRemoteAddress());
-
-        // 设置发送时间并发送
         frame.setSendTime(System.currentTimeMillis());
+
+        // 发送帧
         stream.getConnection().sendFrame(frame);
         log.info("发送数据: {} (流ID: {}, 序列号: {})", message, stream.getStreamId(), frame.getSequence());
     }
 
     private static void startClient() throws InterruptedException {
-        EventLoopGroup group = new NioEventLoopGroup();
+        if (clientGroup != null) {
+            clientGroup.shutdownGracefully();
+        }
+        clientGroup = new NioEventLoopGroup();
+
         try {
             Bootstrap bootstrap = new Bootstrap();
-            bootstrap.group(group)
+            bootstrap.group(clientGroup)
                     .channel(NioDatagramChannel.class)
                     .option(ChannelOption.SO_BROADCAST, true)
                     .handler(new ChannelInitializer<NioDatagramChannel>() {
@@ -152,22 +162,34 @@ public class QuicTest {
                             ch.pipeline()
                                     .addLast(new QuicFrameDecoder())
                                     .addLast(new QuicFrameEncoder())
-                                    .addLast(new QuicHandler());
+                                    .addLast(new QuicClientHandler());
                         }
                     });
 
-            // 连接到服务端（指定服务端地址）
-            ChannelFuture f = bootstrap.connect(new InetSocketAddress(SERVER_HOST, PORT1)).sync();
-            clientChannel = f.channel();
-            System.out.println("QUIC客户端已连接到服务端 " + SERVER_HOST + ":" + PORT1);
+            ChannelFuture bindFuture  = bootstrap.bind(8334).sync();
+            if (!bindFuture.isSuccess()) {
+                throw new RuntimeException("客户端 Channel 绑定失败", bindFuture.cause());
+            }
 
+            // 4. 获取绑定后的 Channel，并等待其激活
+            clientChannel = bindFuture.channel();
+            log.info("客户端 Channel 绑定成功，本地地址：{}", clientChannel.localAddress());
+
+
+            // Channel关闭监听器：仅打印日志，不主动关闭
+            // 在startClient的bind成功后添加：
             clientChannel.closeFuture().addListener(future -> {
-                System.out.println("QUIC客户端关闭");
-                group.shutdownGracefully();
+                log.error("===== Channel被关闭 =====");
+                log.error("关闭原因：{}", future.cause() == null ? "主动关闭" : future.cause().getMessage());
+                // 打印调用栈，定位谁触发了close
+                log.error("关闭操作调用栈：", new RuntimeException("Channel Close Trace"));
             });
+
+
+
         } catch (Exception e) {
             e.printStackTrace();
-            group.shutdownGracefully();
+            clientGroup.shutdownGracefully();
         }
     }
 }

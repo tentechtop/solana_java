@@ -1,11 +1,11 @@
-package com.bit.solana.p2p.quic;
+package com.bit.solana.test;
 
+import com.bit.solana.p2p.quic.*;
 import com.google.common.util.concurrent.RateLimiter;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.Timeout;
 import io.netty.util.TimerTask;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,9 +19,8 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * 基于连接创建的流  可靠UDP流（独立序列号、滑动窗口、无队头阻塞）
  */
-@Slf4j
 @Data
-public class QuicStream {
+public class QuicStream12312 {
     private final QuicConnection connection;
     private final int streamId;
     private final byte priority;
@@ -51,7 +50,7 @@ public class QuicStream {
     private final FecDecoder fecDecoder = new FecDecoder();
     private volatile boolean closed = false;
 
-    public QuicStream(QuicConnection connection, int streamId, byte priority, long qpsLimit, QuicMetrics metrics) {
+    public QuicStream12312(QuicConnection connection, int streamId, byte priority, long qpsLimit, QuicMetrics metrics) {
         this.connection = connection;
         this.streamId = streamId;
         this.priority = priority;
@@ -172,48 +171,46 @@ public class QuicStream {
      * 处理数据帧（乱序缓存、滑动窗口、交付数据）
      */
     public void handleDataFrame(QuicFrame frame) {
+        lock.lock();
+        try {
+            long seq = frame.getSequence();
+            long expectedSeq = recvSequence.get();
 
-        log.info("处理帧: {}", frame);
-        long seq = frame.getSequence();
-        long expectedSeq = recvSequence.get();
+            // 重复帧
+            if (seq < expectedSeq) {
+                metrics.incrementDuplicateFrameCount();
+                sendAck(expectedSeq - 1); // 重发ACK
+                return;
+            }
 
-        // 重复帧
-        if (seq < expectedSeq) {
-            metrics.incrementDuplicateFrameCount();
-            sendAck(expectedSeq - 1); // 重发ACK
-            return;
-        }
-        log.info("期望的序列号: {}", expectedSeq);
-        log.info("当前帧序列号: {}", seq);
-        // 期望的帧
-        if (seq == expectedSeq) {
-            log.info("期望的帧: {}", frame);
-            // 交付数据
-            deliverFrame(frame);
-            recvSequence.incrementAndGet();
-
-            // 检查乱序缓存中的连续帧
-            while (recvBuffer.containsKey(recvSequence.get())) {
-                QuicFrame cachedFrame = recvBuffer.remove(recvSequence.get());
-                deliverFrame(cachedFrame);
+            // 期望的帧
+            if (seq == expectedSeq) {
+                // 交付数据
+                deliverFrame(frame);
                 recvSequence.incrementAndGet();
-            }
 
-            // 发送ACK（批量）
-            addToBatchAck(seq);
-        } else {
-            log.info("乱序帧: {}", frame);
-            // 乱序帧，加入缓存
-            if (seq < expectedSeq + recvWindowSize) { // 接收窗口内
-                log.info("接收窗口内: {}", frame);
-                recvBuffer.put(seq, frame);
-                metrics.incrementOutOfOrderFrameCount();
-                addToBatchAck(expectedSeq - 1); // ACK已接收的最大连续序列号
+                // 检查乱序缓存中的连续帧
+                while (recvBuffer.containsKey(recvSequence.get())) {
+                    QuicFrame cachedFrame = recvBuffer.remove(recvSequence.get());
+                    deliverFrame(cachedFrame);
+                    recvSequence.incrementAndGet();
+                }
+
+                // 发送ACK（批量）
+                addToBatchAck(seq);
             } else {
-                log.info("接收窗口外: {}", frame);
-                // 接收窗口外，丢弃
-                metrics.incrementWindowOutOfFrameCount();
+                // 乱序帧，加入缓存
+                if (seq < expectedSeq + recvWindowSize) { // 接收窗口内
+                    recvBuffer.put(seq, frame);
+                    metrics.incrementOutOfOrderFrameCount();
+                    addToBatchAck(expectedSeq - 1); // ACK已接收的最大连续序列号
+                } else {
+                    // 接收窗口外，丢弃
+                    metrics.incrementWindowOutOfFrameCount();
+                }
             }
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -221,7 +218,6 @@ public class QuicStream {
      * 添加到批量ACK列表
      */
     private void addToBatchAck(long seq) {
-        log.info("添加到批量ACK列表: {}", seq);
         ackList.add(seq);
         if (ackList.size() >= QuicConstants.BATCH_ACK_THRESHOLD) {
             sendBatchAck();

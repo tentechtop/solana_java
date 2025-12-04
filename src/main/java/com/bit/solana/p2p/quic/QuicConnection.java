@@ -1,6 +1,7 @@
 package com.bit.solana.p2p.quic;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.Timeout;
@@ -12,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,6 +38,8 @@ public class QuicConnection {
     private  Timeout idleTimeout;// 空闲超时
     private  Timeout heartbeatTimeout;// 心跳超时
     private  QuicMetrics metrics;// 连接监控
+    // 初始化发送计数器
+    private AtomicInteger streamId = new AtomicInteger(0);
 
     // 拥塞控制（连接级基础参数，流级细化）
     private CongestionControl congestionControl;
@@ -76,43 +80,66 @@ public class QuicConnection {
         metrics.incrementConnectionCount();
     }
 
-    public void handleFrame(QuicFrame frame) {
-        // 更新最后活动时间
-        lastActiveTime.set(System.currentTimeMillis());
 
-        // 连接迁移检测
-        if (!frame.getRemoteAddress().equals(remoteAddress)) {
-            updateRemoteAddress(frame.getRemoteAddress());
+
+    /**
+     * 创建连接
+     */
+    public static QuicConnection create(DatagramChannel channel, InetSocketAddress local, InetSocketAddress remote){
+        long connectionId = ConnectionIdGenerator.generate(local, remote);
+        QuicMetrics quicMetrics = new QuicMetrics();
+        return new QuicConnection(connectionId, channel, local, remote, quicMetrics);
+    }
+
+
+    public void handleFrame(QuicFrame frame) {
+        try {
+            // 更新最后活动时间
+            lastActiveTime.set(System.currentTimeMillis());
+            // 连接迁移检测
+            if (!frame.getRemoteAddress().equals(remoteAddress)) {
+                updateRemoteAddress(frame.getRemoteAddress());
+            }
+            switch (frame.getFrameType()) {
+                case QuicConstants.FRAME_TYPE_DATA:
+                    log.info("处理数据");
+                    getOrCreateStream(frame.getStreamId()).handleDataFrame(frame);
+                    break;
+                case QuicConstants.FRAME_TYPE_ACK:
+                    log.info("处理ACK");
+                    getOrCreateStream(frame.getStreamId()).handleAckFrame(frame);
+                    break;
+                case QuicConstants.FRAME_TYPE_HEARTBEAT:
+                    log.info("处理心跳");
+                    // 心跳响应（直接回复）
+                    //sendHeartbeat();
+                    break;
+                case QuicConstants.FRAME_TYPE_STREAM_CREATE:
+                    log.info("处理流创建");
+                    createStream(frame.getStreamId(), frame.getPriority(), frame.getQpsLimit());
+                    break;
+                case QuicConstants.FRAME_TYPE_STREAM_CLOSE:
+                    log.info("处理流关闭");
+                    removeStream(frame.getStreamId());
+                    break;
+                case QuicConstants.FRAME_TYPE_FEC:
+                    log.info("处理FEC");
+                    getOrCreateStream(frame.getStreamId()).handleFecFrame(frame);
+                    break;
+                case QuicConstants.FRAME_TYPE_MTU_DETECT:
+                    log.info("处理MTU检测");
+                    mtuDetector.handleMtuDetectFrame(frame);
+                    break;
+                default:
+                    metrics.incrementInvalidFrameCount();
+                    break;
+            }
+        }finally {
+            frame.release();
         }
-        switch (frame.getFrameType()) {
-            case QuicConstants.FRAME_TYPE_DATA:
-                getOrCreateStream(frame.getStreamId()).handleDataFrame(frame);
-                break;
-            case QuicConstants.FRAME_TYPE_ACK:
-                getOrCreateStream(frame.getStreamId()).handleAckFrame(frame);
-                break;
-            case QuicConstants.FRAME_TYPE_HEARTBEAT:
-                // 心跳响应（直接回复）
-                sendHeartbeat();
-                break;
-            case QuicConstants.FRAME_TYPE_STREAM_CREATE:
-                createStream(frame.getStreamId(), frame.getPriority(), frame.getQpsLimit());
-                break;
-            case QuicConstants.FRAME_TYPE_STREAM_CLOSE:
-                removeStream(frame.getStreamId());
-                break;
-            case QuicConstants.FRAME_TYPE_FEC:
-                getOrCreateStream(frame.getStreamId()).handleFecFrame(frame);
-                break;
-            case QuicConstants.FRAME_TYPE_MTU_DETECT:
-                mtuDetector.handleMtuDetectFrame(frame);
-                break;
-            default:
-                metrics.incrementInvalidFrameCount();
-                break;
-        }
+
         // 释放帧
-        frame.release();
+        //frame.release();
     }
 
 
@@ -127,12 +154,23 @@ public class QuicConnection {
      * 创建新流
      */
     public QuicStream createStream(int streamId, byte priority, long qpsLimit) {
+        log.info("创建流:{}", streamId);
         QuicStream stream = new QuicStream(this, streamId, priority, qpsLimit, metrics);
         streamMap.put(streamId, stream);
         metrics.incrementStreamCount();
         // 发送流创建帧
-        sendStreamCreateFrame(streamId, priority, qpsLimit);
+        //sendStreamCreateFrame(streamId, priority, qpsLimit);
         return stream;
+    }
+
+
+
+
+    /**
+     * 基于连接创建一个新的数据流
+     */
+    public QuicStream createNewStream() {
+        return createStream(streamId.incrementAndGet(), (byte) 0x01, 0);
     }
 
 
@@ -195,11 +233,15 @@ public class QuicConnection {
      * 发送帧（核心发送逻辑）
      */
     public void sendFrame(QuicFrame frame) {
+        log.info("发送帧:{}", frame);
         // 更新最后活动时间
         lastActiveTime.set(System.currentTimeMillis());
 
-        // 发送数据包
-        //DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
+    /*    ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        frame.encode(buf); // 使用已有的 encode(ByteBuf) 方法
+        DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());*/
+
+
         channel.writeAndFlush(frame).addListener(future -> {
             if (!future.isSuccess()) {
                 metrics.incrementSendFailCount();
@@ -219,5 +261,37 @@ public class QuicConnection {
         streamMap.clear();
         // 更新指标
         metrics.decrementConnectionCount();
+    }
+
+
+    // 手动重写toString()：只打印核心字段，不打印mtuDetector实例
+    @Override
+    public String toString() {
+        // 只打印streamId列表，不打印QuicStream对象本身，避免触发其toString
+        String streamIds = streamMap.keySet().toString();
+        // 简化地址打印（直接用getHostString+端口，避免InetSocketAddress.toString的复杂调用）
+        String remoteAddr = remoteAddress != null ?
+                remoteAddress.getAddress().getHostAddress() + ":" + remoteAddress.getPort() : "null";
+        String localAddr = localAddress != null ?
+                localAddress.getAddress().getHostAddress() + ":" + localAddress.getPort() : "null";
+        // 简化Timeout打印（只打印是否取消）
+        String idleTimeoutStr = idleTimeout != null ? (idleTimeout.isCancelled() ? "cancelled" : "active") : "null";
+        String heartbeatTimeoutStr = heartbeatTimeout != null ? (heartbeatTimeout.isCancelled() ? "cancelled" : "active") : "null";
+        // 简化MTU打印
+        String mtuStr = mtuDetector != null ? String.valueOf(mtuDetector.getCurrentMtu()) : "null";
+
+        return "QuicConnection{" +
+                "connectionId=" + connectionId +
+                ", remoteAddress='" + remoteAddr + '\'' +
+                ", localAddress='" + localAddr + '\'' +
+                ", streamCount=" + streamMap.size() +
+                ", streamIds=" + streamIds +
+                ", lastActiveTime=" + lastActiveTime.get() +
+                ", idleTimeout=" + idleTimeoutStr +
+                ", heartbeatTimeout=" + heartbeatTimeoutStr +
+                ", currentMtu=" + mtuStr +
+                ", congestionControl(winSize)=" + (congestionControl != null ? congestionControl.getCwnd() : "null") +
+                ", metrics(connCount)=" + (metrics != null ? metrics.getConnectionCount() : "null") +
+                '}';
     }
 }

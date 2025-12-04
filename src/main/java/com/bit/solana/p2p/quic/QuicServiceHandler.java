@@ -1,8 +1,11 @@
 package com.bit.solana.p2p.quic;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramChannel;
+import io.netty.channel.socket.DatagramPacket;
+import io.netty.util.CharsetUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
@@ -11,24 +14,19 @@ import java.net.InetSocketAddress;
  * 服务器处理器
  */
 @Slf4j
-public class QuicHandler extends SimpleChannelInboundHandler<QuicFrame> {
+public class QuicServiceHandler extends SimpleChannelInboundHandler<QuicFrame>  {
     private final QuicMetrics metrics = new QuicMetrics();
     private QuicConnection connection;
 
-    @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        InetSocketAddress local = (InetSocketAddress) ctx.channel().localAddress();
-        InetSocketAddress remote = (InetSocketAddress) ctx.channel().remoteAddress();
-        connection = QuicConnectionManager.getOrCreateConnection(
-                (DatagramChannel) ctx.channel(), local, remote, metrics);
-    }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, QuicFrame quicFrame) throws Exception {
-        log.info("收到数据包:{}", quicFrame);
+        //激活连接
         InetSocketAddress local = (InetSocketAddress) ctx.channel().localAddress();
         InetSocketAddress remote = quicFrame.getRemoteAddress();
+
         // 获取或创建连接
+
         connection = QuicConnectionManager.getOrCreateConnection(
                 (DatagramChannel) ctx.channel(), local, remote, metrics);
         connection.handleFrame(quicFrame);

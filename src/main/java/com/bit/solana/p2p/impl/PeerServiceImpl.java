@@ -4,7 +4,6 @@ import com.bit.solana.config.CommonConfig;
 import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
 import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
-import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
@@ -13,18 +12,17 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
-import com.bit.solana.p2p.quic.QuicConstants;
 import com.bit.solana.p2p.quic.QuicFrameDecoder;
 import com.bit.solana.p2p.quic.QuicFrameEncoder;
-import com.bit.solana.p2p.quic.QuicHandler;
+import com.bit.solana.p2p.quic.QuicServiceHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 
@@ -38,8 +36,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
 
@@ -88,11 +84,11 @@ public class PeerServiceImpl implements PeerService {
 
     @PostConstruct
     @Override
-    public void init() throws IOException, CertificateException {
+    public void init() throws IOException, CertificateException, InterruptedException {
         //在项目启动前 用socket 且用8333端口去访问STUN服务器 或者中转服务器 让他们返回 你的公网IP和映射地址 然后再去连接 并主动上报
 
-        // 启动QUIC服务器
         startQuicServer();
+
 
         //连接引导节点 连接成功发起握手  A发起与X的连接 网络底层连接成功 发起握手 合适就记录 不合适就互相删除 不再打扰
 
@@ -119,39 +115,38 @@ public class PeerServiceImpl implements PeerService {
     }
 
 
-
-    public void startQuicServer() throws CertificateException {
-        eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
+    public void startQuicServer()  {
+        // 1. 创建事件循环组（UDP无连接，仅需一个线程组）
+        //可用核心的一半
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        eventLoopGroup = new NioEventLoopGroup(availableProcessors);
         try {
-
-            // 绑定端口启动服务器
+            // 2. 配置Bootstrap（UDP使用Bootstrap而非ServerBootstrap）
             bootstrap = new Bootstrap();
-            quicServerChannel = bootstrap
-                    .group(eventLoopGroup)
-                    .channel(NioDatagramChannel.class)
+            bootstrap.group(eventLoopGroup)
+                    .channel(NioDatagramChannel.class) // UDP通道类型
                     .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 池化内存分配（减少GC）
                     .option(ChannelOption.SO_RCVBUF, 64*1024*1024) // 接收缓冲区
                     .option(ChannelOption.SO_REUSEADDR, true) // 允许端口复用（多线程共享端口）
                     .option(ChannelOption.SO_BROADCAST, true) // 支持广播（按需开启）
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000) // UDP无连接，超时设短（1秒）
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000) // UDP无连接，超时设短（30秒）
                     .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024 * 64)) // 固定接收缓冲区大小（64KB，减少动态调整开销）
+
                     .handler(new ChannelInitializer<NioDatagramChannel>() {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-                            pipeline.addLast(new UdpHandler());
                             pipeline.addLast(new QuicFrameDecoder());
                             pipeline.addLast(new QuicFrameEncoder());
-                            pipeline.addLast(new QuicHandler());
+                            pipeline.addLast(new QuicServiceHandler());
                         }
-                    })
-                    .bind(commonConfig.getSelf().getPort())
-                    .sync()
-                    .channel();
-            log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
-        }catch (Exception e) {
-            log.error("启动QUIC服务器失败", e);
-            throw new RuntimeException("QUIC服务器启动失败", e);
+                    });
+
+            // 3. 绑定端口并启动
+            bootstrap.bind(commonConfig.getSelf().getPort()).sync();
+            log.info("QUIC服务器已启动，监听端口：{}", commonConfig.getSelf().getPort());
+        }catch (Exception e){
+            e.printStackTrace();
         }
     }
 

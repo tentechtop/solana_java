@@ -33,6 +33,7 @@ public class PlainUdpHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        log.info("收到普通 UDP 数据包");
         // 只处理 DatagramPacket 类型的消息
         if (!(msg instanceof DatagramPacket packet)) {
             ctx.fireChannelRead(msg); // 非UDP包透传
