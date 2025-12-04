@@ -134,6 +134,48 @@ public class QuicFrame {
         }
     }
 
+    public byte[] encode() {
+        // 使用默认分配器创建ByteBuf
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        try {
+            // 帧头（固定64字节）
+            buf.writeLong(connectionId);
+            buf.writeInt(streamId);
+            buf.writeByte(frameType);
+            buf.writeLong(sequence);
+            buf.writeLong(ackSequence);
+            buf.writeInt(windowSize);
+            buf.writeByte(priority);
+            buf.writeInt(fecGroupId);
+            buf.writeInt(fecIndex);
+            buf.writeLong(qpsLimit);
+            buf.writeBoolean(isFileRegion);
+            buf.writeLong(fileOffset);
+            buf.writeLong(fileLength);
+            int fileNameLen = fileName == null ? 0 : fileName.getBytes().length;
+            buf.writeInt(fileNameLen);
+            if (fileNameLen > 0) {
+                buf.writeBytes(fileName.getBytes());
+            }
+            // 填充到64字节
+            int padding = 64 - buf.writerIndex();
+            if (padding > 0) {
+                buf.writeZero(padding);
+            }
+            // 有效载荷
+            if (payload != null) {
+                buf.writeBytes(payload);
+            }
+            // 转换为byte[]
+            byte[] result = new byte[buf.readableBytes()];
+            buf.readBytes(result);
+            return result;
+        } finally {
+            // 释放ByteBuf
+            buf.release();
+        }
+    }
+
     public static QuicFrame decode(ByteBuf buf, InetSocketAddress remoteAddress) {
         QuicFrame frame = acquire();
         frame.remoteAddress = remoteAddress;

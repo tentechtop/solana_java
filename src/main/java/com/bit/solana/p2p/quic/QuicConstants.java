@@ -17,7 +17,7 @@ public class QuicConstants {
     public static final long BATCH_ACK_DELAY = 200; // 批量ACK延迟（ms）
     public static final int INITIAL_CWND = 10; // 初始拥塞窗口大小
     public static final int SSTHRESH_INIT = 64; // 慢启动阈值初始值
-    public static final int FEC_REDUNDANCY_RATIO = 3; // FEC冗余比（每3个数据帧加1个冗余帧）
+    public static final int FEC_REDUNDANCY_RATIO = 10; // FEC冗余比（每10个数据帧加1个冗余帧）
     public static final long RTT_SMOOTH_FACTOR = 8; // RTT平滑因子（1/8）
     public static final long RTO_MIN = 100; // 最小重传超时（ms）
     public static final long RTO_MAX = 5_000; // 最大重传超时（ms）

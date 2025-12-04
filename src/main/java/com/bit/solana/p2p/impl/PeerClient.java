@@ -8,6 +8,10 @@ import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.quic.QuicClientHandler;
+import com.bit.solana.p2p.quic.QuicFrameDecoder;
+import com.bit.solana.p2p.quic.QuicFrameEncoder;
+import com.bit.solana.p2p.quic.QuicServerHandler;
 import com.bit.solana.util.MultiAddress;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -16,6 +20,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
@@ -73,22 +78,31 @@ public class PeerClient {
 
     private Bootstrap bootstrap;
 
-    private Channel datagramChannel;
+    private Channel channel;
 
     @PostConstruct
     public void init() throws InterruptedException, ExecutionException {
         eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         bootstrap = new Bootstrap();
-        datagramChannel = bootstrap.group(eventLoopGroup)
+        channel = bootstrap.group(eventLoopGroup)
                 .channel(NioDatagramChannel.class)
                 .option(ChannelOption.SO_REUSEADDR, true)
                 .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                 .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
-                .bind(0) // 随机绑定可用端口
+
+                .handler(new ChannelInitializer<DatagramChannel>() {
+                    @Override
+                    protected void initChannel(DatagramChannel ch) throws Exception {
+                        ChannelPipeline pipeline = ch.pipeline();
+                        pipeline.addLast("frameDecoder", new QuicFrameDecoder()); // 解码UDP包为QuicFrame
+                        pipeline.addLast("frameEncoder", new QuicFrameEncoder()); // 编码QuicFrame为UDP包
+                        pipeline.addLast("serverHandler", new QuicClientHandler()); // 处理业务逻辑（ACK、重传等）
+                    }
+                })
+                .bind(commonConfig.getSelf().getPort()) // 随机绑定可用端口
                 .sync()
                 .channel();
-
-        log.info("PeerClient 初始化完成，绑定UDP端口:{}", datagramChannel.localAddress());
+        log.info("PeerClient 初始化完成，绑定UDP端口:{}", channel.localAddress());
     }
 
 
@@ -123,8 +137,8 @@ public class PeerClient {
 
     @PreDestroy
     public void shutdown() throws InterruptedException {
-        if (datagramChannel != null) {
-            datagramChannel.close().syncUninterruptibly();
+        if (channel != null) {
+            channel.close().syncUninterruptibly();
         }
         if (eventLoopGroup != null) {
             eventLoopGroup.shutdownGracefully();

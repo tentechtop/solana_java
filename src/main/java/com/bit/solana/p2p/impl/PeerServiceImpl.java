@@ -13,6 +13,9 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
+import com.bit.solana.p2p.quic.QuicFrameDecoder;
+import com.bit.solana.p2p.quic.QuicFrameEncoder;
+import com.bit.solana.p2p.quic.QuicServerHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
@@ -123,11 +126,9 @@ public class PeerServiceImpl implements PeerService {
 
 
 
-
     public void startQuicServer() throws CertificateException {
         eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
         try {
-
 
             // 绑定端口启动服务器
             bootstrap = new Bootstrap();
@@ -142,11 +143,9 @@ public class PeerServiceImpl implements PeerService {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-
-
-
-
-
+                            pipeline.addLast("frameDecoder", new QuicFrameDecoder()); // 解码UDP包为QuicFrame
+                            pipeline.addLast("frameEncoder", new QuicFrameEncoder()); // 编码QuicFrame为UDP包
+                            pipeline.addLast("serverHandler", new QuicServerHandler()); // 处理业务逻辑（ACK、重传等）
 
                         }
                     })
@@ -154,10 +153,6 @@ public class PeerServiceImpl implements PeerService {
                     .sync()
                     .channel();
             log.info("QUIC服务器启动成功，监听端口: {}", commonConfig.getSelf().getPort());
-
-
-
-
 
         }catch (Exception e) {
             log.error("启动QUIC服务器失败", e);
