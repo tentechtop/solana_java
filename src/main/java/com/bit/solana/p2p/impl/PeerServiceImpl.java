@@ -12,17 +12,12 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
-import com.bit.solana.p2p.quic.QuicFrameDecoder;
-import com.bit.solana.p2p.quic.QuicFrameEncoder;
-import com.bit.solana.p2p.quic.QuicServiceHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 
@@ -136,9 +131,7 @@ public class PeerServiceImpl implements PeerService {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-                            pipeline.addLast(new QuicFrameDecoder());
-                            pipeline.addLast(new QuicFrameEncoder());
-                            pipeline.addLast(new QuicServiceHandler());
+
                         }
                     });
 

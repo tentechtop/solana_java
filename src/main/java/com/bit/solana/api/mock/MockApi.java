@@ -5,9 +5,7 @@ import com.bit.solana.structure.key.KeyInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
 import org.bouncycastle.util.encoders.Hex;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -22,6 +20,9 @@ import static com.bit.solana.util.SolanaEd25519Signer.*;
 @RestController
 @RequestMapping("/mock")
 public class MockApi {
+
+
+
 
     @GetMapping("/mock1")
     public Result createMnemonic() throws NoSuchAlgorithmException {

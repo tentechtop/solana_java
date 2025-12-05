@@ -2,13 +2,12 @@ package com.bit.solana.api.mock;
 
 import com.bit.solana.p2p.impl.PeerClient;
 import com.bit.solana.p2p.impl.QuicNodeWrapper;
+import com.bit.solana.result.Result;
 import lombok.extern.slf4j.Slf4j;
 
 import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
 
