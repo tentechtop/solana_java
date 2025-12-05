@@ -1,0 +1,24 @@
+package com.bit.solana.quic;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.socket.DatagramPacket;
+import io.netty.handler.codec.MessageToMessageEncoder;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+
+@Slf4j
+public class QuicFrameEncoder extends MessageToMessageEncoder<QuicFrame> {
+
+    @Override
+    protected void encode(ChannelHandlerContext channelHandlerContext, QuicFrame quicFrame, List<Object> out) throws Exception {
+        // 1. 编码帧数据
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        quicFrame.encode(buf); // 使用已有的 encode(ByteBuf) 方法
+
+        // 2. 创建DatagramPacket，指定目标地址（从帧中获取服务端地址）
+        DatagramPacket packet = new DatagramPacket(buf, quicFrame.getRemoteAddress());
+        out.add(packet); // 发送DatagramPacket
+    }
+}
