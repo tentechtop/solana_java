@@ -1,6 +1,7 @@
 package com.bit.solana.p2p.impl;
 
 import com.bit.solana.config.CommonConfig;
+import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
 import com.bit.solana.p2p.impl.handle.QuicConnHandler;
 import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.Peer;
@@ -62,7 +63,8 @@ public class PeerClient {
     private QuicStreamHandler quicStreamHandler;
     @Autowired
     private PeerServiceImpl peerService;
-
+    @Autowired
+    private PlainUdpHandler plainUdpHandler;
 
     // 全局锁（避免重复连接）
     private final ReentrantLock connectLock = new ReentrantLock();
@@ -98,7 +100,16 @@ public class PeerClient {
                 .option(ChannelOption.SO_REUSEADDR, true)
                 .option(ChannelOption.SO_RCVBUF, 10 * 1024 * 1024)
                 .option(ChannelOption.SO_SNDBUF, 10 * 1024 * 1024)
-                .handler(codec)
+                .handler(new ChannelInitializer<NioDatagramChannel>() {
+                    @Override
+                    protected void initChannel(NioDatagramChannel ch) throws Exception {
+                        ChannelPipeline pipeline = ch.pipeline();
+                        // 1. 先添加普通 UDP 处理器（优先拦截普通数据包）
+                        pipeline.addLast("plainUdpHandler", plainUdpHandler);
+                        // 2. 再添加 QUIC 服务器编解码器（处理 QUIC 流量）
+                        pipeline.addLast("quicServerCodec", codec);
+                    }
+                })
                 .bind(0) // 随机绑定可用端口
                 .sync()
                 .channel();
