@@ -9,9 +9,17 @@ import lombok.extern.slf4j.Slf4j;
 public enum QuicFrameEnum {
     DATA_FRAME((byte)0x01, "数据帧"),
     ACK_FRAME((byte)0x02, "ACK帧"),
-    HEARTBEAT_FRAME((byte)0x03, "心跳帧"),
-    FST_FRAME((byte)0x04, "Force STOP帧"),//立即终止流，丢弃未处理数据
-    IMMEDIATE_REQUEST_FRAME((byte)0x05, "立即索取帧"),//立即索取指定分片（如丢失重传/主动拉取）
+    BATCH_ACK_FRAME((byte)0x08, "批量ACK帧"),
+
+    PING_FRAME((byte)0x03, "ping帧"),
+    PONG_FRAME((byte)0x04, "pong帧"),
+
+
+    OFF_FRAME((byte)0x05, "下线帧"),
+    ONLINE_FRAME((byte)0x06, "上线帧"),
+
+
+    IMMEDIATE_REQUEST_FRAME((byte)0x07, "重传请求帧"),//立即请求一个数据帧
 
 
 

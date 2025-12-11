@@ -14,6 +14,15 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.FRAME_HEADER_LENGTH;
  */
 @Data
 public class QuicFrame {
+    private long connectionId; // 雪花算法
+    private long dataId; //  雪花算法
+    private int total;//分片数量 4字节
+    private byte frameType; // 帧类型 1字节
+    private int sequence; // 序列号分片顺序 0-total 最大序列号是total-1 4字节  FIN帧是total-1  序列号是0就是第一帧 序列号是total-1就是最后一帧
+    private int frameTotalLength;//载荷总长 4字节
+    private ByteBuf payload; // 有效载荷
+    private InetSocketAddress remoteAddress;
+
     // 固定头部长度 = connectionId(8) + dataId(8) + total(4) + frameType(1) + sequence(4) + frameTotalLength(4)
     public static final int FIXED_HEADER_LENGTH = 8 + 8 + 4 + 1 + 4 + 4;
 
@@ -36,17 +45,6 @@ public class QuicFrame {
     public static QuicFrame acquire() {
         return RECYCLER.get();
     }
-
-    private long connectionId; // 雪花算法
-    private long dataId; //  雪花算法
-    private int total;//分片数量 4字节
-    private byte frameType; // 帧类型 1字节
-    private int sequence; // 序列号分片顺序 0-total 最大序列号是total-1 4字节
-    private int frameTotalLength;//载荷总长 4字节
-    private ByteBuf payload; // 有效载荷
-    private InetSocketAddress remoteAddress;
-
-
 
 
     /**
@@ -198,10 +196,6 @@ public class QuicFrame {
 
         return basicValid && lengthValid && payloadValid;
     }
-
-
-
-    //发送方法
 
 
 }

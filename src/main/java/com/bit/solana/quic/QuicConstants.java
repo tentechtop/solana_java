@@ -12,9 +12,9 @@ public class QuicConstants {
     public static SnowflakeIdGenerator generator = new SnowflakeIdGenerator();
 
     // 基础配置 带宽耗时 = 总数据量 ÷ 实际吞吐量 = 4.35MB ÷ 115MB/s ≈ 0.0378秒 ≈ 38毫秒
-    // 每一个帧最大负载1024+256个字节  1280个字节 4M区块 需要4096个帧 用虚拟线程
+    // 每一个帧最大负载1024个字节
     // Solana公网最优单帧负载（1024+256）
-    public static final int MAX_FRAME_PAYLOAD = 1280;
+    public static final int MAX_FRAME_PAYLOAD = 1024;
 
     // 一次数据发送最大 1000个帧
     public static final int PUBLIC_BATCH_SIZE = 1000;
