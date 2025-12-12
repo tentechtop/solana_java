@@ -1,15 +1,23 @@
 package com.bit.solana.quic;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
+import io.netty.util.TimerTask;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static com.bit.solana.quic.QuicConnectionManager.*;
+import static com.bit.solana.quic.QuicConstants.*;
 
 @Slf4j
 @Data
@@ -29,16 +37,297 @@ public class SendQuicData extends QuicData {
     private Runnable failCallback;
 
 
-    //全局超时定时器 300ms 内 B 未收全则判定失败
+    /**
+     * 发送所有数据帧
+     * @param ctx Channel上下文
+     * @param remoteAddress 目标地址
+     */
+    public void sendAllFrames(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
+        if (getFrameArray() == null || getFrameArray().length == 0) {
+            log.error("[发送失败] 帧数组为空，连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
+            return;
+        }
 
-    //帧重传定时器 针对未收到 ACK 的帧重传  比如 50ms / 次，最多 6 次
+        log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
+        
+        // 启动全局超时定时器
+        startGlobalTimeoutTimer(ctx);
+        
+        // 遍历发送所有帧
+        for (int sequence = 0; sequence < getTotal(); sequence++) {
+            QuicFrame frame = getFrameArray()[sequence];
+            if (frame != null) {
+                // 设置远程地址
+                frame.setRemoteAddress(remoteAddress);
+                // 发送帧
+                sendFrame(ctx, frame);
+            }
+        }
+    }
 
+    /**
+     * 处理ACK帧
+     * @param ctx Channel上下文
+     * @param ackFrame ACK帧
+     */
+    public void handleAckFrame(ChannelHandlerContext ctx, QuicFrame ackFrame) {
+        long connectionId = ackFrame.getConnectionId();
+        long dataId = ackFrame.getDataId();
+        
+        // 解析ACK载荷
+        ByteBuf payload = ackFrame.getPayload();
+        if (payload == null || payload.readableBytes() < 17) { // 最小载荷: dataId(8) + sequence(4) + isReceive(1) + receivedCount(4)
+            log.error("[ACK解析失败] 载荷无效，连接ID:{} 数据ID:{}", connectionId, dataId);
+            return;
+        }
 
+        long ackDataId = payload.readLong();
+        int sequence = payload.readInt();
+        boolean isReceive = payload.readBoolean();
+        int receivedCount = payload.readInt();
 
+        // 校验数据ID是否匹配
+        if (ackDataId != this.getDataId()) {
+            log.warn("[ACK数据ID不匹配] 期望:{} 实际:{}", this.getDataId(), ackDataId);
+            return;
+        }
 
-    //当收到ACK帧时 加入ACK 确认集合  取消对应帧的重传定时器 检查是否收全 ACK
-    //重传触发：如果某帧的重传定时器超时（50ms）且未收到 ACK，重新发送该帧，重传次数 + 1；
-    //重传次数超限：单帧重传 6 次仍未收到 ACK，判定该帧传输失败，触发全局超时；
+        if (isReceive) {
+            // 确认接收成功
+            processAckSequence(ctx, sequence, receivedCount);
+        } else {
+            // 接收失败，需要重传
+            log.warn("[ACK接收失败] 连接ID:{} 数据ID:{} 序列号:{} 已接收数:{}", 
+                    connectionId, dataId, sequence, receivedCount);
+        }
+    }
+
+    /**
+     * 处理重传请求帧
+     * @param ctx Channel上下文
+     * @param askFrame 重传请求帧
+     */
+    public void handleRetransmitAskFrame(ChannelHandlerContext ctx, QuicFrame askFrame) {
+        long connectionId = askFrame.getConnectionId();
+        long dataId = askFrame.getDataId();
+        
+        // 解析重传请求载荷
+        ByteBuf payload = askFrame.getPayload();
+        if (payload == null || payload.readableBytes() < 16) { // 最小载荷: dataId(8) + missingSeq(4) + retransmitCount(4)
+            log.error("[重传请求解析失败] 载荷无效，连接ID:{} 数据ID:{}", connectionId, dataId);
+            return;
+        }
+
+        long askDataId = payload.readLong();
+        int missingSeq = payload.readInt();
+        int retransmitCount = payload.readInt();
+
+        // 校验数据ID是否匹配
+        if (askDataId != this.getDataId()) {
+            log.warn("[重传请求数据ID不匹配] 期望:{} 实际:{}", this.getDataId(), askDataId);
+            return;
+        }
+
+        // 重传指定的帧
+        retransmitFrame(ctx, missingSeq, retransmitCount);
+    }
+
+    /**
+     * 处理ACK序列号确认
+     */
+    private void processAckSequence(ChannelHandlerContext ctx, int sequence, int receivedCount) {
+        // 如果该序列号已确认，直接返回
+        if (ackedSequences.contains(sequence)) {
+            log.debug("[重复ACK] 连接ID:{} 数据ID:{} 序列号:{} 已确认", getConnectionId(), getDataId(), sequence);
+            return;
+        }
+
+        // 添加到已确认集合
+        ackedSequences.add(sequence);
+        // 取消该帧的重传定时器
+        cancelRetransmitTimer(sequence);
+
+        log.info("[ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认:{}/{}", 
+                getConnectionId(), getDataId(), sequence, ackedSequences.size(), getTotal());
+
+        // 检查是否所有帧都已确认
+        if (ackedSequences.size() == getTotal()) {
+            handleSendComplete(ctx);
+        }
+    }
+
+    /**
+     * 发送单个帧
+     */
+    private void sendFrame(ChannelHandlerContext ctx, QuicFrame frame) {
+        int sequence = frame.getSequence();
+        
+        // 为该帧启动重传定时器（仅在首次发送时）
+        if (!ackedSequences.contains(sequence)) {
+            startFrameRetransmitTimer(ctx, sequence);
+        }
+
+        // 发送帧
+        ctx.writeAndFlush(frame).addListener(future -> {
+            if (!future.isSuccess()) {
+                log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}", 
+                        getConnectionId(), getDataId(), sequence, future.cause());
+            } else {
+                log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}", 
+                        getConnectionId(), getDataId(), sequence);
+            }
+        });
+    }
+
+    /**
+     * 重传指定帧
+     */
+    private void retransmitFrame(ChannelHandlerContext ctx, int sequence, int retransmitCount) {
+        // 检查重传次数是否超限
+        AtomicInteger count = retransmitCounts.computeIfAbsent(sequence, k -> new AtomicInteger(0));
+        int currentCount = count.get();
+
+        if (currentCount >= MAX_RETRANSMIT_TIMES) {
+            log.error("[重传超限] 连接ID:{} 数据ID:{} 序列号:{} 重传次数{}≥{}，发送失败",
+                    getConnectionId(), getDataId(), sequence, currentCount, MAX_RETRANSMIT_TIMES);
+            handleSendFailure(ctx);
+            return;
+        }
+
+        // 获取要重传的帧
+        QuicFrame frame = getFrameBySequence(sequence);
+        if (frame == null) {
+            log.error("[重传帧不存在] 连接ID:{} 数据ID:{} 序列号:{}", 
+                    getConnectionId(), getDataId(), sequence);
+            return;
+        }
+
+        // 增加重传次数
+        count.incrementAndGet();
+        log.info("[开始重传] 连接ID:{} 数据ID:{} 序列号:{} 重传次数:{}", 
+                getConnectionId(), getDataId(), sequence, count.get());
+
+        // 重新启动重传定时器并发送帧
+        startFrameRetransmitTimer(ctx, sequence);
+        sendFrame(ctx, frame);
+    }
+
+    /**
+     * 启动单帧重传定时器
+     */
+    private void startFrameRetransmitTimer(ChannelHandlerContext ctx, int sequence) {
+        // 取消已有的定时器
+        cancelRetransmitTimer(sequence);
+
+        // 创建新的重传定时器
+        Timeout timeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
+            @Override
+            public void run(Timeout timeout) throws Exception {
+                if (timeout.isCancelled() || isComplete()) {
+                    return;
+                }
+                // 定时器触发，重传该帧
+                AtomicInteger count = retransmitCounts.get(sequence);
+                int currentCount = count != null ? count.get() : 0;
+                retransmitFrame(ctx, sequence, currentCount);
+            }
+        }, RETRANSMIT_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        retransmitTimers.put(sequence, timeout);
+    }
+
+    /**
+     * 启动全局超时定时器
+     */
+    private void startGlobalTimeoutTimer(ChannelHandlerContext ctx) {
+        synchronized (this) {
+            if (globalTimeout == null && !isComplete()) {
+                globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
+                    @Override
+                    public void run(Timeout timeout) throws Exception {
+                        if (timeout.isCancelled() || isComplete()) {
+                            return;
+                        }
+                        log.error("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未完成发送，发送失败",
+                                getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
+                        handleSendFailure(ctx);
+                    }
+                }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+                log.info("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
+                        getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
+            }
+        }
+    }
+
+    /**
+     * 处理发送完成
+     */
+    private void handleSendComplete(ChannelHandlerContext ctx) {
+        if (this.isComplete()) {
+            return;
+        }
+        setComplete(true);
+        log.info("[发送完成] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
+
+        // 从发送Map中移除
+        SendMap.remove(getDataId());
+        // 取消所有定时器
+        cancelAllTimers();
+        // 释放帧资源
+        this.release();
+        // 执行成功回调
+        if (successCallback != null) {
+            successCallback.run();
+        }
+    }
+
+    /**
+     * 处理发送失败
+     */
+    private void handleSendFailure(ChannelHandlerContext ctx) {
+        if (this.isComplete()) {
+            return;
+        }
+        setComplete(true);
+        log.error("[发送失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
+
+        // 从发送Map中移除
+        SendMap.remove(getDataId());
+        // 取消所有定时器
+        cancelAllTimers();
+        // 释放帧资源
+        this.release();
+        // 执行失败回调
+        if (failCallback != null) {
+            failCallback.run();
+        }
+    }
+
+    /**
+     * 取消所有定时器
+     */
+    private void cancelAllTimers() {
+        // 取消全局定时器
+        if (globalTimeout != null) {
+            globalTimeout.cancel();
+            globalTimeout = null;
+        }
+        // 取消所有单帧重传定时器
+        retransmitTimers.values().forEach(Timeout::cancel);
+        retransmitTimers.clear();
+        retransmitCounts.clear();
+    }
+
+    /**
+     * 取消单个重传定时器
+     */
+    private void cancelRetransmitTimer(int sequence) {
+        Timeout timeout = retransmitTimers.remove(sequence);
+        if (timeout != null) {
+            timeout.cancel();
+        }
+        retransmitCounts.remove(sequence);
+    }
 
 
 }

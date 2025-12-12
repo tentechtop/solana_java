@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.bit.solana.quic.QuicConnectionManager.*;
+import static com.bit.solana.quic.QuicConstants.*;
 
 @Slf4j
 @Data
@@ -33,8 +34,6 @@ public class ReceiveQuicData extends QuicData {
     private final ConcurrentHashMap<Integer, Timeout> retransmitTimers = new ConcurrentHashMap<>();
     // 单帧重传次数（序列号→次数）
     private final ConcurrentHashMap<Integer, AtomicInteger> retransmitCounts = new ConcurrentHashMap<>();
-    // ACK发送计数器（序列号→发送次数）
-    private final ConcurrentHashMap<Integer, AtomicInteger> ackSendCounts = new ConcurrentHashMap<>();
     // 传输完成回调
     private Runnable successCallback;
     // 传输失败回调
@@ -100,25 +99,14 @@ public class ReceiveQuicData extends QuicData {
             handleMissingFrames(ctx);
         }
 
-        // 发送ACK帧
+        // 发送ACK帧（UDP：发送失败也无所谓，发送方会重发）
         QuicFrame finalAckFrame = ackFrame;
-        AtomicInteger ackCount = ackSendCounts.computeIfAbsent(sequence, k -> new AtomicInteger(0));
-        int currentAckCount = ackCount.incrementAndGet();
-        
-        // 限制ACK发送次数，避免无限重复
-        if (currentAckCount <= MAX_RETRANSMIT_TIMES) {
-            ctx.writeAndFlush(ackFrame).addListener(future -> {
-                //无论成功失败都释放
-                finalAckFrame.release();
-            });
-            log.debug("[发送ACK] 连接ID:{} 数据ID:{} 序列号:{} ACK发送次数:{}",
-                    connectionId, dataId, sequence, currentAckCount);
-        } else {
-            // 超过ACK发送限制，直接释放并记录
+        ctx.writeAndFlush(ackFrame).addListener(future -> {
+            //无论成功失败都释放ACK帧
             finalAckFrame.release();
-            log.warn("[ACK发送限制] 连接ID:{} 数据ID:{} 序列号:{} ACK发送次数{}超过限制{}",
-                    connectionId, dataId, sequence, currentAckCount, MAX_RETRANSMIT_TIMES);
-        }
+        });
+        log.debug("[发送ACK] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
+                connectionId, dataId, sequence, receivedSequences.size(), total);
     }
 
 
@@ -272,7 +260,6 @@ public class ReceiveQuicData extends QuicData {
         // 清空集合，帮助GC
         retransmitTimers.clear();
         retransmitCounts.clear();
-        ackSendCounts.clear();
     }
 
     private void releaseFrames() {

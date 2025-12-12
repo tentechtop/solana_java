@@ -3,7 +3,10 @@ package com.bit.solana.quic;
 import com.bit.solana.util.SnowflakeIdGenerator;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.util.HashedWheelTimer;
+import io.netty.util.Timer;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -43,4 +46,22 @@ public class QuicConstants {
 
     private QuicConstants() {}
 
+
+    //连接下的数据
+    public static Map<Long, SendQuicData> SendMap = new ConcurrentHashMap<>();//发送中的数据缓存 数据收到全部的ACK后释放掉 发送帧50ms后未收到ACK则重发 重发三次未收到ACK则放弃并清除数据 下线节点
+
+    public static  Map<Long, ReceiveQuicData> ReceiveMap = new ConcurrentHashMap<>();//接收中的数据缓存 数据完整后释放掉
+
+    public static final Timer GLOBAL_TIMER = new HashedWheelTimer(
+            10, // 时间轮精度10ms
+            java.util.concurrent.TimeUnit.MILLISECONDS,
+            1024 // 时间轮槽数
+    );
+
+    // 全局超时时间（ms）：300ms
+    public static final long GLOBAL_TIMEOUT_MS = 300;
+    // 单帧重传间隔（ms）
+    public static final long RETRANSMIT_INTERVAL_MS = 50;
+    // 单帧最大重传次数（300/50=6次）
+    public static final int MAX_RETRANSMIT_TIMES = 6;
 }
