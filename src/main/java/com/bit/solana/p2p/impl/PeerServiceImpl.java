@@ -11,10 +11,7 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
-import com.bit.solana.quic.QuicConnectionManager;
-import com.bit.solana.quic.QuicFrameDecoder;
-import com.bit.solana.quic.QuicFrameEncoder;
-import com.bit.solana.quic.QuicServiceHandler;
+import com.bit.solana.quic.*;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -41,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.quic.QuicConnectionManager.Global_Channel;
 import static com.bit.solana.quic.QuicConnectionManager.connectRemote;
+import static com.bit.solana.quic.QuicConstants.generator;
 
 @Slf4j
 @Data
@@ -148,12 +146,22 @@ public class PeerServiceImpl implements PeerService {
             ChannelFuture sync = bootstrap.bind(commonConfig.getSelf().getPort()).sync();
             log.info("QUIC服务器已启动，监听端口：{}", commonConfig.getSelf().getPort());
             Channel channel = sync.channel();
-            Global_Channel = (DatagramChannel) channel;
+
 
             //连接到节点8334
             if (commonConfig.getSelf().getPort()==8333){
-                InetSocketAddress inetSocketAddress = new InetSocketAddress("127.0.0.1",8334);
-                connectRemote(inetSocketAddress);
+                long conId = generator.nextId();
+                long dataId = generator.nextId();
+                QuicFrame acquire = QuicFrame.acquire();
+                acquire.setConnectionId(conId);//生成连接ID
+                acquire.setDataId(dataId);
+                acquire.setTotal(0);
+                acquire.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
+                acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
+                acquire.setPayload(null);
+                channel.writeAndFlush()
+
+
             }
 
 
