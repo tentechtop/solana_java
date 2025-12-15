@@ -160,6 +160,8 @@ public class QuicConnection {
 
     private void handleConnectResponseFrame(ChannelHandlerContext ctx, QuicFrame quicFrame) {
         log.info("处理连接响应");
+        //核销掉这个数据
+
     }
 
 

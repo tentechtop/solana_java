@@ -10,8 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
 import static com.bit.solana.quic.QuicConstants.*;
@@ -34,24 +33,35 @@ public class QuicConnectionManager {
      * 与指定的节点建立连接
      * 为该连接建立心跳任务
      */
-    public QuicConnection connectRemote(InetSocketAddress remoteAddress) {
+    public QuicConnection connectRemote(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, TimeoutException {
         // 1. 参数校验
         if (remoteAddress == null) {
             log.error("远程地址不能为空");
             return null;
         }
         long conId = generator.nextId();
-
+        long dataId = generator.nextId();
         //给远程地址发送连接请求请求帧 等待回复 回复成功后建立连接
         QuicFrame acquire = QuicFrame.acquire();
         acquire.setConnectionId(conId);//生成连接ID
-        acquire.setDataId(0L);
+        acquire.setDataId(dataId);
         acquire.setTotal(0);
         acquire.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
         acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
         acquire.setPayload(null);
-
+        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        RESPONSE_FUTURECACHE.put(dataId, responseFuture);
         Global_Channel.writeAndFlush(acquire);
+        byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
+        if (bytes == null) {
+            log.info("节点{}连接失败", remoteAddress);
+            return null;
+        }
+        //回复的是否是一个连接响应帧
+
+
+
+
 
         //回复成功后创建连接  CompletableFuture
 
