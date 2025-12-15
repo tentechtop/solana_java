@@ -1,19 +1,28 @@
 package com.bit.solana.quic;
 
 import com.bit.solana.util.SnowflakeIdGenerator;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class QuicConstants {
-
+    /**
+     * 请求响应Future缓存：最大容量100万个，30秒过期（请求超时后自动清理，避免内存泄漏）
+     * Key：请求ID，Value：响应Future
+     * 16字节的UUIDV7 - > CompletableFuture<byte[]>
+     */
+    public static Cache<String, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+            .maximumSize(1000_000)
+            .expireAfterWrite(5, TimeUnit.SECONDS)
+            .weakValues() // 弱引用存储Future，GC时可回收
+            .recordStats()
+            .build();
 
     public static SnowflakeIdGenerator generator = new SnowflakeIdGenerator();
 
