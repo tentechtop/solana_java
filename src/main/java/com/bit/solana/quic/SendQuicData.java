@@ -38,6 +38,82 @@ public class SendQuicData extends QuicData {
 
 
     /**
+     * 构建发送数据
+     * @param connectionId
+     * @param dataId
+     * @param frameType
+     * @param fullData
+     * @param maxFrameSize
+     * @return
+     */
+    public static SendQuicData buildFromFullData(long connectionId, long dataId, byte frameType,
+                                             ByteBuf fullData, int maxFrameSize) {
+        // 前置校验
+        if (fullData == null || !fullData.isReadable()) {
+            throw new IllegalArgumentException("完整数据不能为空或不可读");
+        }
+        if (maxFrameSize < 1) {
+            throw new IllegalArgumentException("单帧最大载荷长度必须≥1，实际：" + maxFrameSize);
+        }
+
+        SendQuicData quicData = new SendQuicData();
+        quicData.setConnectionId(connectionId);
+        quicData.setDataId(dataId);
+
+        // 1. 计算分片总数和每帧长度
+        int fullDataLength = fullData.readableBytes();
+        // 单个帧的总长度 = 固定头部 + 最大载荷长度
+        int singleFrameTotalLength = QuicFrame.FIXED_HEADER_LENGTH + maxFrameSize;
+        // 计算需要的分片数（向上取整）
+        int totalFrames = (fullDataLength + maxFrameSize - 1) / maxFrameSize;
+        quicData.setTotal(totalFrames);
+        quicData.setFrameArray(new QuicFrame[totalFrames]);
+
+        // 2. 分片构建QuicFrame
+        fullData.markReaderIndex(); // 标记原始读取位置，避免修改外部缓冲区
+        try {
+            for (int sequence = 0; sequence < totalFrames; sequence++) {
+                // 创建帧实例
+                QuicFrame frame = QuicFrame.acquire();
+                frame.setConnectionId(connectionId);
+                frame.setDataId(dataId);
+                frame.setTotal(totalFrames);
+                frame.setFrameType(frameType);
+                frame.setSequence(sequence);
+
+                // 计算当前帧的载荷长度
+                int remainingBytes = fullData.readableBytes();
+                int currentPayloadLength = Math.min(remainingBytes, maxFrameSize);
+                // 设置帧总长度（固定头部 + 当前载荷长度）
+                frame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH + currentPayloadLength);
+
+                // 复制载荷数据（避免引用外部缓冲区）
+                ByteBuf payload = ALLOCATOR.buffer(currentPayloadLength);
+                fullData.readBytes(payload, currentPayloadLength);
+                frame.setPayload(payload);
+
+                // 将帧存入数组
+                quicData.getFrameArray()[sequence] = frame;
+            }
+            quicData.setComplete(true);
+        } catch (Exception e) {
+            log.error("构建QuicData失败 connectionId={}, dataId={}", connectionId, dataId, e);
+            // 异常时释放已创建的帧
+            for (QuicFrame frame : quicData.getFrameArray()) {
+                if (frame != null) {
+                    frame.release();
+                }
+            }
+            throw new RuntimeException("构建QuicData失败", e);
+        } finally {
+            fullData.resetReaderIndex(); // 恢复外部缓冲区读取位置
+        }
+        return quicData;
+    }
+
+
+
+    /**
      * 发送所有数据帧
      * @param ctx Channel上下文
      * @param remoteAddress 目标地址
