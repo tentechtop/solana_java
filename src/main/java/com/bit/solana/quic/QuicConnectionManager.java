@@ -14,20 +14,59 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
-import static com.bit.solana.quic.QuicConstants.ReceiveMap;
-import static com.bit.solana.quic.QuicConstants.SendMap;
+import static com.bit.solana.quic.QuicConstants.*;
 
 /**
  * 连接管理器（全局连接池）
  */
 @Slf4j
 public class QuicConnectionManager {
+    public static DatagramChannel Global_Channel = null;// UDP通道
 
     private static final Cache<Long, QuicConnection> CONNECTION_MAP  = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
             .recordStats()
             .build();
+
+
+    /**
+     * 与指定的节点建立连接
+     * 为该连接建立心跳任务
+     */
+    public QuicConnection connectRemote(InetSocketAddress remoteAddress) {
+        // 1. 参数校验
+        if (remoteAddress == null) {
+            log.error("远程地址不能为空");
+            return null;
+        }
+        long conId = generator.nextId();
+
+        //给远程地址发送连接请求请求帧 等待回复 回复成功后建立连接
+        QuicFrame acquire = QuicFrame.acquire();
+        acquire.setConnectionId(conId);//生成连接ID
+        acquire.setDataId(0L);
+        acquire.setTotal(0);
+        acquire.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
+        acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
+        acquire.setPayload(null);
+
+        Global_Channel.writeAndFlush(acquire);
+
+        //回复成功后创建连接  CompletableFuture
+
+        acquire.release();
+        return null;
+    }
+
+    /**
+     * 与指定远程节点断开连接
+     * UDP是无连接的，停止心跳并清理资源即可
+     */
+    public void disconnectRemote(InetSocketAddress remoteAddress) {
+
+    }
+
 
 
     /**

@@ -21,6 +21,7 @@ public class QuicFrame {
     private int sequence; // 序列号分片顺序 0-total 最大序列号是total-1 4字节  FIN帧是total-1  序列号是0就是第一帧 序列号是total-1就是最后一帧
     private int frameTotalLength;//载荷总长 4字节
     private ByteBuf payload; // 有效载荷
+    //扩展字段 接收时写入
     private InetSocketAddress remoteAddress;
 
     // 固定头部长度 = connectionId(8) + dataId(8) + total(4) + frameType(1) + sequence(4) + frameTotalLength(4)

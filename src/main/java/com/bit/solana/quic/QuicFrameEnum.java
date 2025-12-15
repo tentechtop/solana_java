@@ -18,8 +18,13 @@ public enum QuicFrameEnum {
     OFF_FRAME((byte)0x05, "下线帧"),
     ONLINE_FRAME((byte)0x06, "上线帧"),
 
-
     IMMEDIATE_REQUEST_FRAME((byte)0x07, "重传请求帧"),//立即请求一个数据帧
+
+
+
+    //50-59 连接相关
+    CONNECT_REQUEST_FRAME((byte)0x50, "连接请求帧"),//A请求连接B B要回复
+    CONNECT_RESPONSE_FRAME((byte)0x51, "连接响应帧"),//B回复A
 
 
 

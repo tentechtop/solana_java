@@ -2,6 +2,7 @@ package com.bit.solana.quic;
 
 import com.bit.solana.util.SnowflakeIdGenerator;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.socket.DatagramChannel;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 
@@ -12,6 +13,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class QuicConstants {
+
+
     public static SnowflakeIdGenerator generator = new SnowflakeIdGenerator();
 
     // 基础配置 带宽耗时 = 总数据量 ÷ 实际吞吐量 = 4.35MB ÷ 115MB/s ≈ 0.0378秒 ≈ 38毫秒
