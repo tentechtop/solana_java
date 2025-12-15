@@ -33,7 +33,7 @@ public class QuicConnectionManager {
      * 与指定的节点建立连接
      * 为该连接建立心跳任务
      */
-    public QuicConnection connectRemote(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, TimeoutException {
+    public static QuicConnection connectRemote(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, TimeoutException {
         // 1. 参数校验
         if (remoteAddress == null) {
             log.error("远程地址不能为空");
@@ -51,19 +51,19 @@ public class QuicConnectionManager {
         acquire.setPayload(null);
         CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(dataId, responseFuture);
-        Global_Channel.writeAndFlush(acquire);
+        Global_Channel.writeAndFlush(acquire).addListener(future -> {
+            if (!future.isSuccess()) {
+                log.info("节点{}连接失败", remoteAddress);
+            } else {
+                log.info("节点{}连接成功", remoteAddress);
+            }
+        });
         byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
         if (bytes == null) {
             log.info("节点{}连接失败", remoteAddress);
             return null;
         }
-        //回复的是否是一个连接响应帧
-
-
-
-
-
-        //回复成功后创建连接  CompletableFuture
+        log.info("连接成功");
 
         acquire.release();
         return null;
@@ -73,7 +73,7 @@ public class QuicConnectionManager {
      * 与指定远程节点断开连接
      * UDP是无连接的，停止心跳并清理资源即可
      */
-    public void disconnectRemote(InetSocketAddress remoteAddress) {
+    public static void disconnectRemote(InetSocketAddress remoteAddress) {
 
     }
 

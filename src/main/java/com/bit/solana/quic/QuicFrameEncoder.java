@@ -13,6 +13,7 @@ public class QuicFrameEncoder extends MessageToMessageEncoder<QuicFrame> {
 
     @Override
     protected void encode(ChannelHandlerContext channelHandlerContext, QuicFrame quicFrame, List<Object> out) throws Exception {
+        log.info("开始编码");
         // 1. 编码帧数据
         ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
         quicFrame.encode(buf); // 使用已有的 encode(ByteBuf) 方法

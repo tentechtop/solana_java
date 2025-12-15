@@ -1,20 +1,16 @@
 package com.bit.solana.p2p.impl;
 
 import com.bit.solana.config.CommonConfig;
-import com.bit.solana.p2p.impl.handle.QuicConnHandler;
-import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.locks.ReentrantLock;
 
 //BIDIRECTIONAL 双向流 所有核心场景（心跳、带响应请求、连接维护）
@@ -31,8 +27,6 @@ public class PeerClient {
     @Autowired
     private RoutingTable routingTable;
     @Autowired
-    private QuicStreamHandler quicStreamHandler;
-    @Autowired
     private PeerServiceImpl peerService;
 
 
@@ -46,27 +40,6 @@ public class PeerClient {
     private Bootstrap bootstrap;
 
     private Channel channel;
-
-/*    @PostConstruct
-    public void init() throws InterruptedException, ExecutionException {
-        eventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
-        bootstrap = new Bootstrap();
-        channel = peerService.getQuicServerChannel();
-        log.info("PeerClient 初始化完成，绑定UDP端口:{}", channel.localAddress());
-    }*/
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

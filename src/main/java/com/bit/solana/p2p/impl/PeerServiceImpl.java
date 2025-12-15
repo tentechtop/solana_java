@@ -4,7 +4,6 @@ import com.bit.solana.config.CommonConfig;
 import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
 import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
-import com.bit.solana.p2p.impl.handle.QuicStreamHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
@@ -12,11 +11,16 @@ import com.bit.solana.p2p.protocol.ProtocolRegistry;
 import com.bit.solana.p2p.protocol.impl.NetworkHandshakeHandler;
 import com.bit.solana.p2p.protocol.impl.PingHandler;
 import com.bit.solana.p2p.protocol.impl.TextHandler;
+import com.bit.solana.quic.QuicConnectionManager;
+import com.bit.solana.quic.QuicFrameDecoder;
+import com.bit.solana.quic.QuicFrameEncoder;
+import com.bit.solana.quic.QuicServiceHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
@@ -31,8 +35,12 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.cert.CertificateException;
 import java.util.concurrent.TimeUnit;
+
+import static com.bit.solana.quic.QuicConnectionManager.Global_Channel;
+import static com.bit.solana.quic.QuicConnectionManager.connectRemote;
 
 @Slf4j
 @Data
@@ -47,8 +55,6 @@ public class PeerServiceImpl implements PeerService {
     private CommonConfig commonConfig;
     @Autowired
     private RoutingTable routingTable;
-    @Autowired
-    private QuicStreamHandler quicStreamHandler;
 
 
     @Autowired
@@ -131,13 +137,26 @@ public class PeerServiceImpl implements PeerService {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
+                            pipeline.addLast(new QuicFrameDecoder());
+                            pipeline.addLast(new QuicFrameEncoder());
+                            pipeline.addLast(new QuicServiceHandler());
 
                         }
                     });
 
             // 3. 绑定端口并启动
-            bootstrap.bind(commonConfig.getSelf().getPort()).sync();
+            ChannelFuture sync = bootstrap.bind(commonConfig.getSelf().getPort()).sync();
             log.info("QUIC服务器已启动，监听端口：{}", commonConfig.getSelf().getPort());
+            Channel channel = sync.channel();
+            Global_Channel = (DatagramChannel) channel;
+
+            //连接到节点8334
+            if (commonConfig.getSelf().getPort()==8333){
+                InetSocketAddress inetSocketAddress = new InetSocketAddress("127.0.0.1",8334);
+                connectRemote(inetSocketAddress);
+            }
+
+
         }catch (Exception e){
             e.printStackTrace();
         }

@@ -31,6 +31,7 @@ import static com.bit.solana.quic.QuicFrameEnum.DATA_FRAME;
 @Data
 public class QuicConnection {
     private long connectionId;// 连接ID
+    public  DatagramChannel channel = null;// UDP通道
     private Channel tcpChannel;// TCP通道
     private boolean isUDP = true;//默认使用可靠UDP
     private  InetSocketAddress localAddress;// 本地地址
@@ -53,7 +54,7 @@ public class QuicConnection {
             @Override
             public void run(Timeout timeout) throws Exception {
                 // 连接已关闭则停止心跳
-                if (remoteAddress == null || Global_Channel == null || !Global_Channel.isActive()) {
+                if (remoteAddress == null || channel == null || !channel.isActive()) {
                     log.info("连接已关闭，停止心跳，连接ID:{}", connectionId);
                     return;
                 }
@@ -70,7 +71,7 @@ public class QuicConnection {
                     pingFrame.setRemoteAddress(remoteAddress);
 
                     // 发送PING帧
-                    Global_Channel.writeAndFlush(pingFrame).addListener(future -> {
+                    channel.writeAndFlush(pingFrame).addListener(future -> {
                         if (!future.isSuccess()) {
                             log.error("[心跳发送失败] 连接ID:{}", connectionId, future.cause());
                         } else {
@@ -161,7 +162,10 @@ public class QuicConnection {
     private void handleConnectResponseFrame(ChannelHandlerContext ctx, QuicFrame quicFrame) {
         log.info("处理连接响应");
         //核销掉这个数据
-
+        CompletableFuture<byte[]> ifPresent = RESPONSE_FUTURECACHE.asMap().remove(quicFrame.getDataId());
+        if (ifPresent != null) {
+            ifPresent.complete(null);
+        }
     }
 
 

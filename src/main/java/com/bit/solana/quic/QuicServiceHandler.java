@@ -22,16 +22,8 @@ public class QuicServiceHandler extends SimpleChannelInboundHandler<QuicFrame> {
     protected void channelRead0(ChannelHandlerContext ctx, QuicFrame quicFrame) throws Exception {
         InetSocketAddress local = (InetSocketAddress) ctx.channel().localAddress();
         InetSocketAddress remote = quicFrame.getRemoteAddress();
-        if (quicFrame == null || !quicFrame.isValid()) {
-            log.warn("无效帧，忽略");
-            ReferenceCountUtil.safeRelease(quicFrame); // 自动判空，安全释放
-            return;
-        }
-
-
-/*        QuicConnection orCreateConnection = QuicConnectionManager.getOrCreateConnection(
-                (DatagramChannel) ctx.channel(), local, remote);
-        orCreateConnection.handleFrame(ChannelHandlerContext ctx,quicFrame);*/
+        QuicConnection orCreateConnection = QuicConnectionManager.getConnection(quicFrame.getConnectionId());
+        orCreateConnection.handleFrame(ctx,quicFrame);
     }
 
 
