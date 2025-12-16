@@ -147,17 +147,11 @@ public class PeerServiceImpl implements PeerService {
             ChannelFuture sync = bootstrap.bind(commonConfig.getSelf().getPort()).sync();
             log.info("QUIC服务器已启动，监听端口：{}", commonConfig.getSelf().getPort());
             Channel channel = sync.channel();
-
             Global_Channel = (DatagramChannel) channel;
 
-            //连接到节点8334
-            if (commonConfig.getSelf().getPort()==8333){
-                InetSocketAddress targetAddr = new InetSocketAddress("127.0.0.1", 8334);
-                QuicConnection quicConnection = connectRemote(targetAddr);
 
 
 
-            }
 
 
         }catch (Exception e){
