@@ -3,7 +3,9 @@ package com.bit.solana.quic;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.socket.DatagramChannel;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 import lombok.extern.slf4j.Slf4j;
@@ -42,31 +44,45 @@ public class QuicConnectionManager {
         long conId = generator.nextId();
         long dataId = generator.nextId();
         //给远程地址发送连接请求请求帧 等待回复 回复成功后建立连接
-        QuicFrame acquire = QuicFrame.acquire();
+        QuicFrame acquire = QuicFrame.acquire();//已经释放
         acquire.setConnectionId(conId);//生成连接ID
         acquire.setDataId(dataId);
         acquire.setTotal(0);
         acquire.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
         acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
         acquire.setPayload(null);
-        CompletableFuture<byte[]> responseFuture = new CompletableFuture<>();
+        acquire.setRemoteAddress(remoteAddress);
+        CompletableFuture<Object> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(dataId, responseFuture);
-        Global_Channel.writeAndFlush(acquire).addListener(future -> {
+
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        acquire.encode(buf);
+        DatagramPacket packet = new DatagramPacket(buf, acquire.getRemoteAddress());
+
+        Global_Channel.writeAndFlush(packet).addListener(future -> {
+            acquire.release();
             if (!future.isSuccess()) {
                 log.info("节点{}连接失败", remoteAddress);
             } else {
                 log.info("节点{}连接成功", remoteAddress);
             }
         });
-        byte[] bytes = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
-        if (bytes == null) {
-            log.info("节点{}连接失败", remoteAddress);
+        Object result = responseFuture.get(5, TimeUnit.SECONDS);//等待返回结果
+        if (result == null) {
+            log.info("结束节点{}连接失败", remoteAddress);
             return null;
         }
         log.info("连接成功");
-
-        acquire.release();
-        return null;
+        //创建一个主动出站连接
+        QuicConnection quicConnection = new QuicConnection();
+        quicConnection.setConnectionId(conId);
+        quicConnection.setRemoteAddress(remoteAddress);
+        quicConnection.setUDP(true);
+        quicConnection.setOutbound(true);
+        quicConnection.setExpired(false);
+        quicConnection.setLastSeen(System.currentTimeMillis());
+        quicConnection.startHeartbeat();
+        return quicConnection;
     }
 
     /**
@@ -78,14 +94,6 @@ public class QuicConnectionManager {
     }
 
 
-
-    /**
-     * 创建或者或者连接
-     */
-    public static QuicConnection createOrGetConnection(InetSocketAddress remoteAddress) {
-
-        return null;
-    }
 
 
     /**
@@ -141,6 +149,40 @@ public class QuicConnectionManager {
         int count = CONNECTION_MAP.asMap().size();
         CONNECTION_MAP.invalidateAll();
         log.info("[清空连接] 清除了{}个连接", count);
+    }
+
+
+    public static QuicConnection createOrGetConnection(DatagramChannel channel,InetSocketAddress local, InetSocketAddress remote, long connectionId) {
+        //获取或者创建一个远程连接
+        QuicConnection quicConnection = QuicConnectionManager.getConnection(connectionId);
+        if (quicConnection == null){
+            quicConnection = new QuicConnection();
+            quicConnection.setConnectionId(connectionId);
+            quicConnection.setRemoteAddress(remote);
+            quicConnection.setUDP(true);
+            quicConnection.setOutbound(false);//非主动连接
+            quicConnection.setExpired(false);
+            quicConnection.setLastSeen(System.currentTimeMillis());
+            QuicConnectionManager.addConnection(connectionId, quicConnection);
+        }
+        quicConnection.setLastSeen(System.currentTimeMillis());
+        return quicConnection;
+    }
+
+
+
+    //发送数据不释放帧
+    public static void sendData(QuicFrame quicFrame) {
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        quicFrame.encode(buf);
+        DatagramPacket packet = new DatagramPacket(buf, quicFrame.getRemoteAddress());
+        Global_Channel.writeAndFlush(packet).addListener(future -> {
+            if (!future.isSuccess()) {
+                log.info("发送帧失败{}", quicFrame);
+            } else {
+                log.info("发送帧成功{}", quicFrame);
+            }
+        });
     }
 
 

@@ -56,7 +56,7 @@ public class QuicData {
         try {
             for (int sequence = 0; sequence < totalFrames; sequence++) {
                 // 创建帧实例
-                QuicFrame frame = QuicFrame.acquire();
+                QuicFrame frame = QuicFrame.acquire();//等待和QuicData一起释放
                 frame.setConnectionId(connectionId);
                 frame.setDataId(dataId);
                 frame.setTotal(totalFrames);

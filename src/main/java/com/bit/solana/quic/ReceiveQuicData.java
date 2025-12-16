@@ -182,7 +182,7 @@ public class ReceiveQuicData extends QuicData {
         askPayload.writeInt(retransmitCount);  // 当前重传次数
 
         // 2. 构建重传询问帧（自定义frameType：比如0x02表示重传请求）
-        QuicFrame askFrame = QuicFrame.acquire();
+        QuicFrame askFrame = QuicFrame.acquire();//已经释放
         askFrame.setConnectionId(connectionId);
         askFrame.setDataId(dataId);
         askFrame.setTotal(1); // 重传询问帧不分片
@@ -194,6 +194,7 @@ public class ReceiveQuicData extends QuicData {
 
         // 3. 发送重传询问帧（通过ctx写出）
         ctx.writeAndFlush(askFrame).addListener(future -> {
+            askFrame.release();
             if (!future.isSuccess()) {
                 log.error("[重传询问发送失败] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}",
                         connectionId, dataId, missingSeq, retransmitCount, future.cause());
@@ -331,7 +332,7 @@ public class ReceiveQuicData extends QuicData {
             ackPayload.writeInt(0); // 无批量信息
         }
 
-        QuicFrame ackFrame = QuicFrame.acquire();
+        QuicFrame ackFrame = QuicFrame.acquire();//构建释放
         ackFrame.setConnectionId(connectionId);
         ackFrame.setDataId(dataId);
         ackFrame.setTotal(1); // ACK帧不分片

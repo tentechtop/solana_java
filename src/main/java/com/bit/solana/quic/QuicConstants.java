@@ -17,7 +17,7 @@ public class QuicConstants {
      * Key：请求ID，Value：响应Future
      * 16字节的UUIDV7 - > CompletableFuture<byte[]>
      */
-    public static Cache<Long, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+    public static Cache<Long, CompletableFuture<Object>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(5, TimeUnit.SECONDS)
             .weakValues() // 弱引用存储Future，GC时可回收

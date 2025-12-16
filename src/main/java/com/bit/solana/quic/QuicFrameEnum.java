@@ -7,24 +7,24 @@ import lombok.extern.slf4j.Slf4j;
 @Getter
 @Slf4j
 public enum QuicFrameEnum {
-    DATA_FRAME((byte)0x01, "数据帧"),
-    ACK_FRAME((byte)0x02, "ACK帧"),
-    BATCH_ACK_FRAME((byte)0x08, "批量ACK帧"),
+    DATA_FRAME((byte)1, "数据帧"),
+    ACK_FRAME((byte)2, "ACK帧"),
+    BATCH_ACK_FRAME((byte)3, "批量ACK帧"),
 
-    PING_FRAME((byte)0x03, "ping帧"),
-    PONG_FRAME((byte)0x04, "pong帧"),
+    PING_FRAME((byte)4, "ping帧"),
+    PONG_FRAME((byte)5, "pong帧"),
 
 
-    OFF_FRAME((byte)0x05, "下线帧"),
-    ONLINE_FRAME((byte)0x06, "上线帧"),
+    OFF_FRAME((byte)6, "下线帧"),
+    ONLINE_FRAME((byte)7, "上线帧"),
 
-    IMMEDIATE_REQUEST_FRAME((byte)0x07, "重传请求帧"),//立即请求一个数据帧
+    IMMEDIATE_REQUEST_FRAME((byte)8, "重传请求帧"),//立即请求一个数据帧
 
 
 
     //50-59 连接相关
-    CONNECT_REQUEST_FRAME((byte)0x50, "连接请求帧"),//A请求连接B B要回复
-    CONNECT_RESPONSE_FRAME((byte)0x51, "连接响应帧"),//B回复A
+    CONNECT_REQUEST_FRAME((byte)9, "连接请求帧"),//A请求连接B B要回复
+    CONNECT_RESPONSE_FRAME((byte)10, "连接响应帧"),//B回复A
 
 
 

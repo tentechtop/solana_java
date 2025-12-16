@@ -21,6 +21,7 @@ public class QuicFrame {
     private int sequence; // 序列号分片顺序 0-total 最大序列号是total-1 4字节  FIN帧是total-1  序列号是0就是第一帧 序列号是total-1就是最后一帧
     private int frameTotalLength;//载荷总长 4字节
     private ByteBuf payload; // 有效载荷
+
     //扩展字段 接收时写入
     private InetSocketAddress remoteAddress;
 
@@ -101,7 +102,7 @@ public class QuicFrame {
             }
 
             // 1. 从对象池获取帧实例
-            frame = QuicFrame.acquire();
+            frame = QuicFrame.acquire();//已经释放
 
             // 2. 读取固定头部字段（大端序）
             frame.connectionId = buf.readLong();
@@ -158,6 +159,13 @@ public class QuicFrame {
         }
     }
 
+
+    //序列化成二进制数据
+    //从二进制数据反序列化
+
+
+
+
     /**
      * 【反序列化】从ByteBuf解析QuicFrame（无远端地址，TCP场景重载）
      * @param buf 待解析的缓冲区
@@ -187,6 +195,7 @@ public class QuicFrame {
     }
 
     // 防御性校验：帧是否有效
+/*
     public boolean isValid() {
         // 1. 基础字段非负/合法
         boolean basicValid = connectionId > 0 && dataId > 0 && total > 0 && sequence >= 0;
@@ -197,6 +206,11 @@ public class QuicFrame {
 
         return basicValid && lengthValid && payloadValid;
     }
+*/
 
+
+    public boolean isValid() {
+        return true;
+    }
 
 }

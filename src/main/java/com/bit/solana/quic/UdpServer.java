@@ -27,8 +27,6 @@ public class UdpServer {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) {
                             ch.pipeline()
-                                    .addLast(new QuicFrameDecoder())
-                                    .addLast(new QuicFrameEncoder())
                                     .addLast(new QuicServiceHandler());
                         }
                     });

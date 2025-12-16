@@ -14,10 +14,13 @@ import com.bit.solana.p2p.protocol.impl.TextHandler;
 import com.bit.solana.quic.*;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
@@ -38,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.bit.solana.quic.QuicConnectionManager.Global_Channel;
 import static com.bit.solana.quic.QuicConnectionManager.connectRemote;
+import static com.bit.solana.quic.QuicConstants.ALLOCATOR;
 import static com.bit.solana.quic.QuicConstants.generator;
 
 @Slf4j
@@ -135,10 +139,7 @@ public class PeerServiceImpl implements PeerService {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {
                             ChannelPipeline pipeline = ch.pipeline();
-                            pipeline.addLast(new QuicFrameDecoder());
-                            pipeline.addLast(new QuicFrameEncoder());
                             pipeline.addLast(new QuicServiceHandler());
-
                         }
                     });
 
@@ -147,19 +148,13 @@ public class PeerServiceImpl implements PeerService {
             log.info("QUIC服务器已启动，监听端口：{}", commonConfig.getSelf().getPort());
             Channel channel = sync.channel();
 
+            Global_Channel = (DatagramChannel) channel;
 
             //连接到节点8334
             if (commonConfig.getSelf().getPort()==8333){
-                long conId = generator.nextId();
-                long dataId = generator.nextId();
-                QuicFrame acquire = QuicFrame.acquire();
-                acquire.setConnectionId(conId);//生成连接ID
-                acquire.setDataId(dataId);
-                acquire.setTotal(0);
-                acquire.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
-                acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
-                acquire.setPayload(null);
-                channel.writeAndFlush()
+                InetSocketAddress targetAddr = new InetSocketAddress("127.0.0.1", 8334);
+                QuicConnection quicConnection = connectRemote(targetAddr);
+
 
 
             }
