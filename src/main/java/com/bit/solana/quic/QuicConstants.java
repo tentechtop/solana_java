@@ -3,11 +3,15 @@ package com.bit.solana.quic;
 import com.bit.solana.util.SnowflakeIdGenerator;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -59,10 +63,370 @@ public class QuicConstants {
     private QuicConstants() {}
 
 
-    //连接下的数据
-    public static Map<Long, SendQuicData> SendMap = new ConcurrentHashMap<>();//发送中的数据缓存 数据收到全部的ACK后释放掉 发送帧50ms后未收到ACK则重发 重发三次未收到ACK则放弃并清除数据 下线节点
+    //连接ID -> 数据ID
+    public static final Map<Long, Long> connectSendMap = new ConcurrentHashMap<>();
+    public static final Map<Long, Long> connectReceiveMap = new ConcurrentHashMap<>();
 
-    public static  Map<Long, ReceiveQuicData> ReceiveMap = new ConcurrentHashMap<>();//接收中的数据缓存 数据完整后释放掉
+    //数据ID-> 数据
+    public static Map<Long, SendQuicData> sendMap = new ConcurrentHashMap<>();//发送中的数据缓存 数据收到全部的ACK后释放掉 发送帧50ms后未收到ACK则重发 重发三次未收到ACK则放弃并清除数据 下线节点
+    public static  Map<Long, ReceiveQuicData> receiveMap = new ConcurrentHashMap<>();//接收中的数据缓存 数据完整后释放掉
+
+
+    // ====================== 发送数据操作方法 ======================
+    /**
+     * 1. 获取指定连接下的全部发送数据
+     * @param connectId 连接ID（不可为null）
+     * @return 该连接下所有有效的发送数据（不可变列表，避免外部修改）
+     */
+    public static List<SendQuicData> getAllSendDataByConnectId(Long connectId) {
+        // 空值校验
+        if (connectId == null) {
+            return Collections.emptyList();
+        }
+
+        List<SendQuicData> sendDataList = new ArrayList<>();
+        // 遍历连接-数据ID映射，筛选指定连接的所有数据
+        for (Map.Entry<Long, Long> entry : connectSendMap.entrySet()) {
+            if (connectId.equals(entry.getKey())) {
+                Long dataId = entry.getValue();
+                SendQuicData sendData = sendMap.get(dataId);
+                // 仅添加非空数据（避免已被清理但映射未删除的情况）
+                if (sendData != null) {
+                    sendDataList.add(sendData);
+                }
+            }
+        }
+        // 返回不可变列表，防止外部修改内部数据
+        return Collections.unmodifiableList(sendDataList);
+    }
+
+    /**
+     * 2. 删除指定连接下的全部发送数据
+     * @param connectId 连接ID（不可为null）
+     */
+    public static void deleteAllSendDataByConnectId(Long connectId) {
+        // 空值校验
+        if (connectId == null) {
+            return;
+        }
+
+        // 步骤1：先收集该连接下的所有数据ID（避免遍历中Map结构变化）
+        List<Long> dataIds = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : connectSendMap.entrySet()) {
+            if (connectId.equals(entry.getKey())) {
+                dataIds.add(entry.getValue());
+            }
+        }
+
+        // 步骤2：删除数据缓存中的对应数据
+        for (Long dataId : dataIds) {
+            sendMap.remove(dataId);
+        }
+
+        // 步骤3：删除连接-数据ID的映射关系
+        connectSendMap.keySet().removeIf(connectId::equals);
+    }
+
+    /**
+     * 3. 根据连接ID和数据ID获取发送数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return 匹配的发送数据（null表示无匹配或映射关系异常）
+     */
+    public static SendQuicData getSendDataByConnectIdAndDataId(Long connectId, Long dataId) {
+        // 空值校验
+        if (connectId == null || dataId == null) {
+            return null;
+        }
+
+        // 校验映射关系：确保该数据ID属于指定连接（防止数据ID被其他连接占用）
+        Long mappedDataId = connectSendMap.get(connectId);
+        if (dataId.equals(mappedDataId)) {
+            return sendMap.get(dataId);
+        }
+        return null;
+    }
+
+    /**
+     * 4. 根据连接ID和数据ID删除发送数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return true=删除成功，false=无匹配映射或参数异常
+     */
+    public static boolean deleteSendDataByConnectIdAndDataId(Long connectId, Long dataId) {
+        // 空值校验
+        if (connectId == null || dataId == null) {
+            return false;
+        }
+
+        // 校验映射关系
+        Long mappedDataId = connectSendMap.get(connectId);
+        if (!dataId.equals(mappedDataId)) {
+            return false;
+        }
+
+        // 删除数据缓存和映射关系
+        sendMap.remove(dataId);
+        connectSendMap.remove(connectId);
+        return true;
+    }
+
+    // ====================== 接收数据操作方法 ======================
+    /**
+     * 5. 获取指定连接下的全部接收数据
+     * @param connectId 连接ID（不可为null）
+     * @return 该连接下所有有效的接收数据（不可变列表）
+     */
+    public static List<ReceiveQuicData> getAllReceiveDataByConnectId(Long connectId) {
+        if (connectId == null) {
+            return Collections.emptyList();
+        }
+
+        List<ReceiveQuicData> receiveDataList = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : connectReceiveMap.entrySet()) {
+            if (connectId.equals(entry.getKey())) {
+                Long dataId = entry.getValue();
+                ReceiveQuicData receiveData = receiveMap.get(dataId);
+                if (receiveData != null) {
+                    receiveDataList.add(receiveData);
+                }
+            }
+        }
+        return Collections.unmodifiableList(receiveDataList);
+    }
+
+    /**
+     * 6. 删除指定连接下的全部接收数据
+     * @param connectId 连接ID（不可为null）
+     */
+    public static void deleteAllReceiveDataByConnectId(Long connectId) {
+        if (connectId == null) {
+            return;
+        }
+
+        // 收集数据ID
+        List<Long> dataIds = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : connectReceiveMap.entrySet()) {
+            if (connectId.equals(entry.getKey())) {
+                dataIds.add(entry.getValue());
+            }
+        }
+
+        // 删除数据缓存
+        for (Long dataId : dataIds) {
+            receiveMap.remove(dataId);
+        }
+
+        // 删除映射关系
+        connectReceiveMap.keySet().removeIf(connectId::equals);
+    }
+
+    /**
+     * 7. 根据连接ID和数据ID获取接收数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return 匹配的接收数据（null表示无匹配或映射异常）
+     */
+    public static ReceiveQuicData getReceiveDataByConnectIdAndDataId(Long connectId, Long dataId) {
+        if (connectId == null || dataId == null) {
+            return null;
+        }
+
+        Long mappedDataId = connectReceiveMap.get(connectId);
+        if (dataId.equals(mappedDataId)) {
+            return receiveMap.get(dataId);
+        }
+        return null;
+    }
+
+    /**
+     * 8. 根据连接ID和数据ID删除接收数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return true=删除成功，false=无匹配映射或参数异常
+     */
+    public static boolean deleteReceiveDataByConnectIdAndDataId(Long connectId, Long dataId) {
+        if (connectId == null || dataId == null) {
+            return false;
+        }
+
+        Long mappedDataId = connectReceiveMap.get(connectId);
+        if (!dataId.equals(mappedDataId)) {
+            return false;
+        }
+
+        receiveMap.remove(dataId);
+        connectReceiveMap.remove(connectId);
+        return true;
+    }
+
+
+    /**
+     * 判断指定连接下是否存在某一个发送数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return true=存在（映射关系有效且数据缓存存在），false=不存在或参数异常
+     */
+    public static boolean isSendDataExistInConnect(Long connectId, Long dataId) {
+        // 空值校验
+        if (connectId == null || dataId == null) {
+            return false;
+        }
+
+        // 1. 校验连接与数据ID的映射关系
+        Long mappedDataId = connectSendMap.get(connectId);
+        if (!dataId.equals(mappedDataId)) {
+            return false;
+        }
+
+        // 2. 校验数据缓存中是否存在该数据ID的有效数据
+        return sendMap.containsKey(dataId) && sendMap.get(dataId) != null;
+    }
+
+    /**
+     * 判断指定连接下是否存在某一个接收数据
+     * @param connectId 连接ID（不可为null）
+     * @param dataId    数据ID（不可为null）
+     * @return true=存在（映射关系有效且数据缓存存在），false=不存在或参数异常
+     */
+    public static boolean isReceiveDataExistInConnect(Long connectId, Long dataId) {
+        // 空值校验
+        if (connectId == null || dataId == null) {
+            return false;
+        }
+
+        // 1. 校验连接与数据ID的映射关系
+        Long mappedDataId = connectReceiveMap.get(connectId);
+        if (!dataId.equals(mappedDataId)) {
+            return false;
+        }
+
+        // 2. 校验数据缓存中是否存在该数据ID的有效数据
+        return receiveMap.containsKey(dataId) && receiveMap.get(dataId) != null;
+    }
+
+    /**
+     * 根据帧数据创建发送数据实例，并自动维护连接-数据ID映射关系
+     * @param frameData  帧数据（ByteBuf类型，Quic帧原始数据）
+     * @return 初始化完成的SendQuicData实例（已加入缓存和映射）
+     * @throws IllegalArgumentException 参数异常时抛出
+     */
+    public static ReceiveQuicData createReceiveDataByFrame(QuicFrame frameData) {
+        // 1. 严格参数校验
+        if (frameData == null || !frameData.isValid()) {
+            throw new IllegalArgumentException("frameData cannot be null or empty");
+        }
+        // 3. 初始化发送数据实例（结合Quic常量配置）
+        ReceiveQuicData receiveQuicData = new ReceiveQuicData();
+        receiveQuicData.setDataId(frameData.getDataId());
+        receiveQuicData.setConnectionId(frameData.getConnectionId());
+        receiveQuicData.setTotal(frameData.getTotal());
+        receiveQuicData.setComplete(false);
+
+        // 4. 线程安全地维护缓存和映射关系
+        receiveMap.put(frameData.getDataId(), receiveQuicData);
+        connectReceiveMap.put(frameData.getConnectionId(), frameData.getDataId());
+        return receiveQuicData;
+    }
+
+
+    /**
+     * 添加连接下的发送数据（线程安全）
+     * 1. 自动生成数据ID（基于雪花算法）
+     * 2. 维护connectSendMap（连接ID->数据ID）和sendMap（数据ID->发送数据）的映射关系
+     * 3. 覆盖已有映射时会先清理旧数据，避免内存泄漏
+     *
+     * @param connectId    连接ID（不可为null）
+     * @param sendQuicData 发送数据实例（不可为null，需包含完整的发送元信息）
+     * @return 成功添加返回true，参数异常/添加失败返回false
+     * @throws IllegalArgumentException 参数为空时抛出
+     */
+    public static boolean addSendDataToConnect(Long connectId, SendQuicData sendQuicData) {
+        // 1. 严格参数校验
+        if (connectId == null) {
+            throw new IllegalArgumentException("connectId cannot be null");
+        }
+        if (sendQuicData == null) {
+            throw new IllegalArgumentException("sendQuicData cannot be null");
+        }
+
+        // 2. 自动生成数据ID（如果sendQuicData未设置）
+        Long dataId = sendQuicData.getDataId();
+
+        // 3. 线程安全处理：覆盖已有映射时先清理旧数据
+        synchronized (connectSendMap) {
+            // 3.1 检查该连接是否已有绑定的旧数据ID
+            Long oldDataId = connectSendMap.get(connectId);
+            if (oldDataId != null && !oldDataId.equals(dataId)) {
+                // 清理旧数据缓存，避免内存泄漏
+                sendMap.remove(oldDataId);
+            }
+
+            // 3.2 更新映射关系：连接ID->数据ID
+            connectSendMap.put(connectId, dataId);
+
+            // 3.3 更新数据缓存：数据ID->发送数据
+            sendMap.put(dataId, sendQuicData);
+
+            // 3.4 初始化发送数据的连接ID（确保关联正确）
+            if (sendQuicData.getConnectionId() == 0) {
+                sendQuicData.setConnectionId(connectId);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 添加连接下的接收数据（线程安全）
+     * 1. 支持手动指定或自动生成数据ID
+     * 2. 维护connectReceiveMap（连接ID->数据ID）和receiveMap（数据ID->接收数据）的映射关系
+     * 3. 覆盖已有映射时会先清理旧数据，避免内存泄漏
+     *
+     * @param connectId       连接ID（不可为null）
+     * @param receiveQuicData 接收数据实例（不可为null，需包含基础元信息）
+     * @return 成功添加返回true，参数异常/添加失败返回false
+     * @throws IllegalArgumentException 参数为空时抛出
+     */
+    public static boolean addReceiveDataToConnect(Long connectId, ReceiveQuicData receiveQuicData) {
+        // 1. 严格参数校验
+        if (connectId == null) {
+            throw new IllegalArgumentException("connectId cannot be null");
+        }
+        if (receiveQuicData == null) {
+            throw new IllegalArgumentException("receiveQuicData cannot be null");
+        }
+
+        // 2. 自动生成数据ID（如果receiveQuicData未设置）
+        Long dataId = receiveQuicData.getDataId();
+
+        // 3. 线程安全处理：覆盖已有映射时先清理旧数据
+        synchronized (connectReceiveMap) {
+            // 3.1 检查该连接是否已有绑定的旧数据ID
+            Long oldDataId = connectReceiveMap.get(connectId);
+            if (oldDataId != null && !oldDataId.equals(dataId)) {
+                // 清理旧数据缓存，避免内存泄漏
+                receiveMap.remove(oldDataId);
+            }
+
+            // 3.2 更新映射关系：连接ID->数据ID
+            connectReceiveMap.put(connectId, dataId);
+
+            // 3.3 更新数据缓存：数据ID->接收数据
+            receiveMap.put(dataId, receiveQuicData);
+
+            // 3.4 初始化接收数据的连接ID（确保关联正确）
+            if (receiveQuicData.getConnectionId() == 0) {
+                receiveQuicData.setConnectionId(connectId);
+            }
+        }
+
+        return true;
+    }
+
+
+
+
 
     public static final Timer GLOBAL_TIMER = new HashedWheelTimer(
             10, // 时间轮精度10ms
@@ -76,4 +440,12 @@ public class QuicConstants {
     public static final long RETRANSMIT_INTERVAL_MS = 50;
     // 单帧最大重传次数（300/50=6次）
     public static final int MAX_RETRANSMIT_TIMES = 6;
+
+
+    // 出站连接主动心跳间隔
+    public static final long OUTBOUND_HEARTBEAT_INTERVAL = 400L;
+    // 入站连接过期检查间隔（仅检查，不发心跳）
+    public static final long INBOUND_CHECK_INTERVAL = 1000L;
+    // 连接过期阈值（统一1000ms无活动）
+    public static final long CONNECTION_EXPIRE_TIMEOUT = 1000L;
 }

@@ -25,13 +25,11 @@ public class QuicServiceHandler extends SimpleChannelInboundHandler<DatagramPack
         QuicFrame quicFrame = QuicFrame.decode(buf, remote);
         try {
             QuicConnection orCreateConnection = QuicConnectionManager.createOrGetConnection((DatagramChannel)ctx.channel(),local,remote,quicFrame.getConnectionId());
-            orCreateConnection.handleFrame(ctx,quicFrame);
+            orCreateConnection.handleFrame(quicFrame);
         } catch (Exception e) {
             // 4. 解码失败直接丢弃，仅记录日志
             log.warn("QUIC帧解码失败，已丢弃无效数据包", e);
             return;
-        }finally {
-            quicFrame.release();
         }
     }
 }

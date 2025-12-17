@@ -1,10 +1,14 @@
 package com.bit.solana.api.mock;
 
+import com.bit.solana.p2p.impl.PeerServiceImpl;
+import com.bit.solana.quic.QuicConnection;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.key.KeyInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
 import org.bouncycastle.util.encoders.Hex;
+import org.checkerframework.checker.units.qual.A;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
@@ -12,6 +16,7 @@ import java.security.*;
 import java.util.List;
 import java.util.Random;
 
+import static com.bit.solana.quic.QuicConnectionManager.getFirstConnection;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 import static com.bit.solana.util.SolanaEd25519Signer.*;
@@ -20,6 +25,16 @@ import static com.bit.solana.util.SolanaEd25519Signer.*;
 @RestController
 @RequestMapping("/mock")
 public class MockApi {
+
+    @Autowired
+    private PeerServiceImpl peerService;
+
+    @GetMapping("/sendMock")
+    public Result sendMock() throws NoSuchAlgorithmException {
+        QuicConnection firstConnection = getFirstConnection();
+        boolean b = firstConnection.sendData("qweqw".getBytes());
+        return Result.OK();
+    }
 
 
 

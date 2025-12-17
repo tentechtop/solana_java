@@ -4,6 +4,8 @@ import io.netty.buffer.ByteBuf;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.InetSocketAddress;
+
 import static com.bit.solana.quic.QuicConstants.ALLOCATOR;
 
 
@@ -15,6 +17,7 @@ public class QuicData {
     private int total;//数据帧总数
     private QuicFrame[] frameArray;//帧数据按照序列号存入
     private boolean isComplete;//数据是否完整
+
 
 
     /**
@@ -124,10 +127,6 @@ public class QuicData {
      */
     public ByteBuf getCombinedFullData() {
         // 前置校验：数据必须完整
-        if (!isComplete) {
-            log.warn("数据未完整，无法组合 connectionId={}, dataId={}", connectionId, dataId);
-            return null;
-        }
         if (frameArray == null || frameArray.length != total || total == 0) {
             log.warn("帧数组异常，无法组合 connectionId={}, dataId={}, total={}",
                     connectionId, dataId, total);

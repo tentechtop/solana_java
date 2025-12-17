@@ -2,6 +2,7 @@ package com.bit.solana.quic;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
@@ -10,6 +11,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -43,12 +45,13 @@ public class ReceiveQuicData extends QuicData {
 
 
     //当收到数据帧时
-    public void handleFrame(ChannelHandlerContext ctx,QuicFrame quicFrame) {
+    public void handleFrame(QuicFrame quicFrame) {
         int sequence = quicFrame.getSequence();
         int total = quicFrame.getTotal();
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
         ByteBuf payload = quicFrame.getPayload();
+        InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
 
         // ========== 边界校验 ==========
         if (sequence < 0 || sequence >= total) {
@@ -78,7 +81,7 @@ public class ReceiveQuicData extends QuicData {
             setConnectionId(connectionId);
             log.info("[初始化数据] 连接ID:{} 数据ID:{} 总帧数:{}", connectionId, dataId, total);
             // 启动全局超时定时器  动态全局超时 根据total动态计算
-            startGlobalTimeoutTimer(ctx);
+            startGlobalTimeoutTimer();
         }
 
 
@@ -92,16 +95,24 @@ public class ReceiveQuicData extends QuicData {
         ackFrame = buildAckFrame(quicFrame, true);
         // ========== 完整性校验 & 重传处理 ==========
         if (receivedSequences.size() == total) {
+            log.info("所有帧接收完成");
             // 所有帧接收完成
-            handleDataComplete(ctx);
+            setComplete(true);
+            handleDataComplete();
         } else {
+            log.info("存在确实的帧");
             // 存在缺失帧，处理重传逻辑
-            handleMissingFrames(ctx);
+            handleMissingFrames(remoteAddress);
         }
 
         // 发送ACK帧（UDP：发送失败也无所谓，发送方会重发）
         QuicFrame finalAckFrame = ackFrame;
-        ctx.writeAndFlush(ackFrame).addListener(future -> {
+
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        ackFrame.encode(buf);
+        DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+
+        Global_Channel.writeAndFlush(packet).addListener(future -> {
             //无论成功失败都释放ACK帧
             finalAckFrame.release();
         });
@@ -110,7 +121,7 @@ public class ReceiveQuicData extends QuicData {
     }
 
 
-    private void handleMissingFrames(ChannelHandlerContext ctx) {
+    private void handleMissingFrames(InetSocketAddress remoteAddress) {
         long connectionId = getConnectionId();
         long dataId = getDataId();
         int total = getTotal();
@@ -136,19 +147,19 @@ public class ReceiveQuicData extends QuicData {
             if (currentCount >= MAX_RETRANSMIT_TIMES) {
                 log.error("[重传超限] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}≥{}，传输失败",
                         connectionId, dataId, missingSeq, currentCount, MAX_RETRANSMIT_TIMES);
-                handleDataFailure(ctx);
+                handleDataFailure();
                 return;
             }
             // 3. 未超限 → 启动/重置单帧重传定时器，发送重传询问
             count.incrementAndGet(); // 重传次数+1
-            resetSingleFrameRetransmitTimer(ctx, missingSeq, RETRANSMIT_INTERVAL_MS, currentCount + 1);
+            resetSingleFrameRetransmitTimer(remoteAddress,missingSeq, RETRANSMIT_INTERVAL_MS, currentCount + 1);
         }
     }
 
     /**
      * 启动/重置单帧重传定时器（发送重传询问）
      */
-    private void resetSingleFrameRetransmitTimer(ChannelHandlerContext ctx, int missingSeq, long timeoutMs, int retransmitCount) {
+    private void resetSingleFrameRetransmitTimer(InetSocketAddress remoteAddress,int missingSeq, long timeoutMs, int retransmitCount) {
         // 先取消该帧已有的定时器（避免重复）
         cancelRetransmitTimer(missingSeq);
 
@@ -160,7 +171,7 @@ public class ReceiveQuicData extends QuicData {
                     return;
                 }
                 // 定时器触发 → 再次发送重传询问
-                sendRetransmitAskFrame(ctx, missingSeq, retransmitCount);
+                sendRetransmitAskFrame(remoteAddress,missingSeq, retransmitCount);
             }
         }, timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         // 存入定时器映射
@@ -171,7 +182,7 @@ public class ReceiveQuicData extends QuicData {
     /**
      * 发送重传询问帧（核心：告诉发送方需要重传哪个seq的帧）
      */
-    private void sendRetransmitAskFrame(ChannelHandlerContext ctx, int missingSeq, int retransmitCount) {
+    private void sendRetransmitAskFrame(InetSocketAddress remoteAddress,int missingSeq, int retransmitCount) {
         long connectionId = getConnectionId();
         long dataId = getDataId();
 
@@ -190,10 +201,14 @@ public class ReceiveQuicData extends QuicData {
         askFrame.setSequence(0);
         askFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH + askPayload.readableBytes());
         askFrame.setPayload(askPayload);
-        askFrame.setRemoteAddress((InetSocketAddress) ctx.channel().remoteAddress());
+        askFrame.setRemoteAddress(remoteAddress);
+
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        askFrame.encode(buf);
+        DatagramPacket packet = new DatagramPacket(buf, askFrame.getRemoteAddress());
 
         // 3. 发送重传询问帧（通过ctx写出）
-        ctx.writeAndFlush(askFrame).addListener(future -> {
+        Global_Channel.writeAndFlush(packet).addListener(future -> {
             askFrame.release();
             if (!future.isSuccess()) {
                 log.error("[重传询问发送失败] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}",
@@ -205,7 +220,7 @@ public class ReceiveQuicData extends QuicData {
         });
     }
 
-    private void startGlobalTimeoutTimer(ChannelHandlerContext ctx) {
+    private void startGlobalTimeoutTimer() {
         // 双重校验锁，防止重复创建
         synchronized (this) {
             if (globalTimeout == null && !isComplete()) {
@@ -217,7 +232,7 @@ public class ReceiveQuicData extends QuicData {
                         }
                         log.error("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未接收完所有帧，接收失败",
                                 getConnectionId(),  getDataId(), GLOBAL_TIMEOUT_MS);
-                        handleDataFailure(ctx);
+                        handleDataFailure();
                     }
                 }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
                 log.info("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
@@ -229,15 +244,15 @@ public class ReceiveQuicData extends QuicData {
     /**
      * 处理数据接收失败
      */
-    private void handleDataFailure(ChannelHandlerContext ctx) {
+    private void handleDataFailure() {
         if (this.isComplete()) {
             return;
         }
         setComplete(true);
         log.error("[数据接收失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
 
-        // 关键：失败时也要移除ReceiveMap，避免内存泄漏
-        ReceiveMap.remove(getDataId());
+        //删除这个数据
+        deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
 
         // 取消所有定时器
         cancelAllRetransmitTimers();
@@ -290,14 +305,22 @@ public class ReceiveQuicData extends QuicData {
     }
 
 
-    private void handleDataComplete(ChannelHandlerContext ctx) {
+    private void handleDataComplete() {
         //交付数据到下一个处理器
         //取消所有定时器  释放资源  传递数据 ctx.fireChannelRead(completeData);
         cancelAllRetransmitTimers();
         ByteBuf combinedFullData = getCombinedFullData();
-        ctx.fireChannelRead(combinedFullData);
+
+
+        // 转为字节数组
+        byte[] bytes = new byte[combinedFullData.readableBytes()];
+        combinedFullData.getBytes(combinedFullData.readerIndex(), bytes);
+        // 打印字节数组（原始值）
+
+        log.info("combinedFullData 字节数组：" + Arrays.toString(bytes));
+
         this.release();
-        ReceiveMap.remove(getDataId());
+        deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
 
         if (successCallback != null) {
             successCallback.run();
