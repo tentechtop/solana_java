@@ -50,9 +50,7 @@ public class ReceiveQuicData extends QuicData {
         int total = quicFrame.getTotal();
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
-        ByteBuf payload = quicFrame.getPayload();
         InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
-
         // ========== 边界校验 ==========
         if (sequence < 0 || sequence >= total) {
             log.error("[非法帧] 连接ID:{} 数据ID:{} 序列号{}超出范围[0,{}]，拒绝处理",
@@ -61,7 +59,15 @@ public class ReceiveQuicData extends QuicData {
             return;
         }
 
-        QuicFrame ackFrame=null;
+        QuicFrame ackFrame = buildAckFrame(quicFrame);
+        //异步赶紧回复ACK
+        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+        ackFrame.encode(buf);
+        DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+        Global_Channel.writeAndFlush(packet).addListener(future -> {
+            ackFrame.release();
+        });
+
         // ========== 重复帧处理 ==========
         if (receivedSequences.contains(sequence)) {
             log.info("[重复帧] 连接ID:{} 数据ID:{} 序列号:{} 总帧数:{}，直接回复ACK",
@@ -69,7 +75,9 @@ public class ReceiveQuicData extends QuicData {
             // 构建ACK帧（标记为已接收）
             // 取消该帧的重传定时器（如果存在）
             cancelRetransmitTimer(sequence);
-            ackFrame = buildAckFrame(quicFrame, true);
+            //释放帧
+            quicFrame.release();
+            return;
         }
 
         // ========== 非重复帧处理 ==========
@@ -84,141 +92,25 @@ public class ReceiveQuicData extends QuicData {
             startGlobalTimeoutTimer();
         }
 
-
+        //克隆一份给到
+        QuicFrame clone = quicFrame.clone();
         // 存储帧并更新计数
-        getFrameArray()[sequence] = quicFrame;
+        getFrameArray()[sequence] = clone;
         receivedSequences.add(sequence);
-        log.info("[接收帧] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
+        log.debug("[接收帧] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
                 connectionId, dataId, sequence, receivedSequences.size(), total);
 
-        // 构建ACK帧（标记为已接收）
-        ackFrame = buildAckFrame(quicFrame, true);
         // ========== 完整性校验 & 重传处理 ==========
         if (receivedSequences.size() == total) {
             log.info("所有帧接收完成");
             // 所有帧接收完成
-            setComplete(true);
             handleDataComplete();
-        } else {
-            log.info("存在确实的帧");
-            // 存在缺失帧，处理重传逻辑
-            handleMissingFrames(remoteAddress);
         }
-
-        // 发送ACK帧（UDP：发送失败也无所谓，发送方会重发）
-        QuicFrame finalAckFrame = ackFrame;
-
-        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-        ackFrame.encode(buf);
-        DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-
-        Global_Channel.writeAndFlush(packet).addListener(future -> {
-            //无论成功失败都释放ACK帧
-            finalAckFrame.release();
-        });
-        log.debug("[发送ACK] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
-                connectionId, dataId, sequence, receivedSequences.size(), total);
+        quicFrame.release();
     }
 
 
-    private void handleMissingFrames(InetSocketAddress remoteAddress) {
-        long connectionId = getConnectionId();
-        long dataId = getDataId();
-        int total = getTotal();
-        //目前缺少哪些帧
-        Set<Integer> missingSequences = new HashSet<>();
-        for (int seq = 0; seq < total; seq++) {
-            if (!receivedSequences.contains(seq)) { // 已接收集合中不存在的seq即为缺失
-                missingSequences.add(seq);
-            }
-        }
-        if (missingSequences.isEmpty()) {
-            return; // 无缺失，直接返回
-        }
-        log.warn("[检测缺失帧] 连接ID:{} 数据ID:{} 总帧数:{} 缺失帧数:{} 缺失seq:{}",
-                connectionId, dataId, total, missingSequences.size(), missingSequences);
 
-        for (int missingSeq : missingSequences) {
-            // 1. 获取当前帧的重传次数（默认0）
-            AtomicInteger count = retransmitCounts.computeIfAbsent(missingSeq, k -> new AtomicInteger(0));
-            int currentCount = count.get();
-
-            // 2. 超过最大重传次数 → 整体传输失败
-            if (currentCount >= MAX_RETRANSMIT_TIMES) {
-                log.error("[重传超限] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}≥{}，传输失败",
-                        connectionId, dataId, missingSeq, currentCount, MAX_RETRANSMIT_TIMES);
-                handleDataFailure();
-                return;
-            }
-            // 3. 未超限 → 启动/重置单帧重传定时器，发送重传询问
-            count.incrementAndGet(); // 重传次数+1
-            resetSingleFrameRetransmitTimer(remoteAddress,missingSeq, RETRANSMIT_INTERVAL_MS, currentCount + 1);
-        }
-    }
-
-    /**
-     * 启动/重置单帧重传定时器（发送重传询问）
-     */
-    private void resetSingleFrameRetransmitTimer(InetSocketAddress remoteAddress,int missingSeq, long timeoutMs, int retransmitCount) {
-        // 先取消该帧已有的定时器（避免重复）
-        cancelRetransmitTimer(missingSeq);
-
-        // 新建定时器
-        Timeout timeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
-            @Override
-            public void run(Timeout timeout) throws Exception {
-                if (timeout.isCancelled() || isComplete()) {
-                    return;
-                }
-                // 定时器触发 → 再次发送重传询问
-                sendRetransmitAskFrame(remoteAddress,missingSeq, retransmitCount);
-            }
-        }, timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-        // 存入定时器映射
-        retransmitTimers.put(missingSeq, timeout);
-    }
-
-
-    /**
-     * 发送重传询问帧（核心：告诉发送方需要重传哪个seq的帧）
-     */
-    private void sendRetransmitAskFrame(InetSocketAddress remoteAddress,int missingSeq, int retransmitCount) {
-        long connectionId = getConnectionId();
-        long dataId = getDataId();
-
-        // 1. 构建重传询问载荷
-        ByteBuf askPayload = QuicConstants.ALLOCATOR.buffer();
-        askPayload.writeLong(dataId);          // 数据ID
-        askPayload.writeInt(missingSeq);       // 缺失的序列号
-        askPayload.writeInt(retransmitCount);  // 当前重传次数
-
-        // 2. 构建重传询问帧（自定义frameType：比如0x02表示重传请求）
-        QuicFrame askFrame = QuicFrame.acquire();//已经释放
-        askFrame.setConnectionId(connectionId);
-        askFrame.setDataId(dataId);
-        askFrame.setTotal(1); // 重传询问帧不分片
-        askFrame.setFrameType((byte) 0x02); // 自定义：重传请求帧类型
-        askFrame.setSequence(0);
-        askFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH + askPayload.readableBytes());
-        askFrame.setPayload(askPayload);
-        askFrame.setRemoteAddress(remoteAddress);
-
-        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-        askFrame.encode(buf);
-        DatagramPacket packet = new DatagramPacket(buf, askFrame.getRemoteAddress());
-
-        // 3. 发送重传询问帧（通过ctx写出）
-        Global_Channel.writeAndFlush(packet).addListener(future -> {
-            askFrame.release();
-            if (!future.isSuccess()) {
-                log.error("[重传询问发送失败] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}",
-                        connectionId, dataId, missingSeq, retransmitCount, future.cause());
-            } else {
-                log.info("[发送重传询问] 连接ID:{} 数据ID:{} 序列号{} 重传次数{}",
-                        connectionId, dataId, missingSeq, retransmitCount);
-            }
-        });
-    }
 
     private void startGlobalTimeoutTimer() {
         // 双重校验锁，防止重复创建
@@ -227,7 +119,7 @@ public class ReceiveQuicData extends QuicData {
                 globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
                     @Override
                     public void run(Timeout timeout) throws Exception {
-                        if (timeout.isCancelled() || isComplete()) {
+                        if (timeout.isCancelled()) {
                             return;
                         }
                         log.error("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未接收完所有帧，接收失败",
@@ -245,15 +137,9 @@ public class ReceiveQuicData extends QuicData {
      * 处理数据接收失败
      */
     private void handleDataFailure() {
-        if (this.isComplete()) {
-            return;
-        }
-        setComplete(true);
         log.error("[数据接收失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
-
         //删除这个数据
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
-
         // 取消所有定时器
         cancelAllRetransmitTimers();
         // 释放帧资源
@@ -306,22 +192,31 @@ public class ReceiveQuicData extends QuicData {
 
 
     private void handleDataComplete() {
-        //交付数据到下一个处理器
-        //取消所有定时器  释放资源  传递数据 ctx.fireChannelRead(completeData);
+        if (isComplete()){
+            log.info("已经完成数据交付");
+            return;
+        }
+        setComplete(true);
         cancelAllRetransmitTimers();
         ByteBuf combinedFullData = getCombinedFullData();
-
-
-        // 转为字节数组
-        byte[] bytes = new byte[combinedFullData.readableBytes()];
-        combinedFullData.getBytes(combinedFullData.readerIndex(), bytes);
-        // 打印字节数组（原始值）
-
-        log.info("combinedFullData 字节数组：" + Arrays.toString(bytes));
-
+        if (combinedFullData == null) { // 增加非空校验，避免空指针
+            log.error("组合完整数据失败，无法处理");
+            return;
+        }
+        try { // 使用try-finally确保释放
+            byte[] bytes = new byte[combinedFullData.readableBytes()];
+            combinedFullData.getBytes(combinedFullData.readerIndex(), bytes);
+            log.info("combinedFullData 字节数组长度：" + bytes.length);
+        } finally {
+            // 关键：无论是否异常，都释放ByteBuf
+            if (combinedFullData.refCnt() > 0) {
+                combinedFullData.release();
+                log.debug("[释放] getCombinedFullData返回的ByteBuf，连接ID:{} 数据ID:{}",
+                        getConnectionId(), getDataId());
+            }
+        }
         this.release();
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
-
         if (successCallback != null) {
             successCallback.run();
         }
@@ -330,44 +225,26 @@ public class ReceiveQuicData extends QuicData {
     /**
      * 构建ACK帧
      * @param quicFrame 收到的数据帧
-     * @param isReceive 是否接收 true是 false否
      * @return
      */
-    private QuicFrame buildAckFrame(QuicFrame quicFrame, boolean isReceive) {
+    private QuicFrame buildAckFrame(QuicFrame quicFrame) {
         long connectionId = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         int sequence = quicFrame.getSequence();
-        
-        // 1. 构建ACK载荷（包含已接收序列号信息，优化UDP传输效率）
-        ByteBuf ackPayload = QuicConstants.ALLOCATOR.buffer();
-        ackPayload.writeLong(dataId);          // 关联的原始数据ID
-        ackPayload.writeInt(sequence);         // 关联的原始帧序列号
-        ackPayload.writeBoolean(isReceive);    // 是否成功接收
-        ackPayload.writeInt(receivedSequences.size()); // 已接收的总帧数（辅助发送方判断）
-        
-        // UDP优化：批量通知已接收的序列号（可选，根据实际需要）
-        if (receivedSequences.size() > 10) { // 当接收帧较多时发送批量信息
-            ackPayload.writeInt(receivedSequences.size()); // 批量数量
-            for (int receivedSeq : receivedSequences) {
-                ackPayload.writeInt(receivedSeq); // 已接收的序列号
-            }
-        } else {
-            ackPayload.writeInt(0); // 无批量信息
-        }
 
-        QuicFrame ackFrame = QuicFrame.acquire();//构建释放
+
+        QuicFrame ackFrame = QuicFrame.acquire();
         ackFrame.setConnectionId(connectionId);
         ackFrame.setDataId(dataId);
+        ackFrame.setSequence(sequence); // ACK帧序列号固定为0
         ackFrame.setTotal(1); // ACK帧不分片
-        ackFrame.setFrameType((byte) 0x01); // 自定义：ACK帧类型
-        ackFrame.setSequence(0); // ACK帧序列号固定为0
+        ackFrame.setFrameType(QuicFrameEnum.ACK_FRAME.getCode()); // 自定义：ACK帧类型
 
         // 计算总长度：固定头部 + 载荷长度
-        int totalLength = QuicFrame.FIXED_HEADER_LENGTH + ackPayload.readableBytes();
+        int totalLength = QuicFrame.FIXED_HEADER_LENGTH;
         ackFrame.setFrameTotalLength(totalLength);
-        ackFrame.setPayload(ackPayload);
+        ackFrame.setPayload(null);
         ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
-
         return ackFrame;
     }
 }

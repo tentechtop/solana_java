@@ -55,22 +55,19 @@ public class QuicConnectionManager {
         reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
         reqQuicFrame.setPayload(null);
         reqQuicFrame.setRemoteAddress(remoteAddress);
-        QuicFrame resQuicFrame = sendFrame(reqQuicFrame);
+        QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
         log.info("响应帧{}",resQuicFrame);
         if (resQuicFrame != null){
-            //创建一个主动出站连接
-            QuicConnection quicConnection = new QuicConnection();
-            quicConnection.setConnectionId(conId);
-            quicConnection.setRemoteAddress(remoteAddress);
-            quicConnection.setUDP(true);
-            quicConnection.setOutbound(true);
-            quicConnection.setExpired(false);
-            quicConnection.setLastSeen(System.currentTimeMillis());
-            quicConnection.startHeartbeat();
-
-            addConnection(conId, quicConnection);
+            QuicConnection connection = getConnection(conId);
+            connection.stopHeartbeat();
+            connection.setUDP(true);
+            connection.setOutbound(true);
+            connection.setExpired(false);
+            connection.setLastSeen(System.currentTimeMillis());
+            connection.startHeartbeat();
+            addConnection(conId, connection);
             resQuicFrame.release();
-            return quicConnection;
+            return connection;
         }
         return null;
     }
@@ -210,7 +207,7 @@ public class QuicConnectionManager {
                     // 等待响应，超时则触发下一次网络重试
                     Object result = responseFuture.get(RESPONSE_TIMEOUT, TimeUnit.MILLISECONDS);
                     if (result instanceof QuicFrame responseFrame) {
-                        log.info("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试成功，收到响应",
+                        log.debug("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试成功，收到响应",
                                 connectionId, remoteAddress, netRetry );
                         // 清理缓存，返回响应帧
                         RESPONSE_FUTURECACHE.asMap().remove(dataId);
@@ -266,10 +263,8 @@ public class QuicConnectionManager {
             DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
             // 同步发送（阻塞直到发送完成）
             ChannelFuture future = Global_Channel.writeAndFlush(packet).sync();
-
-
             if (future.isSuccess()) {
-                log.info("[本地发送成功] 数据ID:{} 连接ID:{} 重试次数:{}",
+                log.debug("[本地发送成功] 数据ID:{} 连接ID:{} 重试次数:{}",
                         frame.getDataId(), frame.getConnectionId(), retryCount.get());
                 return true;
             } else {
@@ -287,11 +282,6 @@ public class QuicConnectionManager {
             retryCount.incrementAndGet();
             log.error("[本地发送异常] 数据ID:{} 连接ID:{} 重试次数:{}，原因：{}",
                     frame.getDataId(), frame.getConnectionId(), retryCount.get(), e.getMessage());
-
-            // 释放缓冲区，避免内存泄漏
-            if (buf != null) {
-                buf.release();
-            }
 
             // 等待重试间隔后递归重试
             try {

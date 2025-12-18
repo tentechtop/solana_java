@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class QuicConstants {
     /**
@@ -34,9 +35,6 @@ public class QuicConstants {
     // 每一个帧最大负载1024个字节
     // Solana公网最优单帧负载（1024+256）
     public static final int MAX_FRAME_PAYLOAD = 1024;
-
-    // 一次数据发送最大 1000个帧
-    public static final int PUBLIC_BATCH_SIZE = 1000;
 
     public static final long CONNECTION_IDLE_TIMEOUT = 30_000; // 连接空闲超时（30s）
 
@@ -59,6 +57,45 @@ public class QuicConstants {
     // 对象池
     public static final ByteBufAllocator ALLOCATOR = ByteBufAllocator.DEFAULT;
     public static final HashedWheelTimer TIMER = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
+
+    // 心跳专用定时器（避免与数据重传共享）
+    public static final HashedWheelTimer HEARTBEAT_TIMER = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
+    // 心跳专用线程池（核心线程数固定，避免被数据任务占用）
+    public static final ExecutorService HEARTBEAT_THREAD_POOL = Executors.newFixedThreadPool(2,
+            new ThreadFactory() {
+                private final AtomicInteger counter = new AtomicInteger(0);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "heartbeat-thread-" + counter.incrementAndGet());
+                    t.setDaemon(true); // 守护线程，不阻塞程序退出
+                    return t;
+                }
+            }
+    );
+
+
+    // 数据发送专用线程池（限制并发，避免资源耗尽）
+    public static final ExecutorService DATA_SEND_THREAD_POOL = new ThreadPoolExecutor(
+            20, // 核心线程数
+            50, // 最大线程数（控制并发上限）
+            60, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(1024*1024*10), // 任务队列（缓冲等待的帧）
+            new ThreadFactory() {
+                private final AtomicInteger counter = new AtomicInteger(0);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "data-send-thread-" + counter.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // 队列满时让提交者等待，避免任务丢失
+    );
+
+
+    public static final HashedWheelTimer RETRANSMIT_TIMER = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
+
+
 
     private QuicConstants() {}
 
@@ -435,11 +472,11 @@ public class QuicConstants {
     );
 
     // 全局超时时间（ms）：300ms
-    public static final long GLOBAL_TIMEOUT_MS = 300;
+    public static final long GLOBAL_TIMEOUT_MS = 400;
     // 单帧重传间隔（ms）
-    public static final long RETRANSMIT_INTERVAL_MS = 50;
-    // 单帧最大重传次数（300/50=6次）
-    public static final int MAX_RETRANSMIT_TIMES = 6;
+    public static final long RETRANSMIT_INTERVAL_MS = 100;
+    // 单帧最大重传次数
+    public static final int MAX_RETRANSMIT_TIMES = 3;
 
 
     // 出站连接主动心跳间隔

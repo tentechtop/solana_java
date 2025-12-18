@@ -16,8 +16,7 @@ public class QuicData {
     private long dataId;//数据ID
     private int total;//数据帧总数
     private QuicFrame[] frameArray;//帧数据按照序列号存入
-    private boolean isComplete;//数据是否完整
-
+    private boolean isComplete = false;//数据是否完整
 
 
     /**

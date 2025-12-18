@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -32,7 +33,19 @@ public class MockApi {
     @GetMapping("/sendMock")
     public Result sendMock() throws NoSuchAlgorithmException {
         QuicConnection firstConnection = getFirstConnection();
-        boolean b = firstConnection.sendData("qweqw".getBytes());
+        if (firstConnection != null){
+            // 1. 生成2048字节的测试数据（核心修改点）
+            int targetLength = 1024 * 1024 * 2;
+            byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
+            // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
+            // 每个字节填充为字符'a'的ASCII码
+            Arrays.fill(mockData, (byte) 'a');
+
+            // 2. 发送2048字节数据
+            boolean b = firstConnection.sendData(mockData);
+        }else {
+            Result.error("连接已经断开");
+        }
         return Result.OK();
     }
 

@@ -3,6 +3,7 @@ package com.bit.solana.quic;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.Recycler;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 
@@ -12,6 +13,7 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.FRAME_HEADER_LENGTH;
 /**
  * 数据帧 连接下的数据
  */
+@Slf4j
 @Data
 public class QuicFrame {
     private long connectionId; // 雪花算法
@@ -22,6 +24,10 @@ public class QuicFrame {
     private int frameTotalLength;//载荷总长 4字节
     private ByteBuf payload; // 有效载荷
 
+    private volatile boolean isReleased = false;
+
+
+
     //扩展字段 接收时写入
     private InetSocketAddress remoteAddress;
 
@@ -29,7 +35,7 @@ public class QuicFrame {
     public static final int FIXED_HEADER_LENGTH = 8 + 8 + 4 + 1 + 4 + 4;
 
     // 对象池 定义 Recycler 池，指定“新对象创建规则”
-    private static final int RECYCLER_MAX_CAPACITY = 1024 * 2;
+    private static final int RECYCLER_MAX_CAPACITY = 1024 * 1024 ;
     private static final Recycler<QuicFrame> RECYCLER = new Recycler<QuicFrame>(RECYCLER_MAX_CAPACITY) {
         @Override
         protected QuicFrame newObject(Handle<QuicFrame> handle) {
@@ -176,41 +182,84 @@ public class QuicFrame {
     }
 
     public void release() {
-        // 释放ByteBuf
-        if (payload != null) {
-            payload.release();
-            payload = null;
+        // 双重校验：防止并发重复释放 + 已释放直接返回
+        if (isReleased) {
+            log.debug("[重复释放] 对象已释放，connectionId:{} dataId:{}", connectionId, dataId);
+            return;
         }
-        // 重置字段
-        connectionId = 0;
-        frameType = 0;
-        sequence = 0;
-        total = 0;
-        dataId = 0;
-        frameTotalLength = 0; // 新增：重置帧总长度
-        remoteAddress = null; // 新增：重置远端地址
+        synchronized (this) { // 同步锁防止并发释放
+            if (isReleased) {
+                return;
+            }
 
-        // 归还对象
-        handle.recycle(this);
+            try {
+                // 释放ByteBuf（增加非空校验+释放日志）
+                if (payload != null) {
+                    if (payload.refCnt() > 0) { // 校验引用计数，避免重复release
+                        payload.release();
+                        log.debug("[释放资源] ByteBuf已释放，connectionId:{} dataId:{}", connectionId, dataId);
+                    }
+                    payload = null;
+                }
+
+                // 重置字段
+                connectionId = 0;
+                frameType = 0;
+                sequence = 0;
+                total = 0;
+                dataId = 0;
+                frameTotalLength = 0; // 新增：重置帧总长度
+                remoteAddress = null; // 新增：重置远端地址
+
+                // 归还对象（增加日志，便于排查对象池问题）
+                handle.recycle(this);
+                log.debug("[释放完成] 对象已归还到对象池，connectionId:{} dataId:{}", connectionId, dataId);
+            } catch (Exception e) {
+                log.error("[释放异常] connectionId:{} dataId:{}", connectionId, dataId, e);
+            } finally {
+                // 标记为已释放（finally保证无论是否异常都标记）
+                isReleased = true;
+            }
+        }
     }
+
 
     // 防御性校验：帧是否有效
-/*
     public boolean isValid() {
         // 1. 基础字段非负/合法
-        boolean basicValid = connectionId > 0 && dataId > 0 && total > 0 && sequence >= 0;
-        // 2. frameTotalLength必须≥固定头部长度（否则payload长度为负）
-        boolean lengthValid = frameTotalLength >= FIXED_HEADER_LENGTH;
-        // 3. payload校验：非空且长度匹配（frameTotalLength - 固定头部）
-        boolean payloadValid = payload != null && payload.readableBytes() == (frameTotalLength - FIXED_HEADER_LENGTH);
-
-        return basicValid && lengthValid && payloadValid;
-    }
-*/
-
-
-    public boolean isValid() {
+        //boolean basicValid = connectionId > 0 && dataId > 0 && total > 0 && sequence >= 0;
         return true;
+    }
+
+
+
+    /**
+     * 克隆当前QuicFrame（深拷贝，独立资源）
+     * @return 克隆后的新QuicFrame实例（需手动release()）
+     */
+    public QuicFrame clone() {
+        // 从对象池获取新实例
+        QuicFrame cloned = QuicFrame.acquire();
+
+        // 复制基础字段（基本类型直接赋值）
+        cloned.connectionId = this.connectionId;
+        cloned.dataId = this.dataId;
+        cloned.total = this.total;
+        cloned.frameType = this.frameType;
+        cloned.sequence = this.sequence;
+        cloned.remoteAddress = this.remoteAddress; // InetSocketAddress是不可变的，直接引用
+
+        // 深拷贝payload（关键：避免共享ByteBuf）
+        if (this.payload != null && this.payload.isReadable()) {
+            // 复制原始payload内容到新缓冲区
+            cloned.payload = this.payload.copy();
+            // 重新计算帧总长度（固定头部 + 新payload长度）
+            cloned.frameTotalLength = FIXED_HEADER_LENGTH + cloned.payload.readableBytes();
+        } else {
+            cloned.payload = null;
+            cloned.frameTotalLength = FIXED_HEADER_LENGTH;
+        }
+        return cloned;
     }
 
 }
