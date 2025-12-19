@@ -108,7 +108,7 @@ public class QuicConstants {
     // 出站连接主动心跳间隔
     public static final long OUTBOUND_HEARTBEAT_INTERVAL = 400L;
     // 连接过期阈值（统一1000ms无活动）
-    public static final long CONNECTION_EXPIRE_TIMEOUT = 1000L;
+    public static final long CONNECTION_EXPIRE_TIMEOUT = 2000L;
     private QuicConstants() {}
 
     //连接ID -> 数据ID

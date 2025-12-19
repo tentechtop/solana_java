@@ -2,6 +2,7 @@ package com.bit.solana.p2p.quic;
 
 
 import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
+import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.p2p.protocol.ProtocolHandler;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,8 +26,12 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
+import static com.bit.solana.config.CommonConfig.self;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ByteUtils.hexToBytes;
+import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
+import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
 
 
 /**
@@ -70,9 +76,11 @@ public class QuicConnectionManager {
 
     //删除节点的连接
     public static void removePeerConnect(String peerId, long connectionId) {
-        if (PeerConnect.containsKey(peerId)){
-            Set<Long> longs = PeerConnect.get(peerId);
-            longs.remove(connectionId);
+        if (peerId!=null){
+            if (PeerConnect.containsKey(peerId)){
+                Set<Long> longs = PeerConnect.get(peerId);
+                longs.remove(connectionId);
+            }
         }
     }
 
@@ -129,7 +137,7 @@ public class QuicConnectionManager {
      * 为该连接建立心跳任务
      */
     public static QuicConnection connectRemote(String peerId,InetSocketAddress remoteAddress)
-            throws ExecutionException, InterruptedException, TimeoutException {
+            throws ExecutionException, InterruptedException, TimeoutException, IOException {
         // 1. 参数校验
         if (remoteAddress == null) {
             log.error("远程地址不能为空");
@@ -146,24 +154,40 @@ public class QuicConnectionManager {
         reqQuicFrame.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
 
         //连接包 包含节点ID 加密公钥
-
-        byte[] peerIdBytes = hexToBytes(peerId);
-
-
-        reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+peerIdBytes.length);
-        reqQuicFrame.setPayload(peerIdBytes);//携带节点ID 这样被连接的节点就能立马让P2P节点上线
+        NetworkHandshake networkHandshake = new NetworkHandshake();
+        networkHandshake.setNodeId(self.getId());
+        byte[][] AKeys = generateCurve25519KeyPair();
+        byte[] aPrivateKey = AKeys[0];
+        byte[] aPublicKey = AKeys[1];
+        networkHandshake.setSharedSecret(aPublicKey);
+        byte[] serialize = networkHandshake.serialize();
+        int length = serialize.length;
+        log.info("握手长度！{}",length);
+        reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+length);
+        reqQuicFrame.setPayload(serialize);//携带节点ID 这样被连接的节点就能立马让P2P节点上线
         reqQuicFrame.setRemoteAddress(remoteAddress);
         QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
         log.info("响应帧{}",resQuicFrame);
         reqQuicFrame.release();
         if (resQuicFrame != null){
             QuicConnection connection = getConnection(conId);
+            byte[] payload = resQuicFrame.getPayload();
+            //解析
+            NetworkHandshake deserialize = NetworkHandshake.deserialize(payload);
+            byte[] nodeId = deserialize.getNodeId();
+            byte[] bPublicKey = deserialize.getSharedSecret();
+
+            //协商
+            byte[] sharedSecret = generateSharedSecret(aPrivateKey, bPublicKey);
+            log.info("协商共享密钥是:{}", bytesToHex(sharedSecret));
+
             connection.setPeerId(peerId);
             connection.stopHeartbeat();
             connection.setUDP(true);
             connection.setOutbound(true);
             connection.setExpired(false);
             connection.setLastSeen(System.currentTimeMillis());
+            connection.setSharedSecret(sharedSecret);
             connection.startHeartbeat();
             addConnection(conId, connection);
             addPeerConnect(peerId,conId);
@@ -274,10 +298,10 @@ public class QuicConnectionManager {
     public static QuicFrame sendFrame(QuicFrame quicFrame) {
         // 1. 基础参数定义
         final int LOCAL_RETRY_MAX = 3;    // 本地错误最大重试次数
-        final long LOCAL_RETRY_INTERVAL = 20; // 本地重试间隔（ms）
+        final long LOCAL_RETRY_INTERVAL = 50; // 本地重试间隔（ms）
         final int NET_RETRY_MAX = 2;      // 网络错误最大重试次数
-        final long NET_RETRY_INTERVAL = 50;  // 网络重试间隔（ms）
-        final long RESPONSE_TIMEOUT = 150;   // 单次响应等待超时（ms）
+        final long NET_RETRY_INTERVAL = 100;  // 网络重试间隔（ms）
+        final long RESPONSE_TIMEOUT = 300;   // 单次响应等待超时（ms）
         InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
         long connectionId = quicFrame.getConnectionId();
 

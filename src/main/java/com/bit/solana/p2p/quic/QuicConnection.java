@@ -1,5 +1,7 @@
 package com.bit.solana.p2p.quic;
 
+import com.bit.solana.p2p.protocol.NetworkHandshake;
+import com.bit.solana.util.ECCWithAESGCM;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -23,10 +25,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
+import static com.bit.solana.config.CommonConfig.self;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.*;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 import static com.bit.solana.p2p.quic.SendQuicData.buildFromFullData;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
+import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 
 
 @Slf4j
@@ -40,6 +44,7 @@ public class QuicConnection {
     // 心跳/检查任务相关
     private TimerTask connectionTask; // 统一命名：出站=心跳任务，入站=检查任务
     private volatile Timeout connectionTimeout; // 保存定时任务引用，用于取消
+    private byte[] sharedSecret;//共享加密密钥
 
 
     // 新增：RTT统计相关字段
@@ -360,16 +365,37 @@ public class QuicConnection {
             //发送连接响应帧
             long dataId = quicFrame.getDataId();
             byte[] payload = quicFrame.getPayload();
-            String peerId = bytesToHex(payload);
+            log.info("握手请求数据长度{}",payload.length);
+
+            //解析成握手数据
+            NetworkHandshake deserialize = NetworkHandshake.deserialize(payload);
+
+            byte[] nodeId = deserialize.getNodeId();
+            String peerId = bytesToHex(nodeId);
+            byte[] aPublicKey = deserialize.getSharedSecret();
+
+            byte[][] BKeys = generateCurve25519KeyPair();
+            byte[] bPrivateKey = BKeys[0];
+            byte[] bPublicKey = BKeys[1];
+            byte[] sharedSecret = ECCWithAESGCM.generateSharedSecret(bPrivateKey, aPublicKey);
+            log.info("共享加密密钥对sharedSecret: {}", bytesToHex(sharedSecret));
+
+            NetworkHandshake networkHandshake = new NetworkHandshake();
+            networkHandshake.setNodeId(self.getId());
+            networkHandshake.setSharedSecret(bPublicKey);
+            byte[] serialize = networkHandshake.serialize();
             acquire.setConnectionId(conId);//生成连接ID
             acquire.setDataId(dataId);
             acquire.setTotal(1);
             acquire.setFrameType(QuicFrameEnum.CONNECT_RESPONSE_FRAME.getCode());
-            acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
-            acquire.setPayload(null);
+            acquire.setPayload(serialize);
+            acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+serialize.length);
+
             ByteBuf buffer = ALLOCATOR.buffer();
             acquire.encode(buffer);
             DatagramPacket datagramPacket = new DatagramPacket(buffer, quicFrame.getRemoteAddress());
+            setPeerId(peerId);
+            setSharedSecret(sharedSecret);
             Global_Channel.writeAndFlush(datagramPacket).addListener(future -> {
                 if (!future.isSuccess()) {
                     log.error("[连接响应发送失败] 节点ID:{}", conId, future.cause());
@@ -379,11 +405,13 @@ public class QuicConnection {
                     addPeerConnect(peerId,conId);
                 }
             });
+        }catch (Exception e){
+            log.error("解析出错",e);
         }finally {
             acquire.release();
         }
-
     }
+
 
     private void handleConnectResponseFrame(QuicFrame quicFrame) {
         log.info("处理连接响应{}",quicFrame);

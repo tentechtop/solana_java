@@ -32,7 +32,7 @@ import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 public class CommonConfig {
     //节点信息
     @Getter
-    private Peer self;//本地节点信息
+    public static Peer self;//本地节点信息
     @Autowired
     private SystemConfig config;
 
