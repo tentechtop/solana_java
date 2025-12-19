@@ -253,12 +253,12 @@ public class QuicConnection {
 
     //发送二进制数据 二进制到QuicData
     //处理数据帧 返回ACK帧
-    private QuicMsg handleDataFrame(QuicFrame quicFrame) {
+    private void handleDataFrame(QuicFrame quicFrame) {
         boolean receiveDataExistInConnect = isReceiveDataExistInConnect(quicFrame.getConnectionId(), quicFrame.getDataId());
         if (receiveDataExistInConnect){
             //存在就直接获取到
             ReceiveQuicData receiveQuicData = getReceiveDataByConnectIdAndDataId(quicFrame.getConnectionId(), quicFrame.getDataId());
-            return receiveQuicData.handleFrame(quicFrame);
+            receiveQuicData.handleFrame(quicFrame);
         }else {
             //是否处理过
             Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
@@ -283,11 +283,9 @@ public class QuicConnection {
                 DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
                 Global_Channel.writeAndFlush(packet);
                 ackFrame.release();
-
-                return null;
             }else {
                 ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
-                return receiveDataByFrame.handleFrame(quicFrame);
+                receiveDataByFrame.handleFrame(quicFrame);
             }
         }
     }
@@ -295,10 +293,11 @@ public class QuicConnection {
     //处理ACK帧
 
 
-    public QuicMsg handleFrame(QuicFrame quicFrame) {
+    public void handleFrame(QuicFrame quicFrame) {
         switch (QuicFrameEnum.fromCode(quicFrame.getFrameType())) {
             case DATA_FRAME:
-               return handleDataFrame(quicFrame);
+               handleDataFrame(quicFrame);
+               break;
             case DATA_ACK_FRAME:
                 handleACKFrame(quicFrame);
                 break;
@@ -325,7 +324,6 @@ public class QuicConnection {
             default:
                 break;
         }
-        return null;
     }
 
     private void handleBatchACKFrame(QuicFrame quicFrame) {

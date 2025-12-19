@@ -64,8 +64,13 @@ public class MockApi {
     public String sendMsg(String nodeId) throws Exception {
         //节点回复反转换后的数据
 
+        int targetLength = 1024 * 1024 * 2;
+        byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
+        // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
+        // 每个字节填充为字符'a'的ASCII码
+        Arrays.fill(mockData, (byte) 'a');
 
-        byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, new byte[]{0x02}, 5);
+        byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, mockData, 5);
         P2PMessage deserialize = P2PMessage.deserialize(bytes);
         byte[] data = deserialize.getData();
         log.info("节点回复：{}", parseUtf8(data));
