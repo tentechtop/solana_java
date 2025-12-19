@@ -251,8 +251,25 @@ public class QuicConnection {
             Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
             if (ifPresent!=null){
                 log.info("数据已经处理过了");
-                //TODO 回复ALL_ACK
-
+                //回复ALL_ACK
+                long connectionId = getConnectionId();
+                long dataId = quicFrame.getDataId();
+                QuicFrame ackFrame =  QuicFrame.acquire();
+                ackFrame.setConnectionId(connectionId);
+                ackFrame.setDataId(dataId);
+                ackFrame.setSequence(0); // ACK帧序列号固定为0
+                ackFrame.setTotal(1); // ACK帧不分片
+                ackFrame.setFrameType(QuicFrameEnum.ALL_ACK_FRAME.getCode()); // 自定义：ACK帧类型
+                ackFrame.setRemoteAddress(getRemoteAddress());
+                // 计算总长度：固定头部 + 载荷长度
+                int totalLength = QuicFrame.FIXED_HEADER_LENGTH;
+                ackFrame.setFrameTotalLength(totalLength);
+                ackFrame.setPayload(null);
+                ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                ackFrame.encode(buf);
+                DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+                Global_Channel.writeAndFlush(packet);
+                ackFrame.release();
             }else {
                 ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
                 receiveDataByFrame.handleFrame(quicFrame);
