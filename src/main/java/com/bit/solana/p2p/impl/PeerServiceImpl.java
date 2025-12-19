@@ -3,7 +3,6 @@ package com.bit.solana.p2p.impl;
 import com.bit.solana.config.CommonConfig;
 import com.bit.solana.config.SystemConfig;
 import com.bit.solana.p2p.PeerService;
-import com.bit.solana.p2p.impl.handle.PlainUdpHandler;
 import com.bit.solana.p2p.peer.RoutingTable;
 import com.bit.solana.p2p.peer.Settings;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
@@ -15,13 +14,10 @@ import com.bit.solana.p2p.quic.QuicConnection;
 import com.bit.solana.p2p.quic.QuicServiceHandler;
 import com.bit.solana.util.MultiAddress;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
@@ -80,9 +76,6 @@ public class PeerServiceImpl implements PeerService {
     private PingHandler pingHandler;
     @Autowired
     private TextHandler textHandler;
-
-    @Autowired
-    private PlainUdpHandler plainUdpHandler;
 
 
 

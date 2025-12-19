@@ -1,6 +1,7 @@
 package com.bit.solana.p2p.quic;
 
 
+import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.buffer.ByteBuf;
@@ -10,6 +11,8 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -25,6 +28,8 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
  */
 @Slf4j
 public class QuicConnectionManager {
+
+
     public static DatagramChannel Global_Channel = null;// UDP通道
 
     private static final Cache<Long, QuicConnection> CONNECTION_MAP  = Caffeine.newBuilder()
@@ -292,6 +297,7 @@ public class QuicConnectionManager {
             return sendWithLocalRetry(frame, retryCount, maxRetry, interval);
         }
     }
+
 
 
 

@@ -1,5 +1,6 @@
 package com.bit.solana.p2p.quic;
 
+import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.socket.DatagramPacket;
@@ -9,12 +10,10 @@ import io.netty.util.Timer;
 import io.netty.util.TimerTask;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,6 +25,7 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
 @Slf4j
 @Data
 public class ReceiveQuicData extends QuicData {
+
     //是否完成接收
     private volatile boolean isComplete = false;
 
@@ -124,7 +124,6 @@ public class ReceiveQuicData extends QuicData {
             log.info("已经完成数据交付");
             return;
         }
-        //TODO
         //回复ALL_ACK帧
         long connectionId = getConnectionId();
         long dataId = getDataId();
@@ -155,6 +154,10 @@ public class ReceiveQuicData extends QuicData {
         }
         //交付完整数据到下一个处理器
         log.info("完整数据长度{} 数据ID{}",combinedFullData.length,getDataId());
+
+        //处理数据
+        pushCompleteMsg(combinedFullData);
+
         R_CACHE.put(getDataId(),System.currentTimeMillis());
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
         if (successCallback != null) {
