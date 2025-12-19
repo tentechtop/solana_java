@@ -1,5 +1,6 @@
 package com.bit.solana.api.mock;
 
+import com.bit.solana.p2p.impl.PeerClient;
 import com.bit.solana.p2p.impl.PeerServiceImpl;
 import com.bit.solana.p2p.quic.QuicConnection;
 import com.bit.solana.result.Result;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
+import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.getFirstConnection;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
@@ -29,6 +31,10 @@ public class MockApi {
 
     @Autowired
     private PeerServiceImpl peerService;
+
+    @Autowired
+    private PeerClient peerClient;
+
 
     @GetMapping("/sendMock")
     public Result sendMock() throws NoSuchAlgorithmException, InterruptedException {
@@ -48,6 +54,18 @@ public class MockApi {
             return Result.error("连接已经断开");
         }
     }
+
+
+
+
+    @GetMapping("/sendMsg")
+    public String sendMsg(String nodeId) throws Exception {
+        //节点回复反转换后的数据
+        byte[] bytes = peerClient.sendData(Base58.decode(nodeId), TEXT_V1, new byte[]{0x01}, 5);
+        log.info("节点回复：{}", new String(bytes));
+        return new String(bytes);
+    }
+
 
 
 
