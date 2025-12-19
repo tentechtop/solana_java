@@ -58,7 +58,6 @@ public class ReceiveQuicData extends QuicData {
         //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
         int size = receivedSequences.size();
         if (size>1 && size % 1024 == 0) {
-            log.info("size是是1024的倍数");
             QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
             ackFrame.encode(buf);

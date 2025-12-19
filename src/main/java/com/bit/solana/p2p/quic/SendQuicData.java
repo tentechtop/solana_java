@@ -300,7 +300,7 @@ public class SendQuicData extends QuicData {
             }
         }
 
-        log.info("[批量ACK处理完成] 连接ID:{} 数据ID:{} 总帧数:{} 本次确认新序列号:{} 累计确认:{}",
+        log.debug("[批量ACK处理完成] 连接ID:{} 数据ID:{} 总帧数:{} 本次确认新序列号:{} 累计确认:{}",
                 getConnectionId(), getDataId(), totalFrames, confirmedCount, ackedSequences.size());
 
         // 检查是否所有帧都已确认（触发完成逻辑）

@@ -297,7 +297,7 @@ public class QuicConnection {
     }
 
     private void handleBatchACKFrame(QuicFrame quicFrame) {
-        log.info("处理批量ACK");
+        log.debug("处理批量ACK");
         long connectionId1 = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         SendQuicData sendQuicData = getSendDataByConnectIdAndDataId(connectionId1, dataId);
@@ -310,7 +310,7 @@ public class QuicConnection {
     }
 
     private void handleALLACKFrame(QuicFrame quicFrame) {
-        log.info("处理所有帧完成");
+        log.debug("处理所有帧完成");
         long connectionId1 = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         int sequence = quicFrame.getSequence();
