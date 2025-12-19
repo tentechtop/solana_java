@@ -16,8 +16,6 @@ public class QuicData {
     private QuicFrame[] frameArray;//帧数据按照序列号存入
 
 
-
-
     public byte[] getCombinedFullData() {
         // 校验帧数组是否存在
         if (frameArray == null || frameArray.length == 0) {
