@@ -38,6 +38,22 @@ public class QuicConnectionManager {
     public static final Map<String, Set<Long>> PeerConnect = new ConcurrentHashMap<>();
 
 
+    //获取节点的连接
+    public static QuicConnection getPeerConnection(String peerId) {
+        if (PeerConnect.containsKey(peerId)){
+            Set<Long> longs = PeerConnect.get(peerId);
+            if (!longs.isEmpty()){
+                //随机选择一个
+                long connectionId = longs.iterator().next();
+                return QuicConnectionManager.getConnection(connectionId);
+            }else {
+                return null;
+            }
+        }else {
+            return null;
+        }
+    }
+
 
     //给节点添加一个连接
     public static void addPeerConnect(String peerId, long connectionId) {
@@ -61,7 +77,7 @@ public class QuicConnectionManager {
     }
 
 
-    //获取在线的节点 在线节点至少有一个有效的连接
+
 
     /**
      * 获取在线的节点列表

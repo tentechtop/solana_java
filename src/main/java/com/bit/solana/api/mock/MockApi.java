@@ -2,6 +2,7 @@ package com.bit.solana.api.mock;
 
 import com.bit.solana.p2p.impl.PeerClient;
 import com.bit.solana.p2p.impl.PeerServiceImpl;
+import com.bit.solana.p2p.protocol.P2PMessage;
 import com.bit.solana.p2p.quic.QuicConnection;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.key.KeyInfo;
@@ -20,6 +21,7 @@ import java.util.Random;
 
 import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.getFirstConnection;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 import static com.bit.solana.util.SolanaEd25519Signer.*;
@@ -61,12 +63,26 @@ public class MockApi {
     @GetMapping("/sendMsg")
     public String sendMsg(String nodeId) throws Exception {
         //节点回复反转换后的数据
-        byte[] bytes = peerClient.sendData(Base58.decode(nodeId), TEXT_V1, new byte[]{0x01}, 5);
-        log.info("节点回复：{}", new String(bytes));
-        return new String(bytes);
+
+
+        byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, new byte[]{0x02}, 5);
+        P2PMessage deserialize = P2PMessage.deserialize(bytes);
+        byte[] data = deserialize.getData();
+        log.info("节点回复：{}", parseUtf8(data));
+        return parseUtf8(data);
     }
 
-
+    public static String parseUtf8(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return "";
+        }
+        try {
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.debug("解析UTF8失败，返回十六进制", e);
+            return bytesToHex(bytes);
+        }
+    }
 
 
 

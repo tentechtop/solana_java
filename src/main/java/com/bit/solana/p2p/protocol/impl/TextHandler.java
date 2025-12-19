@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+
 import static com.bit.solana.p2p.protocol.P2PMessage.newResponseMessage;
 
 @Slf4j
@@ -20,10 +22,9 @@ public class TextHandler implements ProtocolHandler.ResultProtocolHandler{
     @Override
     public byte[] handleResult(P2PMessage requestParams) throws Exception {
 
-        log.info("收到文本消息");
+        log.info("收到文本消息{}",requestParams.getData());
         String text = "我已经收到回复";
-
-        P2PMessage p2PMessage = newResponseMessage(commonConfig.getSelf().getId(), ProtocolEnum.TEXT_V1,requestParams.getRequestId(), text.getBytes());
+        P2PMessage p2PMessage = newResponseMessage(commonConfig.getSelf().getId(), ProtocolEnum.TEXT_V1,requestParams.getRequestId(), text.getBytes(StandardCharsets.UTF_8));
 
         return p2PMessage.serialize();
     }

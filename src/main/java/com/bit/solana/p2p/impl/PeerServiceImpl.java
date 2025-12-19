@@ -35,10 +35,11 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.cert.CertificateException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
-import static com.bit.solana.p2p.quic.QuicConnectionManager.connectRemote;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.*;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 
 @Slf4j
@@ -164,6 +165,11 @@ public class PeerServiceImpl implements PeerService {
             e.printStackTrace();
         }
     }
+
+
+
+
+
 
     /**
      * 关闭服务器

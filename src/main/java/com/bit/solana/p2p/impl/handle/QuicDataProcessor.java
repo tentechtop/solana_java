@@ -133,7 +133,7 @@ public class QuicDataProcessor {
     private void processSingleMsg(QuicMsg msg, int index) {
         try {
             // 示例逻辑：打印消息长度（实际场景：解析Protobuf/JSON、写入DB、调用RPC等）
-            log.info("处理第{}条消息，字节长度：{}", index, msg.getData().length);
+            log.debug("处理第{}条消息，字节长度：{}", index, msg.getData().length);
 
             // TODO 替换为真实业务逻辑：
             // 1. 解析二进制消息（如protobuf反序列化）
