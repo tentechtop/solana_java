@@ -38,7 +38,12 @@ import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
  * 连接管理器（全局连接池）
  */
 @Slf4j
+@Component
 public class QuicConnectionManager {
+
+    @Autowired
+    private QuicDataProcessor quicDataProcessor;
+
 
     //节点ID - > 连接ID
     public static final Map<String, Set<Long>> PeerConnect = new ConcurrentHashMap<>();
@@ -205,7 +210,46 @@ public class QuicConnectionManager {
 
     }
 
+    public static QuicConnection createOrGetConnection(DatagramChannel channel, InetSocketAddress local, InetSocketAddress remote, long connectionId) {
+        //获取或者创建一个远程连接
+        QuicConnection quicConnection = QuicConnectionManager.getConnection(connectionId);
+        if (quicConnection == null){
+            quicConnection = new QuicConnection();
+            quicConnection.setConnectionId(connectionId);
+            quicConnection.setRemoteAddress(remote);
+            quicConnection.setUDP(true);
+            quicConnection.setOutbound(false);//非主动连接
+            quicConnection.startHeartbeat();
+            QuicConnectionManager.addConnection(connectionId, quicConnection);
+        }
+        quicConnection.updateLastSeen();
+        return quicConnection;
+    }
 
+
+    /**
+     * 根据帧数据创建发送数据实例，并自动维护连接-数据ID映射关系
+     * @param frameData  帧数据（ByteBuf类型，Quic帧原始数据）
+     * @return 初始化完成的SendQuicData实例（已加入缓存和映射）
+     * @throws IllegalArgumentException 参数异常时抛出
+     */
+    public static ReceiveQuicData createReceiveDataByFrame(QuicFrame frameData) {
+        // 1. 严格参数校验
+        if (frameData == null || !frameData.isValid()) {
+            throw new IllegalArgumentException("frameData cannot be null or empty");
+        }
+        // 3. 初始化发送数据实例（结合Quic常量配置）
+        ReceiveQuicData receiveQuicData = new ReceiveQuicData();
+        receiveQuicData.setDataId(frameData.getDataId());
+        receiveQuicData.setConnectionId(frameData.getConnectionId());
+        receiveQuicData.setTotal(frameData.getTotal());
+        receiveQuicData.setRemoteAddress(frameData.getRemoteAddress());
+
+        // 4. 线程安全地维护缓存和映射关系
+        receiveMap.put(frameData.getDataId(), receiveQuicData);
+        connectReceiveMap.put(frameData.getConnectionId(), frameData.getDataId());
+        return receiveQuicData;
+    }
 
 
     /**
@@ -272,21 +316,7 @@ public class QuicConnectionManager {
     }
 
 
-    public static QuicConnection createOrGetConnection(DatagramChannel channel,InetSocketAddress local, InetSocketAddress remote, long connectionId) {
-        //获取或者创建一个远程连接
-        QuicConnection quicConnection = QuicConnectionManager.getConnection(connectionId);
-        if (quicConnection == null){
-            quicConnection = new QuicConnection();
-            quicConnection.setConnectionId(connectionId);
-            quicConnection.setRemoteAddress(remote);
-            quicConnection.setUDP(true);
-            quicConnection.setOutbound(false);//非主动连接
-            quicConnection.startHeartbeat();
-            QuicConnectionManager.addConnection(connectionId, quicConnection);
-        }
-        quicConnection.updateLastSeen();
-        return quicConnection;
-    }
+
 
 
 

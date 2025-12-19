@@ -1,5 +1,6 @@
 package com.bit.solana.p2p.quic;
 
+import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.util.ECCWithAESGCM;
 import io.netty.buffer.ByteBuf;
@@ -45,6 +46,8 @@ public class QuicConnection {
     private TimerTask connectionTask; // 统一命名：出站=心跳任务，入站=检查任务
     private volatile Timeout connectionTimeout; // 保存定时任务引用，用于取消
     private byte[] sharedSecret;//共享加密密钥
+
+
 
 
     // 新增：RTT统计相关字段
@@ -250,12 +253,12 @@ public class QuicConnection {
 
     //发送二进制数据 二进制到QuicData
     //处理数据帧 返回ACK帧
-    private void handleDataFrame(QuicFrame quicFrame) {
+    private QuicMsg handleDataFrame(QuicFrame quicFrame) {
         boolean receiveDataExistInConnect = isReceiveDataExistInConnect(quicFrame.getConnectionId(), quicFrame.getDataId());
         if (receiveDataExistInConnect){
             //存在就直接获取到
             ReceiveQuicData receiveQuicData = getReceiveDataByConnectIdAndDataId(quicFrame.getConnectionId(), quicFrame.getDataId());
-            receiveQuicData.handleFrame(quicFrame);
+            return receiveQuicData.handleFrame(quicFrame);
         }else {
             //是否处理过
             Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
@@ -280,9 +283,11 @@ public class QuicConnection {
                 DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
                 Global_Channel.writeAndFlush(packet);
                 ackFrame.release();
+
+                return null;
             }else {
                 ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
-                receiveDataByFrame.handleFrame(quicFrame);
+                return receiveDataByFrame.handleFrame(quicFrame);
             }
         }
     }
@@ -290,11 +295,10 @@ public class QuicConnection {
     //处理ACK帧
 
 
-    public void handleFrame(QuicFrame quicFrame) {
+    public QuicMsg handleFrame(QuicFrame quicFrame) {
         switch (QuicFrameEnum.fromCode(quicFrame.getFrameType())) {
             case DATA_FRAME:
-                handleDataFrame(quicFrame);
-                break;
+               return handleDataFrame(quicFrame);
             case DATA_ACK_FRAME:
                 handleACKFrame(quicFrame);
                 break;
@@ -321,6 +325,7 @@ public class QuicConnection {
             default:
                 break;
         }
+        return null;
     }
 
     private void handleBatchACKFrame(QuicFrame quicFrame) {

@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -389,29 +390,9 @@ public class QuicConstants {
         return receiveMap.containsKey(dataId) && receiveMap.get(dataId) != null;
     }
 
-    /**
-     * 根据帧数据创建发送数据实例，并自动维护连接-数据ID映射关系
-     * @param frameData  帧数据（ByteBuf类型，Quic帧原始数据）
-     * @return 初始化完成的SendQuicData实例（已加入缓存和映射）
-     * @throws IllegalArgumentException 参数异常时抛出
-     */
-    public static ReceiveQuicData createReceiveDataByFrame(QuicFrame frameData) {
-        // 1. 严格参数校验
-        if (frameData == null || !frameData.isValid()) {
-            throw new IllegalArgumentException("frameData cannot be null or empty");
-        }
-        // 3. 初始化发送数据实例（结合Quic常量配置）
-        ReceiveQuicData receiveQuicData = new ReceiveQuicData();
-        receiveQuicData.setDataId(frameData.getDataId());
-        receiveQuicData.setConnectionId(frameData.getConnectionId());
-        receiveQuicData.setTotal(frameData.getTotal());
-        receiveQuicData.setRemoteAddress(frameData.getRemoteAddress());
 
-        // 4. 线程安全地维护缓存和映射关系
-        receiveMap.put(frameData.getDataId(), receiveQuicData);
-        connectReceiveMap.put(frameData.getConnectionId(), frameData.getDataId());
-        return receiveQuicData;
-    }
+
+
 
 
     /**

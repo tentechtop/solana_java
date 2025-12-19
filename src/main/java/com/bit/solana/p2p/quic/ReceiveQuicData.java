@@ -19,12 +19,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.getConnection;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 
 
 @Slf4j
 @Data
 public class ReceiveQuicData extends QuicData {
+
 
     //是否完成接收
     private volatile boolean isComplete = false;
@@ -44,7 +46,7 @@ public class ReceiveQuicData extends QuicData {
 
 
     //当收到数据帧时
-    public void handleFrame(QuicFrame quicFrame) {
+    public QuicMsg handleFrame(QuicFrame quicFrame) {
         int sequence = quicFrame.getSequence();
         int total = quicFrame.getTotal();
         long dataId = quicFrame.getDataId();
@@ -71,7 +73,7 @@ public class ReceiveQuicData extends QuicData {
         if (receivedSequences.contains(sequence)) {
             log.debug("[重复帧] 连接ID:{} 数据ID:{} 序列号:{} 总帧数:{}，直接回复ACK",
                     connectionId, dataId, sequence, total);
-            return;
+            return null;
         }
         if (getFrameArray() == null) {
             setFrameArray(new QuicFrame[total]);
@@ -93,6 +95,8 @@ public class ReceiveQuicData extends QuicData {
             // 所有帧接收完成
             handleDataComplete();
         }
+
+        return null;
     }
 
 
@@ -119,10 +123,10 @@ public class ReceiveQuicData extends QuicData {
 
 
 
-    private void handleDataComplete() {
+    private QuicMsg handleDataComplete() {
         if (isComplete()){
             log.info("已经完成数据交付");
-            return;
+            return null;
         }
         //回复ALL_ACK帧
         long connectionId = getConnectionId();
@@ -150,7 +154,7 @@ public class ReceiveQuicData extends QuicData {
         byte[] combinedFullData = getCombinedFullData();
         if (combinedFullData == null) { // 增加非空校验，避免空指针
             log.error("组合完整数据失败，无法处理");
-            return;
+            return null;
         }
         //交付完整数据到下一个处理器
         log.info("完整数据长度{} 数据ID{}",combinedFullData.length,getDataId());
@@ -162,11 +166,14 @@ public class ReceiveQuicData extends QuicData {
         quicMsg.setData(combinedFullData);
         pushCompleteMsg(quicMsg);
 
+
         R_CACHE.put(getDataId(),System.currentTimeMillis());
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
         if (successCallback != null) {
             successCallback.run();
         }
+
+        return quicMsg;
     }
 
     /**
