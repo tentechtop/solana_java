@@ -104,8 +104,9 @@ public class QuicConnection {
                         } else {
                             log.debug("出站连接PING帧发送成功，连接ID:{}，PONG帧:{}", connectionId, quicFrame);
                             updateLastSeen(); // 接收PONG更新活动时间
+                            quicFrame.release();
                         }
-                        quicFrame.release();
+
                     } catch (Exception e) {
                         log.error("[出站心跳异常] 连接ID:{}", connectionId, e);
                     }finally {

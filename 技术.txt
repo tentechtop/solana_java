@@ -44,6 +44,31 @@ JVM 配置：-Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGC
 
 -Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8 --add-modules jdk.incubator.vector
 
+
+
+-Xms16G   -Xmx16G
+
+-XX:+UnlockExperimentalVMOptions
+
+-XX:+UseG1GC
+  -XX:MaxGCPauseMillis=20
+   -XX:ParallelGCThreads=8
+    -XX:G1NewSizePercent=20
+    -XX:G1MaxNewSizePercent=50
+     -XX:G1HeapRegionSize=32M
+      -XX:G1MixedGCLiveThresholdPercent=70
+       -XX:G1MixedGCCountTarget=4
+        -XX:G1OldCSetRegionThresholdPercent=15
+         -XX:G1ReservePercent=15
+          -XX:G1HeapWastePercent=5
+          -XX:ConcGCThreads=4
+           -XX:InitiatingHeapOccupancyPercent=50   -XX:+UseStringDeduplication
+           -XX:StringDeduplicationAgeThreshold=3   -XX:+ParallelRefProcEnabled
+            -XX:MaxDirectMemorySize=4G   -XX:+DisableExplicitGC
+              -Xlog:gc,gc+heap,gc+metaspace,gc+age=info,gc+ref=info,gc+safepoint=info:file=gc.log:time,uptime,pid,tags:filecount=5,filesize=100M
+               -XX:+AlwaysPreTouch   -XX:MetaspaceSize=256M   -XX:MaxMetaspaceSize=512M
+
+
 至少 8 核 CPU，16GB 内存，SSD 存储
 
 部署建议

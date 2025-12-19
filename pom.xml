@@ -179,6 +179,12 @@
         </dependency>
 
 
+        <dependency>
+            <groupId>io.jpower.kcp</groupId>
+            <artifactId>kcp-netty</artifactId>
+            <version>1.5.2</version>
+        </dependency>
+
     </dependencies>
 
 

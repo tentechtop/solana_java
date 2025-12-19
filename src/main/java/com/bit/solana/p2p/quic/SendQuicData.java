@@ -28,10 +28,7 @@ public class SendQuicData extends QuicData {
     private final  Set<Integer> ackedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private Timeout globalTimeout = null;
-    // 单帧重传定时器（序列号→定时器）
-    private final ConcurrentHashMap<Integer, Timeout> retransmitTimers = new ConcurrentHashMap<>();
-    // 单帧重传次数（序列号→次数）
-    private final ConcurrentHashMap<Integer, AtomicInteger> retransmitCounts = new ConcurrentHashMap<>();
+
     // 传输完成回调
     private Runnable successCallback;
     // 传输失败回调
@@ -140,9 +137,6 @@ public class SendQuicData extends QuicData {
                             } else {
                                 log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                         getConnectionId(), getDataId(), sequence);
-                                if (!ackedSequences.contains(sequence)) {
-                                    startFrameRetransmitTimer(sequence);
-                                }
                             }
                         });
                     } catch (Exception e) {
@@ -182,89 +176,6 @@ public class SendQuicData extends QuicData {
 
 
 
-    /**
-     * 启动单帧重传定时器（严格延迟 RETRANSMIT_INTERVAL_MS 后执行）
-     * 核心：定时器到期后，仅当「未收到ACK」时才重传
-     */
-    private void startFrameRetransmitTimer(int sequence) {
-        // 1. 先取消旧定时器，避免重复触发（关键！）
-        cancelRetransmitTimer(sequence);
-
-        // 2. 再次校验：已确认则不启动定时器
-        if (ackedSequences.contains(sequence)) {
-            log.debug("[跳过定时器] 连接ID:{} 数据ID:{} 序列号:{} 已确认，无需延迟检查",
-                    getConnectionId(), getDataId(), sequence);
-            return;
-        }
-
-        // 3. 启动【延迟】定时器：RETRANSMIT_INTERVAL_MS 后执行
-        Timeout timeout = QuicConstants.GLOBAL_TIMER.newTimeout(
-                new TimerTask() {
-                    @Override
-                    public void run(Timeout timeout) throws Exception {
-                        // 双重防护：定时器被取消/已收到ACK → 直接返回
-                        if (timeout.isCancelled() || ackedSequences.contains(sequence)) {
-                            log.debug("[定时器取消] 连接ID:{} 数据ID:{} 序列号:{} 无需重传",
-                                    getConnectionId(), getDataId(), sequence);
-                            return;
-                        }
-
-                        // 4. 定时器到期，且未收到ACK → 触发重传
-                        log.info("[延迟重传触发] 连接ID:{} 数据ID:{} 序列号:{} 已延迟{}ms未收到ACK",
-                                getConnectionId(), getDataId(), sequence, QuicConstants.RETRANSMIT_INTERVAL_MS);
-                        retransmitFrame(sequence);
-                    }
-                },
-                QuicConstants.RETRANSMIT_INTERVAL_MS, // 延迟时间（核心参数）
-                TimeUnit.MILLISECONDS // 时间单位
-        );
-
-        // 4. 保存定时器，用于后续取消
-        retransmitTimers.put(sequence, timeout);
-        log.debug("[延迟定时器启动] 连接ID:{} 数据ID:{} 序列号:{} 延迟{}ms后检查ACK",
-                getConnectionId(), getDataId(), sequence, QuicConstants.RETRANSMIT_INTERVAL_MS);
-    }
-
-
-    /**
-     * 重传指定帧
-     */
-    private void retransmitFrame(int sequence) {
-        // 关键：如果已收到ACK，直接返回，不重传
-        if (ackedSequences.contains(sequence)) {
-            log.debug("[无需重传] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
-                    getConnectionId(), getDataId(), sequence);
-            return;
-        }
-
-        // 1. 初始化计数（仅首次），后续直接获取
-        AtomicInteger count = retransmitCounts.computeIfAbsent(sequence, k -> new AtomicInteger(0));
-        // 2. 先检查次数是否超限（当前已重传次数）
-        if (count.get() >= MAX_RETRANSMIT_TIMES) {
-            log.error("[重传超限] 连接ID:{} 数据ID:{} 序列号:{} 重传次数{}≥{}，发送失败",
-                    getConnectionId(), getDataId(), sequence, count.get(), MAX_RETRANSMIT_TIMES);
-            handleSendFailure();
-            return;
-        }
-
-        // 3. 获取要重传的帧
-        QuicFrame frame = getFrameBySequence(sequence);
-        if (frame == null) {
-            log.error("[重传帧不存在] 连接ID:{} 数据ID:{} 序列号:{}",
-                    getConnectionId(), getDataId(), sequence);
-            return;
-        }
-
-        // 4. 累加重传次数（先加后用）
-        int currentCount = count.incrementAndGet();
-        log.info("[开始重传] 连接ID:{} 数据ID:{} 序列号:{} 重传次数:{}",
-                getConnectionId(), getDataId(), sequence, currentCount);
-
-        // 5. 重新启动重传定时器并发送帧
-        startFrameRetransmitTimer(sequence);
-        sendFrame(frame);
-    }
-
 
     /**
      * 处理发送失败
@@ -291,23 +202,10 @@ public class SendQuicData extends QuicData {
             globalTimeout.cancel();
             globalTimeout = null;
         }
-        // 取消所有单帧重传定时器
-        retransmitTimers.values().forEach(Timeout::cancel);
-        retransmitTimers.clear();
-        retransmitCounts.clear();
+
     }
 
 
-    /**
-     * 取消单个重传定时器
-     */
-    private void cancelRetransmitTimer(int sequence) {
-        Timeout timeout = retransmitTimers.remove(sequence);
-        if (timeout != null) {
-            timeout.cancel();
-        }
-        //retransmitCounts.remove(sequence);
-    }
 
 
     public void onAckReceived(int sequence) {
@@ -315,8 +213,6 @@ public class SendQuicData extends QuicData {
         if (ackedSequences.add(sequence)) {
             log.debug("[ACK处理] 连接ID:{} 数据ID:{} 序列号:{} 已确认，取消重传定时器",
                     getConnectionId(), getDataId(), sequence);
-            // 取消该序列号的重传定时器
-            cancelRetransmitTimer(sequence);
 
             // 检查是否所有帧都已确认
             if (ackedSequences.size() == getTotal()) {

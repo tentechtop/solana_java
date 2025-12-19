@@ -36,7 +36,7 @@ public class QuicConstants {
     public static SnowflakeIdGenerator generator = new SnowflakeIdGenerator();
 
     //单帧载荷
-    public static final int MAX_FRAME_PAYLOAD = 1280;
+    public static final int MAX_FRAME_PAYLOAD = 1024;
 
     // 全局超时时间
     public static final long GLOBAL_TIMEOUT_MS = 2000;

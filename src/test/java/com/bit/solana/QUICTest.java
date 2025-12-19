@@ -15,10 +15,6 @@ public class QUICTest {
 
 
 
-        peerClient.init(); // 手动调用 init
-
-
-
 
     }
 

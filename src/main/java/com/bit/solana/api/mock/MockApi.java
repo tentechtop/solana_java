@@ -35,7 +35,7 @@ public class MockApi {
         QuicConnection firstConnection = getFirstConnection();
         if (firstConnection != null){
             // 1. 生成2048字节的测试数据（核心修改点）
-            int targetLength = 1024 * 1024 *5;
+            int targetLength = 1024 * 1024 * 9;
             byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
             // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
             // 每个字节填充为字符'a'的ASCII码

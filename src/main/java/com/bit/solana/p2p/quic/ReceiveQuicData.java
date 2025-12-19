@@ -53,6 +53,12 @@ public class ReceiveQuicData extends QuicData {
 
         ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
         ackFrame.encode(buf);
+
+/*        long l = System.currentTimeMillis();
+        //是否偶数 偶数就回复
+        if (sequence % 2 == 0) {
+
+        }*/
         DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
         Global_Channel.writeAndFlush(packet);
         ackFrame.release();
