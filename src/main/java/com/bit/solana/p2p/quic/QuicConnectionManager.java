@@ -144,7 +144,12 @@ public class QuicConnectionManager {
         reqQuicFrame.setDataId(dataId);
         reqQuicFrame.setTotal(0);
         reqQuicFrame.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
+
+        //连接包 包含节点ID 加密公钥
+
         byte[] peerIdBytes = hexToBytes(peerId);
+
+
         reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+peerIdBytes.length);
         reqQuicFrame.setPayload(peerIdBytes);//携带节点ID 这样被连接的节点就能立马让P2P节点上线
         reqQuicFrame.setRemoteAddress(remoteAddress);
