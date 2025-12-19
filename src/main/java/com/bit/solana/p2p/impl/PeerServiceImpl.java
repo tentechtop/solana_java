@@ -129,7 +129,7 @@ public class PeerServiceImpl implements PeerService {
             bootstrap.group(eventLoopGroup)
                     .channel(NioDatagramChannel.class) // UDP通道类型
                     .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 池化内存分配（减少GC）
-                    .option(ChannelOption.SO_RCVBUF, 64*1024*1024) // 接收缓冲区
+                    .option(ChannelOption.SO_RCVBUF, 1024*1024*1024) // 接收缓冲区
                     .option(ChannelOption.SO_REUSEADDR, true) // 允许端口复用（多线程共享端口）
                     .option(ChannelOption.SO_BROADCAST, true) // 支持广播（按需开启）
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000) // UDP无连接，超时设短（30秒）

@@ -34,7 +34,6 @@ public class QuicConstants {
 
     //单帧载荷
     public static final int MAX_FRAME_PAYLOAD = 1024;
-
     // 全局超时时间
     public static final long GLOBAL_TIMEOUT_MS = 2000;
     // 单帧重传间隔
