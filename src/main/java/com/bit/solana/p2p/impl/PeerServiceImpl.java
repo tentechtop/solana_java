@@ -152,7 +152,7 @@ public class PeerServiceImpl implements PeerService {
 
             if (commonConfig.getSelf().getPort()==8333){
                 InetSocketAddress targetAddr = new InetSocketAddress("127.0.0.1", 8334);
-                QuicConnection quicConnection = connectRemote(targetAddr);
+                QuicConnection quicConnection = connectRemote("BJfacYs27FRthbjxKaEHrJRbnd8kMyfSRReg7qunstkh",targetAddr);
                 if (quicConnection == null){
                     log.info("连接失败");
                 }else {

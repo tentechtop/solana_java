@@ -4,6 +4,7 @@ import com.bit.solana.database.DataBase;
 import com.bit.solana.database.rocksDb.TableEnum;
 import com.bit.solana.p2p.impl.QuicNodeWrapper;
 import com.bit.solana.p2p.peer.Peer;
+import com.bit.solana.p2p.quic.QuicMsg;
 import com.bit.solana.structure.key.KeyInfo;
 import com.bit.solana.util.SolanaEd25519Signer;
 import jakarta.annotation.PostConstruct;
@@ -103,17 +104,6 @@ public class CommonConfig {
     });
 
 
-    /**
-     * 节点连接缓存 节点ID -> 节点的连接
-     */
-    public static Cache<String, QuicNodeWrapper> PEER_CONNECT_CACHE  = Caffeine.newBuilder()
-            .maximumSize(10000)
-            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
-            .recordStats()
-            .build();
-
-
-
     //已经连接且握手  节点心跳15秒一次 60秒过期
     public static Cache<String, Peer> ONLINE_PEER_CACHE  = Caffeine.newBuilder()
             .maximumSize(5120)//256位 * 20每个桶的大小
@@ -126,7 +116,7 @@ public class CommonConfig {
      * Key：请求ID，Value：响应Future
      * 16字节的UUIDV7 - > CompletableFuture<byte[]>
      */
-    public static Cache<String, CompletableFuture<byte[]>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+    public static Cache<String, CompletableFuture<QuicMsg>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(30, TimeUnit.SECONDS)
             .weakValues() // 弱引用存储Future，GC时可回收
@@ -159,12 +149,7 @@ public class CommonConfig {
         GLOBAL_SCHEDULER.shutdown();
         log.info("关闭全局调度器");
 
-        //关闭所有的连接
-        for (QuicNodeWrapper node : PEER_CONNECT_CACHE.asMap().values()) {
-            node.close();
-        }
-        //清空所有的缓存
-        PEER_CONNECT_CACHE.invalidateAll();
+
         RESPONSE_FUTURECACHE.invalidateAll();
         RECONNECT_COUNTER.invalidateAll();
         MESSAGE_CACHE.invalidateAll();

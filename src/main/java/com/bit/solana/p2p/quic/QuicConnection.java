@@ -16,21 +16,23 @@ import org.checkerframework.checker.nullness.qual.PolyNull;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
-import static com.bit.solana.p2p.quic.QuicConnectionManager.sendFrame;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.*;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 import static com.bit.solana.p2p.quic.SendQuicData.buildFromFullData;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 
 @Slf4j
 @Data
 public class QuicConnection {
+    private String peerId;// 节点ID
     private long connectionId;// 连接ID
     private Channel tcpChannel;// TCP通道
     private boolean isUDP = true;//默认使用可靠UDP
@@ -227,9 +229,12 @@ public class QuicConnection {
         // 4. 清空成员变量引用（辅助GC，减少引用链）
         remoteAddress = null;
 
-        // 5. 清理业务缓存中的引用（关键！如果有其他缓存持有该连接的关联数据）
-        // 比如ReceiveMap中如果有该连接的dataId映射，需同步清理
 
+        //清除所有正在发送的数据
+        deleteAllSendDataByConnectId(connectionId);
+        deleteAllReceiveDataByConnectId(connectionId);
+        //下线节点连接
+        removePeerConnect(peerId,connectionId);
     }
 
 
@@ -341,7 +346,7 @@ public class QuicConnection {
 
     private void handlePongFrame( QuicFrame quicFrame) {
         log.debug("处理PONG帧{}",quicFrame);
-        CompletableFuture<Object> ifPresent = RESPONSE_FUTURECACHE.asMap().remove(quicFrame.getDataId());
+        CompletableFuture<Object> ifPresent = QUIC_RESPONSE_FUTURECACHE.asMap().remove(quicFrame.getDataId());
         if (ifPresent != null) {
             ifPresent.complete(quicFrame);
         }
@@ -354,6 +359,8 @@ public class QuicConnection {
             long conId = quicFrame.getConnectionId();
             //发送连接响应帧
             long dataId = quicFrame.getDataId();
+            byte[] payload = quicFrame.getPayload();
+            String peerId = bytesToHex(payload);
             acquire.setConnectionId(conId);//生成连接ID
             acquire.setDataId(dataId);
             acquire.setTotal(1);
@@ -368,6 +375,8 @@ public class QuicConnection {
                     log.error("[连接响应发送失败] 节点ID:{}", conId, future.cause());
                 } else {
                     log.debug("[连接响应发送成功] 节点ID:{}", conId);
+                    //将该节点上线
+                    addPeerConnect(peerId,conId);
                 }
             });
         }finally {
@@ -379,7 +388,7 @@ public class QuicConnection {
     private void handleConnectResponseFrame(QuicFrame quicFrame) {
         log.info("处理连接响应{}",quicFrame);
         //核销掉这个数据
-        CompletableFuture<Object> ifPresent = RESPONSE_FUTURECACHE.asMap().remove(quicFrame.getDataId());
+        CompletableFuture<Object> ifPresent = QUIC_RESPONSE_FUTURECACHE.asMap().remove(quicFrame.getDataId());
         if (ifPresent != null) {
             ifPresent.complete(quicFrame);
         }

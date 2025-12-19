@@ -22,4 +22,8 @@ import static com.bit.solana.util.ByteUtils.bytesToHex;
 public class QuicNodeWrapper {
     private byte[] nodeId; // 节点ID 公钥的base58编码
     private QuicConnection quicConnection;
+
+    public void close() {
+
+    }
 }

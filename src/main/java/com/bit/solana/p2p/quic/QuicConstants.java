@@ -22,14 +22,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class QuicConstants {
 
     //将完整的二进制数据放在缓存中 等待消费者消费 一次全部取走
-    private static final BlockingQueue<byte[]> MSG_QUEUE = new LinkedBlockingQueue<>(10000);
+    private static final BlockingQueue<QuicMsg> MSG_QUEUE = new LinkedBlockingQueue<>(10000);
 
     /**
      * 推送完整Quic消息到静态队列（非阻塞，避免阻塞Netty IO线程）
      * @param msg 完整消息体
      * @return 是否推送成功
      */
-    public static boolean pushCompleteMsg(byte[] msg) {
+    public static boolean pushCompleteMsg(QuicMsg msg) {
         try {
             // 非阻塞推送：队列满时等待100ms，仍失败则返回false
             boolean success = MSG_QUEUE.offer(msg, 100, TimeUnit.MILLISECONDS);
@@ -48,13 +48,13 @@ public class QuicConstants {
     /**
      * 阻塞取消息：无数据则挂起，有数据立即返回（核心，CPU≈0消耗）
      */
-    public static byte[] takeMsg() throws InterruptedException {
+    public static QuicMsg takeMsg() throws InterruptedException {
         return MSG_QUEUE.take();
     }
     /**
      * 带超时的取消息：避免永久阻塞（可选）
      */
-    public static byte[] pollMsg(long timeout, TimeUnit unit) throws InterruptedException {
+    public static QuicMsg pollMsg(long timeout, TimeUnit unit) throws InterruptedException {
         return MSG_QUEUE.poll(timeout, unit);
     }
 
@@ -67,8 +67,8 @@ public class QuicConstants {
      * 原子性批量提取队列中所有可用消息（非阻塞，线程安全）
      * @return 消息列表（队列为空时返回空列表）
      */
-    public static List<byte[]> drainAllMsg() {
-        List<byte[]> msgList = new ArrayList<>();
+    public static List<QuicMsg> drainAllMsg() {
+        List<QuicMsg> msgList = new ArrayList<>();
         // drainTo：原子性将队列中所有元素移到集合，返回移走的数量
         MSG_QUEUE.drainTo(msgList);
         return msgList;
@@ -81,7 +81,7 @@ public class QuicConstants {
      * 请求响应Future缓存：最大容量100万个，30秒过期（请求超时后自动清理，避免内存泄漏）
      * 标志->CompletableFuture
      */
-    public static Cache<Long, CompletableFuture<Object>> RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
+    public static Cache<Long, CompletableFuture<Object>> QUIC_RESPONSE_FUTURECACHE  = Caffeine.newBuilder()
             .maximumSize(1000_000)
             .expireAfterWrite(5, TimeUnit.SECONDS)
             .weakValues() // 弱引用存储Future，GC时可回收

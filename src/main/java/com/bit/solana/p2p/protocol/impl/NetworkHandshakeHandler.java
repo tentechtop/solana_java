@@ -50,7 +50,6 @@ public class NetworkHandshakeHandler implements ProtocolHandler.ResultProtocolHa
         log.info("共享加密密钥对sharedSecret: {}", bytesToHex(sharedSecret));
 
 
-
         NetworkHandshake networkHandshake = new NetworkHandshake();
         networkHandshake.setNodeId(commonConfig.getSelf().getId());
         networkHandshake.setSharedSecret(bPublicKey);

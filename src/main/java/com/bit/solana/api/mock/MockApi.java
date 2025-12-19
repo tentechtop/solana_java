@@ -61,8 +61,6 @@ public class MockApi {
         PublicKey publicKey = keyPair.getPublic();
 
 
-
-
         return Result.OK();
     }
 

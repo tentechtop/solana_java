@@ -2,6 +2,8 @@ package com.bit.solana.p2p.quic;
 
 
 import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolHandler;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.buffer.ByteBuf;
@@ -15,12 +17,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
+import static com.bit.solana.util.ByteUtils.hexToBytes;
 
 
 /**
@@ -28,6 +33,70 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
  */
 @Slf4j
 public class QuicConnectionManager {
+
+    //节点ID - > 连接ID
+    public static final Map<String, Set<Long>> PeerConnect = new ConcurrentHashMap<>();
+
+
+
+    //给节点添加一个连接
+    public static void addPeerConnect(String peerId, long connectionId) {
+        if (!PeerConnect.containsKey(peerId)){
+            ConcurrentSkipListSet<Long> longs = new ConcurrentSkipListSet<>();
+            longs.add(connectionId);
+            PeerConnect.put(peerId, longs);
+        }else {
+            Set<Long> longs = PeerConnect.get(peerId);
+            longs.add(connectionId);
+            PeerConnect.put(peerId, longs);
+        }
+    }
+
+    //删除节点的连接
+    public static void removePeerConnect(String peerId, long connectionId) {
+        if (PeerConnect.containsKey(peerId)){
+            Set<Long> longs = PeerConnect.get(peerId);
+            longs.remove(connectionId);
+        }
+    }
+
+
+    //获取在线的节点 在线节点至少有一个有效的连接
+
+    /**
+     * 获取在线的节点列表
+     * 在线节点定义：至少有一个有效的连接（未过期、非失效、有心跳）
+     *
+     * @return 在线节点ID集合
+     */
+    public static Set<String> getOnlinePeerIds() {
+        Set<String> onlinePeers = new HashSet<>();
+
+        // 遍历所有节点的连接映射
+        for (Map.Entry<String, Set<Long>> entry : PeerConnect.entrySet()) {
+            String peerId = entry.getKey();
+            Set<Long> connectionIds = entry.getValue();
+
+            // 检查该节点是否有至少一个有效连接
+            boolean hasValidConnection = connectionIds.stream()
+                    .anyMatch(connId -> {
+                        QuicConnection connection = getConnection(connId);
+                        return isConnectionValid(connection);
+                    });
+
+            if (hasValidConnection) {
+                onlinePeers.add(peerId);
+            }
+        }
+
+        log.info("[获取在线节点] 共找到{}个在线节点，节点列表：{}", onlinePeers.size(), onlinePeers);
+        return onlinePeers;
+    }
+
+    private static boolean isConnectionValid(QuicConnection connection) {
+        //连接不为空 不过期
+        return connection != null && !connection.isExpired();
+    }
 
 
     public static DatagramChannel Global_Channel = null;// UDP通道
@@ -43,7 +112,8 @@ public class QuicConnectionManager {
      * 与指定的节点建立连接
      * 为该连接建立心跳任务
      */
-    public static QuicConnection connectRemote(InetSocketAddress remoteAddress) throws ExecutionException, InterruptedException, TimeoutException {
+    public static QuicConnection connectRemote(String peerId,InetSocketAddress remoteAddress)
+            throws ExecutionException, InterruptedException, TimeoutException {
         // 1. 参数校验
         if (remoteAddress == null) {
             log.error("远程地址不能为空");
@@ -58,14 +128,16 @@ public class QuicConnectionManager {
         reqQuicFrame.setDataId(dataId);
         reqQuicFrame.setTotal(0);
         reqQuicFrame.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
-        reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
-        reqQuicFrame.setPayload(null);
+        byte[] peerIdBytes = hexToBytes(peerId);
+        reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+peerIdBytes.length);
+        reqQuicFrame.setPayload(peerIdBytes);//携带节点ID 这样被连接的节点就能立马让P2P节点上线
         reqQuicFrame.setRemoteAddress(remoteAddress);
         QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
         log.info("响应帧{}",resQuicFrame);
         reqQuicFrame.release();
         if (resQuicFrame != null){
             QuicConnection connection = getConnection(conId);
+            connection.setPeerId(peerId);
             connection.stopHeartbeat();
             connection.setUDP(true);
             connection.setOutbound(true);
@@ -73,6 +145,7 @@ public class QuicConnectionManager {
             connection.setLastSeen(System.currentTimeMillis());
             connection.startHeartbeat();
             addConnection(conId, connection);
+            addPeerConnect(peerId,conId);
             resQuicFrame.release();
             return connection;
         }
@@ -127,7 +200,6 @@ public class QuicConnectionManager {
         QuicConnection removed = CONNECTION_MAP.asMap().remove(connectionId);
         if (removed != null) {
             log.info("[连接移除] 连接ID:{}", connectionId);
-
         }
     }
 
@@ -190,7 +262,7 @@ public class QuicConnectionManager {
 
         long dataId = quicFrame.getDataId();
         CompletableFuture<Object> responseFuture = new CompletableFuture<>();
-        RESPONSE_FUTURECACHE.put(dataId, responseFuture);
+        QUIC_RESPONSE_FUTURECACHE.put(dataId, responseFuture);
 
         // 2. 网络错误重试循环（外层：处理端到端无响应）
         for (int netRetry = 0; netRetry < NET_RETRY_MAX; netRetry++) {
@@ -203,7 +275,7 @@ public class QuicConnectionManager {
             if (!localSendSuccess) {
                 log.error("[请求] 连接ID:{} 远程地址:{} 本地发送重试{}次失败，终止网络重试",
                         connectionId, remoteAddress, LOCAL_RETRY_MAX);
-                RESPONSE_FUTURECACHE.asMap().remove(dataId);
+                QUIC_RESPONSE_FUTURECACHE.asMap().remove(dataId);
                 break;
             }
 
@@ -216,14 +288,14 @@ public class QuicConnectionManager {
                     log.debug("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试成功，收到响应",
                             connectionId, remoteAddress, netRetry );
                     // 清理缓存，返回响应帧
-                    RESPONSE_FUTURECACHE.asMap().remove(dataId);
+                    QUIC_RESPONSE_FUTURECACHE.asMap().remove(dataId);
                     return responseFrame;
                 }
             } catch (Exception e) {
                 // 响应超时/异常 → 网络错误，准备下一次重试
                 log.warn("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试超时（{}ms），原因：{}",
                         connectionId, remoteAddress, netRetry + 1, RESPONSE_TIMEOUT, e.getMessage());
-                RESPONSE_FUTURECACHE.asMap().remove(dataId);
+                QUIC_RESPONSE_FUTURECACHE.asMap().remove(dataId);
 
                 // 非最后一次网络重试 → 等待间隔后重试
                 if (netRetry < NET_RETRY_MAX - 1) {

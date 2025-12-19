@@ -156,7 +156,11 @@ public class ReceiveQuicData extends QuicData {
         log.info("完整数据长度{} 数据ID{}",combinedFullData.length,getDataId());
 
         //处理数据
-        pushCompleteMsg(combinedFullData);
+        QuicMsg quicMsg = new QuicMsg();
+        quicMsg.setConnectionId(getConnectionId());
+        quicMsg.setDataId(getDataId());
+        quicMsg.setData(combinedFullData);
+        pushCompleteMsg(quicMsg);
 
         R_CACHE.put(getDataId(),System.currentTimeMillis());
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());

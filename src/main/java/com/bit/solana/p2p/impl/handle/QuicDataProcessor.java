@@ -1,19 +1,41 @@
 package com.bit.solana.p2p.impl.handle;
 
+import com.bit.solana.p2p.impl.QuicNodeWrapper;
+import com.bit.solana.p2p.protocol.P2PMessage;
+import com.bit.solana.p2p.protocol.ProtocolEnum;
+import com.bit.solana.p2p.protocol.ProtocolHandler;
+import com.bit.solana.p2p.protocol.ProtocolRegistry;
+import com.bit.solana.p2p.quic.QuicConnection;
 import com.bit.solana.p2p.quic.QuicConstants;
+import com.bit.solana.p2p.quic.QuicMsg;
+import com.google.protobuf.InvalidProtocolBufferException;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
+
+import static com.bit.solana.config.CommonConfig.RESPONSE_FUTURECACHE;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.PeerConnect;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.getConnection;
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 @Component
 @Slf4j
 public class QuicDataProcessor {
+
+    @Autowired
+    private ProtocolRegistry protocolRegistry;
+
     // 消费线程池
     private ExecutorService consumerExecutor;
 
@@ -58,14 +80,14 @@ public class QuicDataProcessor {
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 // 1. 阻塞等待至少1条消息（无消息时挂起，不浪费CPU）
-                byte[] firstMsg = QuicConstants.takeMsg();
+                QuicMsg firstMsg = QuicConstants.takeMsg();
                 log.debug("获取到首条消息，开始批量提取剩余消息");
 
                 // 2. 批量提取队列中所有剩余消息（原子操作，非阻塞）
-                List<byte[]> remainingMsgs = QuicConstants.drainAllMsg();
+                List<QuicMsg> remainingMsgs = QuicConstants.drainAllMsg();
 
                 // 3. 合并首条+剩余消息，形成完整批量列表
-                List<byte[]> batchMsgs = new ArrayList<>(remainingMsgs.size() + 1);
+                List<QuicMsg> batchMsgs = new ArrayList<>(remainingMsgs.size() + 1);
                 batchMsgs.add(firstMsg);
                 batchMsgs.addAll(remainingMsgs);
 
@@ -75,7 +97,7 @@ public class QuicDataProcessor {
 
             } catch (InterruptedException e) {
                 // 线程被中断，优雅退出循环
-                log.warn("消费线程被中断，准备退出", e);
+                log.info("消费线程被中断，准备退出");
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
@@ -89,16 +111,16 @@ public class QuicDataProcessor {
      * 批量处理消息（核心业务逻辑，根据实际需求修改）
      * @param batchMsgs 批量消息列表（至少1条）
      */
-    private void processBatch(List<byte[]> batchMsgs) {
+    private void processBatch(List<QuicMsg> batchMsgs) {
         // 示例：遍历处理每条消息（可替换为批量入库、批量转发等）
         for (int i = 0; i < batchMsgs.size(); i++) {
-            byte[] msg = batchMsgs.get(i);
+            QuicMsg msg = batchMsgs.get(i);
             try {
                 // 处理单条消息（解析、校验、业务处理等）
                 processSingleMsg(msg, i + 1);
             } catch (Exception e) {
                 // 单条消息失败不影响整体，仅记录日志
-                log.error("处理第{}条消息失败（长度：{}字节）", i + 1, msg.length, e);
+                log.error("处理第{}条消息失败（长度：{}字节）", i + 1, msg.getData().length, e);
             }
         }
     }
@@ -108,20 +130,51 @@ public class QuicDataProcessor {
      * @param msg 单条Quic消息
      * @param index 批量中的序号（便于排查问题）
      */
-    private void processSingleMsg(byte[] msg, int index) {
-        // 示例逻辑：打印消息长度（实际场景：解析Protobuf/JSON、写入DB、调用RPC等）
-        log.info("处理第{}条消息，字节长度：{}", index, msg.length);
+    private void processSingleMsg(QuicMsg msg, int index) {
+        try {
+            // 示例逻辑：打印消息长度（实际场景：解析Protobuf/JSON、写入DB、调用RPC等）
+            log.info("处理第{}条消息，字节长度：{}", index, msg.getData().length);
 
-        // TODO 替换为真实业务逻辑：
-        // 1. 解析二进制消息（如protobuf反序列化）
-        // 2. 业务校验（如签名、长度校验）
-        // 3. 数据入库/转发/计算等
+            // TODO 替换为真实业务逻辑：
+            // 1. 解析二进制消息（如protobuf反序列化）
+            // 2. 业务校验（如签名、长度校验）
+            // 3. 数据入库/转发/计算等
 
-        //回复节点  通过节点ID找到连接 并发送信息  将消息分发到对应的处理器处理即可 处理器如果有返回值 就调用协议返回即可
+            //回复节点  通过节点ID找到连接 并发送信息  将消息分发到对应的处理器处理即可 处理器如果有返回值 就调用协议返回即可
 
-
-
-
+            P2PMessage deserialize = P2PMessage.deserialize(msg.getData());
+            if (deserialize.isRequest()) {
+                log.info("收到请求: {}", deserialize);
+                Map<ProtocolEnum, ProtocolHandler> handlerMap = protocolRegistry.getHandlerMap();
+                ProtocolHandler protocolHandler = handlerMap.get(ProtocolEnum.fromCode(deserialize.getType()));
+                if (protocolHandler != null){
+                    byte[] handle = protocolHandler.handle(deserialize);
+                    if (handle != null){
+                        //用原来的流写回
+                        //包装型 ByteBuf 无需释放的底层逻辑
+                        //Unpooled.wrappedBuffer(handle) 创建的 UnpooledHeapByteBuf 有两个关键特性：
+                        //零拷贝：缓冲区不持有新内存，只是对外部 handle 字节数组的 “视图”；
+                        //引用计数无意义：其 release() 方法仅修改引用计数，但不会释放任何内存（因为内存是外部的 byte[]，由 JVM 垃圾回收管理）。
+                        QuicConnection connection = getConnection(msg.getConnectionId());
+                        connection.sendData(handle);
+                    }
+                }else {
+                    log.info("未注册的协议：{}", deserialize.getType());
+                }
+            }else if (deserialize.isResponse()) {
+                log.info("收到响应: {}", deserialize);
+                CompletableFuture<QuicMsg> ifPresent = RESPONSE_FUTURECACHE.asMap().remove(bytesToHex(deserialize.getRequestId()));
+                if (ifPresent != null) {
+                    ifPresent.complete(msg);
+                }
+            }else {
+                log.info("收到普通消息: {}", deserialize);
+            }
+        }catch (InvalidProtocolBufferException e){
+            log.error("解析失败");
+        }catch (Exception e){
+            log.error("处理第{}条消息失败（长度：{}字节）", index, msg.getData().length, e);
+        }
     }
 
     /**
@@ -148,7 +201,7 @@ public class QuicDataProcessor {
     }
 
     // ========== 可选：对外提供手动批量提取方法（供监控/测试） ==========
-    public List<byte[]> manualDrainAll() {
+    public List<QuicMsg> manualDrainAll() {
         return QuicConstants.drainAllMsg();
     }
 }
