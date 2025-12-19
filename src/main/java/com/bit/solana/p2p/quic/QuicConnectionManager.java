@@ -1,4 +1,4 @@
-package com.bit.solana.quic;
+package com.bit.solana.p2p.quic;
 
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -17,7 +17,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
-import static com.bit.solana.quic.QuicConstants.*;
+import static com.bit.solana.p2p.quic.QuicConstants.*;
+
 
 /**
  * 连接管理器（全局连接池）
@@ -57,6 +58,7 @@ public class QuicConnectionManager {
         reqQuicFrame.setRemoteAddress(remoteAddress);
         QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
         log.info("响应帧{}",resQuicFrame);
+        reqQuicFrame.release();
         if (resQuicFrame != null){
             QuicConnection connection = getConnection(conId);
             connection.stopHeartbeat();
@@ -172,73 +174,69 @@ public class QuicConnectionManager {
      * 本地错误：20ms重试1次，最多3次；网络错误：100ms重试1次，最多3次；失败返回null
      */
     public static QuicFrame sendFrame(QuicFrame quicFrame) {
-        try {
-            // 1. 基础参数定义
-            final int LOCAL_RETRY_MAX = 3;    // 本地错误最大重试次数
-            final long LOCAL_RETRY_INTERVAL = 20; // 本地重试间隔（ms）
-            final int NET_RETRY_MAX = 2;      // 网络错误最大重试次数
-            final long NET_RETRY_INTERVAL = 50;  // 网络重试间隔（ms）
-            final long RESPONSE_TIMEOUT = 150;   // 单次响应等待超时（ms）
-            InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
-            long connectionId = quicFrame.getConnectionId();
+        // 1. 基础参数定义
+        final int LOCAL_RETRY_MAX = 3;    // 本地错误最大重试次数
+        final long LOCAL_RETRY_INTERVAL = 20; // 本地重试间隔（ms）
+        final int NET_RETRY_MAX = 2;      // 网络错误最大重试次数
+        final long NET_RETRY_INTERVAL = 50;  // 网络重试间隔（ms）
+        final long RESPONSE_TIMEOUT = 150;   // 单次响应等待超时（ms）
+        InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
+        long connectionId = quicFrame.getConnectionId();
 
-            long dataId = quicFrame.getDataId();
-            CompletableFuture<Object> responseFuture = new CompletableFuture<>();
-            RESPONSE_FUTURECACHE.put(dataId, responseFuture);
+        long dataId = quicFrame.getDataId();
+        CompletableFuture<Object> responseFuture = new CompletableFuture<>();
+        RESPONSE_FUTURECACHE.put(dataId, responseFuture);
 
-            // 2. 网络错误重试循环（外层：处理端到端无响应）
-            for (int netRetry = 0; netRetry < NET_RETRY_MAX; netRetry++) {
-                // 每次网络重试生成新的dataId（避免旧响应干扰）
+        // 2. 网络错误重试循环（外层：处理端到端无响应）
+        for (int netRetry = 0; netRetry < NET_RETRY_MAX; netRetry++) {
+            // 每次网络重试生成新的dataId（避免旧响应干扰）
 
-                // 3. 本地错误重试（内层：确保数据能发出去）
-                AtomicInteger localRetryCount = new AtomicInteger(0);
-                boolean localSendSuccess = sendWithLocalRetry(quicFrame, localRetryCount, LOCAL_RETRY_MAX, LOCAL_RETRY_INTERVAL);
+            // 3. 本地错误重试（内层：确保数据能发出去）
+            AtomicInteger localRetryCount = new AtomicInteger(0);
+            boolean localSendSuccess = sendWithLocalRetry(quicFrame, localRetryCount, LOCAL_RETRY_MAX, LOCAL_RETRY_INTERVAL);
 
-                if (!localSendSuccess) {
-                    log.error("[请求] 连接ID:{} 远程地址:{} 本地发送重试{}次失败，终止网络重试",
-                            connectionId, remoteAddress, LOCAL_RETRY_MAX);
+            if (!localSendSuccess) {
+                log.error("[请求] 连接ID:{} 远程地址:{} 本地发送重试{}次失败，终止网络重试",
+                        connectionId, remoteAddress, LOCAL_RETRY_MAX);
+                RESPONSE_FUTURECACHE.asMap().remove(dataId);
+                break;
+            }
+
+
+            // 4. 本地发送成功，等待响应（判定网络错误）
+            try {
+                // 等待响应，超时则触发下一次网络重试
+                Object result = responseFuture.get(RESPONSE_TIMEOUT, TimeUnit.MILLISECONDS);
+                if (result instanceof QuicFrame responseFrame) {
+                    log.debug("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试成功，收到响应",
+                            connectionId, remoteAddress, netRetry );
+                    // 清理缓存，返回响应帧
                     RESPONSE_FUTURECACHE.asMap().remove(dataId);
-                    break;
+                    return responseFrame;
                 }
+            } catch (Exception e) {
+                // 响应超时/异常 → 网络错误，准备下一次重试
+                log.warn("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试超时（{}ms），原因：{}",
+                        connectionId, remoteAddress, netRetry + 1, RESPONSE_TIMEOUT, e.getMessage());
+                RESPONSE_FUTURECACHE.asMap().remove(dataId);
 
-
-                // 4. 本地发送成功，等待响应（判定网络错误）
-                try {
-                    // 等待响应，超时则触发下一次网络重试
-                    Object result = responseFuture.get(RESPONSE_TIMEOUT, TimeUnit.MILLISECONDS);
-                    if (result instanceof QuicFrame responseFrame) {
-                        log.debug("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试成功，收到响应",
-                                connectionId, remoteAddress, netRetry );
-                        // 清理缓存，返回响应帧
-                        RESPONSE_FUTURECACHE.asMap().remove(dataId);
-                        return responseFrame;
-                    }
-                } catch (Exception e) {
-                    // 响应超时/异常 → 网络错误，准备下一次重试
-                    log.warn("[请求] 连接ID:{} 远程地址:{} 第{}次网络重试超时（{}ms），原因：{}",
-                            connectionId, remoteAddress, netRetry + 1, RESPONSE_TIMEOUT, e.getMessage());
-                    RESPONSE_FUTURECACHE.asMap().remove(dataId);
-
-                    // 非最后一次网络重试 → 等待间隔后重试
-                    if (netRetry < NET_RETRY_MAX - 1) {
-                        try {
-                            TimeUnit.MILLISECONDS.sleep(NET_RETRY_INTERVAL);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            log.error("[请求] 网络重试间隔被中断", ie);
-                            break;
-                        }
+                // 非最后一次网络重试 → 等待间隔后重试
+                if (netRetry < NET_RETRY_MAX - 1) {
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(NET_RETRY_INTERVAL);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.error("[请求] 网络重试间隔被中断", ie);
+                        break;
                     }
                 }
             }
-
-            // 所有重试耗尽，返回null
-            log.error("[请求] 连接ID:{} 远程地址:{} 本地/网络重试均失败，返回null",
-                    quicFrame.getConnectionId(), remoteAddress);
-            return null;
-        }finally {
-            quicFrame.release();
         }
+
+        // 所有重试耗尽，返回null
+        log.error("[请求] 连接ID:{} 远程地址:{} 本地/网络重试均失败，返回null",
+                quicFrame.getConnectionId(), remoteAddress);
+        return null;
     }
 
     /**
@@ -294,19 +292,6 @@ public class QuicConnectionManager {
             return sendWithLocalRetry(frame, retryCount, maxRetry, interval);
         }
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

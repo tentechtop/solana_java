@@ -1,4 +1,4 @@
-package com.bit.solana.quic;
+package com.bit.solana.p2p.quic;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -19,28 +19,26 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.bit.solana.quic.QuicConnectionManager.*;
-import static com.bit.solana.quic.QuicConstants.*;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
+import static com.bit.solana.p2p.quic.QuicConstants.*;
+
 
 @Slf4j
 @Data
 public class ReceiveQuicData extends QuicData {
+    //是否完成接收
+    private volatile boolean isComplete = false;
+
     // 已经接收到的帧序列号
     private final Set<Integer> receivedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 
-
     // 全局定时器
     private volatile Timeout globalTimeout;
-    // 单帧重传定时器（序列号→定时器）
-    private final ConcurrentHashMap<Integer, Timeout> retransmitTimers = new ConcurrentHashMap<>();
-    // 单帧重传次数（序列号→次数）
-    private final ConcurrentHashMap<Integer, AtomicInteger> retransmitCounts = new ConcurrentHashMap<>();
     // 传输完成回调
     private Runnable successCallback;
     // 传输失败回调
     private Runnable failCallback;
-
 
 
 
@@ -51,37 +49,20 @@ public class ReceiveQuicData extends QuicData {
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
         InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
-        // ========== 边界校验 ==========
-        if (sequence < 0 || sequence >= total) {
-            log.error("[非法帧] 连接ID:{} 数据ID:{} 序列号{}超出范围[0,{}]，拒绝处理",
-                    connectionId, dataId, sequence, total - 1);
-            //丢弃不处理
-            return;
-        }
-
         QuicFrame ackFrame = buildAckFrame(quicFrame);
-        //异步赶紧回复ACK
+
         ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
         ackFrame.encode(buf);
         DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-        Global_Channel.writeAndFlush(packet).addListener(future -> {
-            ackFrame.release();
-        });
+        Global_Channel.writeAndFlush(packet);
+        ackFrame.release();
 
         // ========== 重复帧处理 ==========
         if (receivedSequences.contains(sequence)) {
-            log.info("[重复帧] 连接ID:{} 数据ID:{} 序列号:{} 总帧数:{}，直接回复ACK",
+            log.debug("[重复帧] 连接ID:{} 数据ID:{} 序列号:{} 总帧数:{}，直接回复ACK",
                     connectionId, dataId, sequence, total);
-            // 构建ACK帧（标记为已接收）
-            // 取消该帧的重传定时器（如果存在）
-            cancelRetransmitTimer(sequence);
-            //释放帧
-            quicFrame.release();
             return;
         }
-
-        // ========== 非重复帧处理 ==========
-        // 1. 初始化帧数组（首次接收时）
         if (getFrameArray() == null) {
             setFrameArray(new QuicFrame[total]);
             setTotal(total);
@@ -92,24 +73,17 @@ public class ReceiveQuicData extends QuicData {
             startGlobalTimeoutTimer();
         }
 
-        //克隆一份给到
-        QuicFrame clone = quicFrame.clone();
-        // 存储帧并更新计数
-        getFrameArray()[sequence] = clone;
+        getFrameArray()[sequence] = quicFrame;
         receivedSequences.add(sequence);
         log.debug("[接收帧] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
                 connectionId, dataId, sequence, receivedSequences.size(), total);
 
-        // ========== 完整性校验 & 重传处理 ==========
         if (receivedSequences.size() == total) {
             log.info("所有帧接收完成");
             // 所有帧接收完成
             handleDataComplete();
         }
-        quicFrame.release();
     }
-
-
 
 
     private void startGlobalTimeoutTimer() {
@@ -127,9 +101,32 @@ public class ReceiveQuicData extends QuicData {
                         handleDataFailure();
                     }
                 }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
-                log.info("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
+                log.debug("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
                         getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
             }
+        }
+    }
+
+
+
+    private void handleDataComplete() {
+        if (isComplete()){
+            log.info("已经完成数据交付");
+            return;
+        }
+        setComplete(true);
+        cancelAllRetransmitTimers();
+        byte[] combinedFullData = getCombinedFullData();
+        if (combinedFullData == null) { // 增加非空校验，避免空指针
+            log.error("组合完整数据失败，无法处理");
+            return;
+        }
+        //交付完整数据到下一个处理器
+        log.info("完整数据长度{} 数据ID{}",combinedFullData.length,getDataId());
+        R_CACHE.put(getDataId(),System.currentTimeMillis());
+        deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
+        if (successCallback != null) {
+            successCallback.run();
         }
     }
 
@@ -157,11 +154,6 @@ public class ReceiveQuicData extends QuicData {
             globalTimeout.cancel();
             globalTimeout = null; // 清空引用，帮助GC
         }
-        // 遍历并取消所有定时器
-        retransmitTimers.values().forEach(Timeout::cancel);
-        // 清空集合，帮助GC
-        retransmitTimers.clear();
-        retransmitCounts.clear();
     }
 
     private void releaseFrames() {
@@ -170,7 +162,7 @@ public class ReceiveQuicData extends QuicData {
         // 遍历释放已接收的QuicFrame（避免内存泄漏）
         for (QuicFrame frame : frameArray) {
             if (frame != null) {
-                frame.release(); // 假设QuicFrame有release方法释放内部资源
+                frame=null;
             }
         }
         // 清空数组引用，帮助GC
@@ -179,48 +171,6 @@ public class ReceiveQuicData extends QuicData {
         receivedSequences.clear();
     }
 
-
-    // 取消单个重传定时器
-    private void cancelRetransmitTimer(int sequence) {
-        Timeout timeout = retransmitTimers.remove(sequence);
-        if (timeout != null) {
-            timeout.cancel();
-        }
-        // 移除重传次数计数
-        retransmitCounts.remove(sequence);
-    }
-
-
-    private void handleDataComplete() {
-        if (isComplete()){
-            log.info("已经完成数据交付");
-            return;
-        }
-        setComplete(true);
-        cancelAllRetransmitTimers();
-        ByteBuf combinedFullData = getCombinedFullData();
-        if (combinedFullData == null) { // 增加非空校验，避免空指针
-            log.error("组合完整数据失败，无法处理");
-            return;
-        }
-        try { // 使用try-finally确保释放
-            byte[] bytes = new byte[combinedFullData.readableBytes()];
-            combinedFullData.getBytes(combinedFullData.readerIndex(), bytes);
-            log.info("combinedFullData 字节数组长度：" + bytes.length);
-        } finally {
-            // 关键：无论是否异常，都释放ByteBuf
-            if (combinedFullData.refCnt() > 0) {
-                combinedFullData.release();
-                log.debug("[释放] getCombinedFullData返回的ByteBuf，连接ID:{} 数据ID:{}",
-                        getConnectionId(), getDataId());
-            }
-        }
-        this.release();
-        deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
-        if (successCallback != null) {
-            successCallback.run();
-        }
-    }
 
     /**
      * 构建ACK帧
@@ -231,20 +181,17 @@ public class ReceiveQuicData extends QuicData {
         long connectionId = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         int sequence = quicFrame.getSequence();
-
-
-        QuicFrame ackFrame = QuicFrame.acquire();
+        QuicFrame ackFrame =  QuicFrame.acquire();
         ackFrame.setConnectionId(connectionId);
         ackFrame.setDataId(dataId);
         ackFrame.setSequence(sequence); // ACK帧序列号固定为0
         ackFrame.setTotal(1); // ACK帧不分片
-        ackFrame.setFrameType(QuicFrameEnum.ACK_FRAME.getCode()); // 自定义：ACK帧类型
-
+        ackFrame.setFrameType(QuicFrameEnum.DATA_ACK_FRAME.getCode()); // 自定义：ACK帧类型
+        ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
         // 计算总长度：固定头部 + 载荷长度
         int totalLength = QuicFrame.FIXED_HEADER_LENGTH;
         ackFrame.setFrameTotalLength(totalLength);
         ackFrame.setPayload(null);
-        ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
         return ackFrame;
     }
 }

@@ -1,4 +1,4 @@
-package com.bit.solana.quic;
+package com.bit.solana.p2p.quic;
 
 import com.bit.solana.p2p.protocol.ProtocolEnum;
 import lombok.Getter;
@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public enum QuicFrameEnum {
     DATA_FRAME((byte)1, "数据帧"),
-    ACK_FRAME((byte)2, "数据ACK帧"),
+    DATA_ACK_FRAME((byte)2, "数据ACK帧"),
 
     PING_FRAME((byte)3, "ping帧"),
     PONG_FRAME((byte)4, "pong帧"),
@@ -17,21 +17,8 @@ public enum QuicFrameEnum {
     CONNECT_RESPONSE_FRAME((byte)6, "连接响应帧"),
 
 
-    IMMEDIATE_REQUEST_FRAME((byte)8, "重传请求帧"),
-
-
 
     OFF_FRAME((byte)6, "下线帧"),//通知类帧 无回复
-
-
-
-
-
-
-
-    BATCH_ACK_FRAME((byte)3, "批量ACK帧"),
-
-    //50-59 连接相关
 
 
 

@@ -1,7 +1,7 @@
 package com.bit.solana.api.mock;
 
 import com.bit.solana.p2p.impl.PeerServiceImpl;
-import com.bit.solana.quic.QuicConnection;
+import com.bit.solana.p2p.quic.QuicConnection;
 import com.bit.solana.result.Result;
 import com.bit.solana.structure.key.KeyInfo;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import static com.bit.solana.quic.QuicConnectionManager.getFirstConnection;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.getFirstConnection;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 import static com.bit.solana.util.SolanaEd25519Signer.*;
@@ -31,11 +31,11 @@ public class MockApi {
     private PeerServiceImpl peerService;
 
     @GetMapping("/sendMock")
-    public Result sendMock() throws NoSuchAlgorithmException {
+    public Result sendMock() throws NoSuchAlgorithmException, InterruptedException {
         QuicConnection firstConnection = getFirstConnection();
         if (firstConnection != null){
             // 1. 生成2048字节的测试数据（核心修改点）
-            int targetLength = 1024 * 1024 * 2;
+            int targetLength = 1024 * 1024 *5;
             byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
             // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
             // 每个字节填充为字符'a'的ASCII码
@@ -43,10 +43,10 @@ public class MockApi {
 
             // 2. 发送2048字节数据
             boolean b = firstConnection.sendData(mockData);
+            return Result.OK();
         }else {
-            Result.error("连接已经断开");
+            return Result.error("连接已经断开");
         }
-        return Result.OK();
     }
 
 

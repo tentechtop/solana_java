@@ -1,4 +1,4 @@
-package com.bit.solana.quic;
+package com.bit.solana.p2p.quic;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -22,10 +22,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-import static com.bit.solana.quic.QuicConnectionManager.*;
-import static com.bit.solana.quic.QuicConstants.*;
-import static com.bit.solana.quic.QuicFrameEnum.DATA_FRAME;
-import static com.bit.solana.quic.SendQuicData.buildFromFullData;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.sendFrame;
+import static com.bit.solana.p2p.quic.QuicConstants.*;
+import static com.bit.solana.p2p.quic.SendQuicData.buildFromFullData;
 
 
 @Slf4j
@@ -40,8 +40,13 @@ public class QuicConnection {
     private volatile Timeout connectionTimeout; // 保存定时任务引用，用于取消
 
 
-
-
+    // 新增：RTT统计相关字段
+    private volatile long minRtt = Long.MAX_VALUE; // 最小RTT（最理想网络状况）
+    private volatile long maxRtt = 0; // 最大RTT
+    private volatile long avgRtt = 0; // 平均RTT
+    private volatile long lastRtt = 0; // 上一次RTT
+    private volatile long rttVariance = 0; // RTT方差（抖动）
+    private volatile int rttCount = 0; // RTT样本数量（用于计算平均）
 
 
 
@@ -80,10 +85,10 @@ public class QuicConnection {
                         markAsExpired();
                         return;
                     }
-
+                    QuicFrame pingFrame = QuicFrame.acquire();
                     try {
                         // 主动发送PING帧
-                        QuicFrame pingFrame = QuicFrame.acquire();
+
                         long dataId = generator.nextId();
                         pingFrame.setConnectionId(connectionId);
                         pingFrame.setDataId(dataId);
@@ -99,10 +104,12 @@ public class QuicConnection {
                         } else {
                             log.debug("出站连接PING帧发送成功，连接ID:{}，PONG帧:{}", connectionId, quicFrame);
                             updateLastSeen(); // 接收PONG更新活动时间
-                            quicFrame.release();
                         }
+                        quicFrame.release();
                     } catch (Exception e) {
                         log.error("[出站心跳异常] 连接ID:{}", connectionId, e);
+                    }finally {
+                        pingFrame.release();
                     }
 
                     // 继续调度下一次心跳（未过期才继续）
@@ -134,20 +141,19 @@ public class QuicConnection {
                         markAsExpired();
                         return;
                     }
-
                     log.debug("入站连接过期检查通过，连接ID:{}（最后活动时间:{}ms前）",
                             connectionId, now - lastSeen);
 
                     // 继续调度下一次检查（未过期才继续）
                     if (!timeout.isCancelled() && !expired) {
-                        connectionTimeout = HEARTBEAT_TIMER.newTimeout(this, INBOUND_CHECK_INTERVAL, TimeUnit.MILLISECONDS);
+                        connectionTimeout = HEARTBEAT_TIMER.newTimeout(this, CONNECTION_EXPIRE_TIMEOUT, TimeUnit.MILLISECONDS);
                     }
                 }
             };
             // 启动入站过期检查（1000ms间隔）
-            connectionTimeout = HEARTBEAT_TIMER.newTimeout(connectionTask, INBOUND_CHECK_INTERVAL, TimeUnit.MILLISECONDS);
+            connectionTimeout = HEARTBEAT_TIMER.newTimeout(connectionTask, CONNECTION_EXPIRE_TIMEOUT, TimeUnit.MILLISECONDS);
             log.info("入站连接过期检查任务启动，连接ID:{}，检查间隔:{}ms，过期阈值:{}ms",
-                    connectionId, INBOUND_CHECK_INTERVAL, CONNECTION_EXPIRE_TIMEOUT);
+                    connectionId, CONNECTION_EXPIRE_TIMEOUT, CONNECTION_EXPIRE_TIMEOUT);
         }
     }
 
@@ -182,25 +188,12 @@ public class QuicConnection {
 
 
     //基于连接发送一次完整的数据  对方对数据中的每一个帧都回复ACK 表示数据发送成功
-    public boolean sendData(byte[] data) {
+    public boolean sendData(byte[] data) throws InterruptedException {
         long dataId = generator.nextId();
-        ByteBuf buffer = null;
-        try {
-            buffer = ALLOCATOR.buffer();
-            buffer.writeBytes(data);
-            SendQuicData sendQuicData = buildFromFullData(connectionId, dataId,
-                    DATA_FRAME.getCode(), buffer, remoteAddress, MAX_FRAME_PAYLOAD);
-            addSendDataToConnect(connectionId, sendQuicData);
-            sendQuicData.sendAllFrames();
-            return true;
-        } catch (Exception e){
-            return false;
-        }finally {
-            // 关键：无论是否异常，最终释放 buffer
-            if (buffer != null && buffer.refCnt() > 0) {
-                buffer.release();
-            }
-        }
+        SendQuicData sendQuicData = buildFromFullData(connectionId, dataId, data, remoteAddress, MAX_FRAME_PAYLOAD);
+        addSendDataToConnect(connectionId, sendQuicData);
+        sendQuicData.sendAllFrames();
+        return true;
     }
 
 
@@ -253,9 +246,14 @@ public class QuicConnection {
             ReceiveQuicData receiveQuicData = getReceiveDataByConnectIdAndDataId(quicFrame.getConnectionId(), quicFrame.getDataId());
             receiveQuicData.handleFrame(quicFrame);
         }else {
-            //不存在就创建
-            ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
-            receiveDataByFrame.handleFrame(quicFrame);
+            //是否处理过
+            Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
+            if (ifPresent!=null){
+                log.info("数据已经处理过了");
+            }else {
+                ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
+                receiveDataByFrame.handleFrame(quicFrame);
+            }
         }
     }
 
@@ -263,33 +261,29 @@ public class QuicConnection {
 
 
     public void handleFrame(QuicFrame quicFrame) {
-        try {
-            switch (QuicFrameEnum.fromCode(quicFrame.getFrameType())) {
-                case DATA_FRAME:
-                    handleDataFrame(quicFrame);
-                    break;
-                case ACK_FRAME:
-                    handleACKFrame(quicFrame);
-                    break;
-                case PING_FRAME:
-                    handlePingFrame(quicFrame);
-                    break;
-                case PONG_FRAME:
-                    handlePongFrame(quicFrame);
-                    break;
-                case OFF_FRAME:
-                    handleOffFrame(quicFrame);
-                    break;
-                case CONNECT_REQUEST_FRAME:
-                    handleConnectRequestFrame(quicFrame);
-                    break;
-                case CONNECT_RESPONSE_FRAME:
-                    handleConnectResponseFrame(quicFrame);
-                default:
-                    break;
-            }
-        }finally {
-            quicFrame.release();
+        switch (QuicFrameEnum.fromCode(quicFrame.getFrameType())) {
+            case DATA_FRAME:
+                handleDataFrame(quicFrame);
+                break;
+            case DATA_ACK_FRAME:
+                handleACKFrame(quicFrame);
+                break;
+            case PING_FRAME:
+                handlePingFrame(quicFrame);
+                break;
+            case PONG_FRAME:
+                handlePongFrame(quicFrame);
+                break;
+            case OFF_FRAME:
+                handleOffFrame(quicFrame);
+                break;
+            case CONNECT_REQUEST_FRAME:
+                handleConnectRequestFrame(quicFrame);
+                break;
+            case CONNECT_RESPONSE_FRAME:
+                handleConnectResponseFrame(quicFrame);
+            default:
+                break;
         }
     }
 
@@ -299,33 +293,35 @@ public class QuicConnection {
         if (ifPresent != null) {
             ifPresent.complete(quicFrame);
         }
-        quicFrame.release();
     }
 
     private void handleConnectRequestFrame(QuicFrame quicFrame) {
-        log.info("处理连接请求");
-        long conId = quicFrame.getConnectionId();
-        //发送连接响应帧
-        long dataId = quicFrame.getDataId();
         QuicFrame acquire = QuicFrame.acquire();//已经释放
-        acquire.setConnectionId(conId);//生成连接ID
-        acquire.setDataId(dataId);
-        acquire.setTotal(1);
-        acquire.setFrameType(QuicFrameEnum.CONNECT_RESPONSE_FRAME.getCode());
-        acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
-        acquire.setPayload(null);
-        ByteBuf buffer = ALLOCATOR.buffer();
-        acquire.encode(buffer);
-        DatagramPacket datagramPacket = new DatagramPacket(buffer, quicFrame.getRemoteAddress());
-        Global_Channel.writeAndFlush(datagramPacket).addListener(future -> {
+        try {
+            log.info("处理连接请求");
+            long conId = quicFrame.getConnectionId();
+            //发送连接响应帧
+            long dataId = quicFrame.getDataId();
+            acquire.setConnectionId(conId);//生成连接ID
+            acquire.setDataId(dataId);
+            acquire.setTotal(1);
+            acquire.setFrameType(QuicFrameEnum.CONNECT_RESPONSE_FRAME.getCode());
+            acquire.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
+            acquire.setPayload(null);
+            ByteBuf buffer = ALLOCATOR.buffer();
+            acquire.encode(buffer);
+            DatagramPacket datagramPacket = new DatagramPacket(buffer, quicFrame.getRemoteAddress());
+            Global_Channel.writeAndFlush(datagramPacket).addListener(future -> {
+                if (!future.isSuccess()) {
+                    log.error("[连接响应发送失败] 节点ID:{}", conId, future.cause());
+                } else {
+                    log.debug("[连接响应发送成功] 节点ID:{}", conId);
+                }
+            });
+        }finally {
             acquire.release();
-            if (!future.isSuccess()) {
-                log.error("[连接响应发送失败] 节点ID:{}", conId, future.cause());
-            } else {
-                log.debug("[连接响应发送成功] 节点ID:{}", conId);
-            }
-        });
-        quicFrame.release();
+        }
+
     }
 
     private void handleConnectResponseFrame(QuicFrame quicFrame) {
@@ -335,7 +331,6 @@ public class QuicConnection {
         if (ifPresent != null) {
             ifPresent.complete(quicFrame);
         }
-        quicFrame.release();
     }
 
 
@@ -343,35 +338,38 @@ public class QuicConnection {
     private void handleOffFrame(QuicFrame quicFrame) {
         log.info("处理节点下线");
         //取消心跳关闭连接
-        quicFrame.release();
     }
 
     private void handlePingFrame(QuicFrame quicFrame) {
-        log.debug("处理ping");
-        //更新访问时间
-        //回复PONG帧
         QuicFrame pongFrame = QuicFrame.acquire();//已经释放
-        pongFrame.setConnectionId(connectionId);
-        pongFrame.setDataId(quicFrame.getDataId()); // 临时数据ID
-        pongFrame.setFrameType(QuicFrameEnum.PONG_FRAME.getCode()); // PING_FRAME类型
-        pongFrame.setTotal(1); // 单帧无需分片
-        pongFrame.setSequence(0);
-        pongFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH); // 无载荷
-        pongFrame.setRemoteAddress(quicFrame.getRemoteAddress());
+        try {
+            log.debug("处理ping");
+            //更新访问时间
+            //回复PONG帧
 
-        //编码
-        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-        pongFrame.encode(buf);
-        DatagramPacket packet = new DatagramPacket(buf, pongFrame.getRemoteAddress());
-        Global_Channel.writeAndFlush(packet).addListener(future -> {
+            pongFrame.setConnectionId(connectionId);
+            pongFrame.setDataId(quicFrame.getDataId()); // 临时数据ID
+            pongFrame.setFrameType(QuicFrameEnum.PONG_FRAME.getCode()); // PING_FRAME类型
+            pongFrame.setTotal(1); // 单帧无需分片
+            pongFrame.setSequence(0);
+            pongFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH); // 无载荷
+            pongFrame.setRemoteAddress(quicFrame.getRemoteAddress());
+
+            //编码
+            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+            pongFrame.encode(buf);
+            DatagramPacket packet = new DatagramPacket(buf, pongFrame.getRemoteAddress());
+            Global_Channel.writeAndFlush(packet).addListener(future -> {
+                if (!future.isSuccess()) {
+                    log.info("回复失败{}", remoteAddress);
+                } else {
+                    log.debug("回复成功{}", remoteAddress);
+                }
+            });
+        }finally {
             pongFrame.release();
-            if (!future.isSuccess()) {
-                log.info("回复失败{}", remoteAddress);
-            } else {
-                log.debug("回复成功{}", remoteAddress);
-            }
-        });
-        quicFrame.release();
+            quicFrame.release();
+        }
     }
 
     private void handleACKFrame( QuicFrame quicFrame) {
@@ -382,9 +380,7 @@ public class QuicConnection {
         // 标记该序列号为已确认
         if (sendQuicData != null){
             sendQuicData.onAckReceived(sequence);
-        }else {
-            log.info("数据处理完成了");
-            quicFrame.release();
         }
+        quicFrame.release();
     }
 }
