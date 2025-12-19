@@ -33,7 +33,9 @@ public class QuicConstants {
     public static SnowflakeIdGenerator generator = new SnowflakeIdGenerator();
 
     //单帧载荷
-    public static final int MAX_FRAME_PAYLOAD = 1024;
+    public static final int MAX_FRAME = 8192;//单次最大发送8192帧 当一帧承载1K数据 8192帧 约等于8M数据 极限是一帧1400字节
+
+    public static final int MAX_FRAME_PAYLOAD = 1400;
     // 全局超时时间
     public static final long GLOBAL_TIMEOUT_MS = 2000;
     // 单帧重传间隔
@@ -343,6 +345,8 @@ public class QuicConstants {
         receiveQuicData.setDataId(frameData.getDataId());
         receiveQuicData.setConnectionId(frameData.getConnectionId());
         receiveQuicData.setTotal(frameData.getTotal());
+        receiveQuicData.setRemoteAddress(frameData.getRemoteAddress());
+
         // 4. 线程安全地维护缓存和映射关系
         receiveMap.put(frameData.getDataId(), receiveQuicData);
         connectReceiveMap.put(frameData.getConnectionId(), frameData.getDataId());

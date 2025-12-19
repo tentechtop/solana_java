@@ -251,6 +251,8 @@ public class QuicConnection {
             Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
             if (ifPresent!=null){
                 log.info("数据已经处理过了");
+                //TODO 回复ALL_ACK
+
             }else {
                 ReceiveQuicData receiveDataByFrame = createReceiveDataByFrame(quicFrame);
                 receiveDataByFrame.handleFrame(quicFrame);
@@ -269,6 +271,12 @@ public class QuicConnection {
             case DATA_ACK_FRAME:
                 handleACKFrame(quicFrame);
                 break;
+            case ALL_ACK_FRAME:
+                handleALLACKFrame(quicFrame);
+                break;
+            case BATCH_ACK_FRAME:
+                handleBatchACKFrame(quicFrame);
+                break;
             case PING_FRAME:
                 handlePingFrame(quicFrame);
                 break;
@@ -286,6 +294,32 @@ public class QuicConnection {
             default:
                 break;
         }
+    }
+
+    private void handleBatchACKFrame(QuicFrame quicFrame) {
+        log.info("处理批量ACK");
+        long connectionId1 = quicFrame.getConnectionId();
+        long dataId = quicFrame.getDataId();
+        SendQuicData sendQuicData = getSendDataByConnectIdAndDataId(connectionId1, dataId);
+        // 标记该序列号为已确认
+        if (sendQuicData != null){
+            byte[] payload = quicFrame.getPayload();
+            sendQuicData.batchAck(payload);
+        }
+        quicFrame.release();
+    }
+
+    private void handleALLACKFrame(QuicFrame quicFrame) {
+        log.info("处理所有帧完成");
+        long connectionId1 = quicFrame.getConnectionId();
+        long dataId = quicFrame.getDataId();
+        int sequence = quicFrame.getSequence();
+        SendQuicData sendQuicData = getSendDataByConnectIdAndDataId(connectionId1, dataId);
+        // 标记该序列号为已确认
+        if (sendQuicData != null){
+            sendQuicData.allReceived();
+        }
+        quicFrame.release();
     }
 
     private void handlePongFrame( QuicFrame quicFrame) {

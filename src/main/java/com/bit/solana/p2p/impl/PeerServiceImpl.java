@@ -26,6 +26,7 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 
+import io.netty.util.concurrent.DefaultThreadFactory;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Data;
@@ -122,19 +123,26 @@ public class PeerServiceImpl implements PeerService {
         // 1. 创建事件循环组（UDP无连接，仅需一个线程组）
         //可用核心的一半
         int availableProcessors = Runtime.getRuntime().availableProcessors();
-        eventLoopGroup = new NioEventLoopGroup(availableProcessors);
+        eventLoopGroup = new NioEventLoopGroup(availableProcessors, new DefaultThreadFactory("udp-io-thread", true));
         try {
             // 2. 配置Bootstrap（UDP使用Bootstrap而非ServerBootstrap）
             bootstrap = new Bootstrap();
             bootstrap.group(eventLoopGroup)
                     .channel(NioDatagramChannel.class) // UDP通道类型
                     .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT) // 池化内存分配（减少GC）
-                    .option(ChannelOption.SO_RCVBUF, 1024*1024*1024) // 接收缓冲区
+                    // UDP接收缓冲区
+                    .option(ChannelOption.SO_RCVBUF, 64 * 1024 * 1024)
+                    // UDP发送缓冲区
+                    .option(ChannelOption.SO_SNDBUF, 32 * 1024 * 1024)
                     .option(ChannelOption.SO_REUSEADDR, true) // 允许端口复用（多线程共享端口）
                     .option(ChannelOption.SO_BROADCAST, true) // 支持广播（按需开启）
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000) // UDP无连接，超时设短（30秒）
-                    .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1024 * 64)) // 固定接收缓冲区大小（64KB，减少动态调整开销）
 
+                    .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(1500))
+                    .option(ChannelOption.MAX_MESSAGES_PER_READ, 1024) // 每次IO事件最多读取1024个DatagramPacket
+                    .option(ChannelOption.WRITE_BUFFER_WATER_MARK, new WriteBufferWaterMark(
+                            16 * 1024 * 1024, // 低水位：16MB
+                            64 * 1024 * 1024  // 高水位：64MB
+                    ))
                     .handler(new ChannelInitializer<NioDatagramChannel>() {
                         @Override
                         protected void initChannel(NioDatagramChannel ch) throws Exception {

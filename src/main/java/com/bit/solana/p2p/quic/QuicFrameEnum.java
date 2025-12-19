@@ -9,16 +9,18 @@ import lombok.extern.slf4j.Slf4j;
 public enum QuicFrameEnum {
     DATA_FRAME((byte)1, "数据帧"),
     DATA_ACK_FRAME((byte)2, "数据ACK帧"),
+    ALL_ACK_FRAME((byte)3, "ALL_ACK帧"),
+    BATCH_ACK_FRAME((byte)4, "BATCH_ACK帧"),
 
-    PING_FRAME((byte)3, "ping帧"),
-    PONG_FRAME((byte)4, "pong帧"),
+    PING_FRAME((byte)5, "ping帧"),
+    PONG_FRAME((byte)6, "pong帧"),
 
-    CONNECT_REQUEST_FRAME((byte)5, "连接请求帧"),
-    CONNECT_RESPONSE_FRAME((byte)6, "连接响应帧"),
+    CONNECT_REQUEST_FRAME((byte)7, "连接请求帧"),
+    CONNECT_RESPONSE_FRAME((byte)8, "连接响应帧"),
 
 
 
-    OFF_FRAME((byte)6, "下线帧"),//通知类帧 无回复
+    OFF_FRAME((byte)9, "下线帧"),//通知类帧 无回复
 
 
 
