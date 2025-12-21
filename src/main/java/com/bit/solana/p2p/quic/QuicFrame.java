@@ -71,9 +71,6 @@ public class QuicFrame {
     }
 
 
-
-
-
     //将帧序列化为字节缓冲
     public void encode(ByteBuf buf) {
         // 前置校验：帧必须有效
