@@ -151,7 +151,7 @@ public class SendQuicData extends QuicData {
                             if (!future.isSuccess()) {
                                 log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
                                         getConnectionId(), getDataId(), sequence, future.cause());
-                                handleSendFailure();
+                                //handleSendFailure();重新发送
                             } else {
                                 log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                         getConnectionId(), getDataId(), sequence);
