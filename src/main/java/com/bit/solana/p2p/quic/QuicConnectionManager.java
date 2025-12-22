@@ -137,6 +137,13 @@ public class QuicConnectionManager {
             .build();
 
 
+    public static QuicConnection connectRemoteByAddr(String peerId,InetSocketAddress remoteAddress)
+            throws ExecutionException, InterruptedException, TimeoutException, IOException {
+
+        return null;
+    }
+
+
     /**
      * 与指定的节点建立连接
      * 为该连接建立心跳任务
