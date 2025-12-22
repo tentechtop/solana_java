@@ -356,8 +356,8 @@ public class QuicConnectionManager {
         final int LOCAL_RETRY_MAX = 3;    // 本地错误最大重试次数
         final long LOCAL_RETRY_INTERVAL = 50; // 本地重试间隔（ms）
         final int NET_RETRY_MAX = 2;      // 网络错误最大重试次数
-        final long NET_RETRY_INTERVAL = 100;  // 网络重试间隔（ms）
-        final long RESPONSE_TIMEOUT = 300;   // 单次响应等待超时（ms）
+        final long NET_RETRY_INTERVAL = 200;  // 网络重试间隔（ms）
+        final long RESPONSE_TIMEOUT = 500;   // 单次响应等待超时（ms）
         InetSocketAddress remoteAddress = quicFrame.getRemoteAddress();
         long connectionId = quicFrame.getConnectionId();
 
