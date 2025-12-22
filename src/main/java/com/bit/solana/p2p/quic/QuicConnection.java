@@ -53,7 +53,7 @@ public class QuicConnection {
     // 帧重传间隔
     public long RETRANSMIT_INTERVAL_MS = 1000;
     //mtu  创建连接时探测
-    public int MAX_FRAME_PAYLOAD = 1024;
+    public int MAX_FRAME_PAYLOAD = 1024 * 10;
 
 
     // 新增：RTT统计相关字段
