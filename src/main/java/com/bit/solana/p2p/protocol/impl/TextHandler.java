@@ -21,6 +21,7 @@ public class TextHandler implements ProtocolHandler.ResultProtocolHandler{
 
     @Override
     public byte[] handleResult(P2PMessage requestParams) throws Exception {
+        log.info("数据长度{}",requestParams.getData().length);
 
         String text = "我已经收到回复";
         P2PMessage p2PMessage = newResponseMessage(commonConfig.getSelf().getId(), ProtocolEnum.TEXT_V1,requestParams.getRequestId(), text.getBytes(StandardCharsets.UTF_8));

@@ -15,6 +15,10 @@ import java.util.concurrent.atomic.AtomicLong;
 public class QuicFlowControl {
     // 连接ID
     private final long connectionId;
+
+    // 新增：全局流量控制器引用
+    private final GlobalFlowControl globalFlowControl;
+
     
     // 发送窗口相关
     private final AtomicInteger sendWindow = new AtomicInteger(0);           // 当前发送窗口大小
@@ -40,8 +44,11 @@ public class QuicFlowControl {
         this.connectionId = connectionId;
         this.sendWindow.set(sendWindowSize.get());
         this.receiveWindow.set(receiveWindowSize.get());
-        log.debug("流量控制器初始化: connectionId={}, sendWindowSize={}, receiveWindowSize={}", 
-                 connectionId, sendWindowSize.get(), receiveWindowSize.get());
+        // 注册到全局控制器
+        this.globalFlowControl = GlobalFlowControl.getInstance();
+        this.globalFlowControl.registerConnection(this);
+        log.debug("流量控制器初始化: connectionId={}, sendWindowSize={}, receiveWindowSize={}",
+                connectionId, sendWindowSize.get(), receiveWindowSize.get());
     }
     
     /**
@@ -60,8 +67,10 @@ public class QuicFlowControl {
      */
     public void onDataSent(int dataSize) {
         bytesInFlight.addAndGet(dataSize);
-        log.debug("发送数据: connectionId={}, dataSize={}, bytesInFlight={}", 
-                 connectionId, dataSize, bytesInFlight.get());
+        // 同步更新全局在途字节数
+        globalFlowControl.onGlobalDataSent(dataSize);
+        log.debug("发送数据: connectionId={}, dataSize={}, bytesInFlight={}",
+                connectionId, dataSize, bytesInFlight.get());
     }
     
     /**
@@ -71,13 +80,14 @@ public class QuicFlowControl {
     public void onAckReceived(int ackedSize) {
         // 释放在途字节
         bytesInFlight.addAndGet(-ackedSize);
-        
-        // 根据网络状况调整发送窗口
+        // 同步更新全局在途字节数
+        globalFlowControl.onGlobalAckReceived(ackedSize);
+        // 调整发送窗口
         adjustSendWindow();
-        
-        log.debug("收到ACK: connectionId={}, ackedSize={}, bytesInFlight={}, sendWindow={}", 
-                 connectionId, ackedSize, bytesInFlight.get(), sendWindow.get());
+        log.debug("收到ACK: connectionId={}, ackedSize={}, bytesInFlight={}, sendWindow={}",
+                connectionId, ackedSize, bytesInFlight.get(), sendWindow.get());
     }
+
     
     /**
      * 发生丢包时减小发送窗口
@@ -178,6 +188,8 @@ public class QuicFlowControl {
      * 重置流量控制器
      */
     public void reset() {
+        // 减去当前连接的在途字节数
+        globalFlowControl.onGlobalAckReceived((int) bytesInFlight.get());
         bytesInFlight.set(0);
         bytesReceived.set(0);
         sendWindow.set(sendWindowSize.get());
@@ -197,5 +209,10 @@ public class QuicFlowControl {
             receiveWindow.get(), receiveWindowSize.get(), getReceiveWindowUtilization(),
             bytesInFlight.get(), bytesReceived.get()
         );
+    }
+
+    // 新增：连接关闭时调用，从全局控制器移除
+    public void close() {
+        globalFlowControl.unregisterConnection(connectionId);
     }
 }

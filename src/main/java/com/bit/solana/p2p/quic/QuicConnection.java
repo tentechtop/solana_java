@@ -48,6 +48,12 @@ public class QuicConnection {
     private byte[] sharedSecret;//共享加密密钥
 
 
+    //全局超时时间
+    public long GLOBAL_TIMEOUT_MS = 5000;
+    // 帧重传间隔
+    public long RETRANSMIT_INTERVAL_MS = 1000;
+    //mtu  创建连接时探测
+    public int MAX_FRAME_PAYLOAD = 1024;
 
 
     // 新增：RTT统计相关字段
@@ -270,9 +276,9 @@ public class QuicConnection {
                 QuicFrame ackFrame =  QuicFrame.acquire();
                 ackFrame.setConnectionId(connectionId);
                 ackFrame.setDataId(dataId);
-                ackFrame.setSequence(0); // ACK帧序列号固定为0
+                ackFrame.setSequence(quicFrame.getSequence()); // ACK帧序列号固定为0
                 ackFrame.setTotal(1); // ACK帧不分片
-                ackFrame.setFrameType(QuicFrameEnum.ALL_ACK_FRAME.getCode()); // 自定义：ACK帧类型
+                ackFrame.setFrameType(QuicFrameEnum.DATA_ACK_FRAME.getCode()); // 自定义：ACK帧类型
                 ackFrame.setRemoteAddress(getRemoteAddress());
                 // 计算总长度：固定头部 + 载荷长度
                 int totalLength = QuicFrame.FIXED_HEADER_LENGTH;

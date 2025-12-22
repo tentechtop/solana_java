@@ -27,6 +27,10 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
 @Data
 public class ReceiveQuicData extends QuicData {
 
+    public final long GLOBAL_TIMEOUT_MS = 2000;
+
+    // 帧重传间隔
+    public  final long RETRANSMIT_INTERVAL_MS = 300;
 
     //是否完成接收
     private volatile boolean isComplete = false;
@@ -52,10 +56,8 @@ public class ReceiveQuicData extends QuicData {
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
 
-        /*        long l = System.currentTimeMillis();
-        //是否偶数 偶数就回复
-        if (sequence % 2 == 0) {
-        }*/
+
+
 
         //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
         int size = receivedSequences.size();

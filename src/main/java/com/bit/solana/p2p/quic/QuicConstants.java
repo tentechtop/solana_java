@@ -96,21 +96,12 @@ public class QuicConstants {
     //单帧载荷
     public static final int MAX_FRAME = 8192;//单次最大发送8192帧 当一帧承载1K数据 8192帧 约等于8M数据 极限是一帧1400字节
 
-    public static final int MAX_FRAME_PAYLOAD = 1400;
-    // 全局超时时间
-    public static final long GLOBAL_TIMEOUT_MS = 2000;
-    // 单帧重传间隔
-    public static final long RETRANSMIT_INTERVAL_MS = 2000;
-    // 单帧最大重传次数
-    public static final int MAX_RETRANSMIT_TIMES = 3;
-
-
-
     // 出站连接主动心跳间隔
     public static final long OUTBOUND_HEARTBEAT_INTERVAL = 400L;
     // 连接过期阈值（统一1000ms无活动）
     public static final long CONNECTION_EXPIRE_TIMEOUT = 2000L;
     private QuicConstants() {}
+
 
     //连接ID -> 数据ID
     public static final Map<Long, Long> connectSendMap = new HashMap<>();

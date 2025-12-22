@@ -24,10 +24,20 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
 @Slf4j
 @Data
 public class SendQuicData extends QuicData {
+
+    public  final long GLOBAL_TIMEOUT_MS = 5000;
+
+    // 帧重传间隔
+    public  final long RETRANSMIT_INTERVAL_MS = 1000;
+
     // ACK确认集合：记录B已确认的序列号
     private final  Set<Integer> ackedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private Timeout globalTimeout = null;
+
+    // 新增：重传定时器（每个SendQuicData实例独立）
+    private Timeout retransmitTimeout = null;
+
 
     // 传输完成回调
     private Runnable successCallback;
@@ -62,6 +72,12 @@ public class SendQuicData extends QuicData {
 
         int fullDataLength = sendData.length;
         int totalFrames = (fullDataLength + maxFrameSize - 1) / maxFrameSize;
+        //如果总帧数大于MAX_FRAME 直接报错
+        if (totalFrames > MAX_FRAME) {
+            log.info("当前帧数量{} ",totalFrames);
+            throw new IllegalArgumentException("帧数量超出最大限制");
+        }
+
         // 计算分片总数：向上取整（避免因整数除法丢失最后一个不完整分片）
         quicData.setTotal(totalFrames);//分片总数
         quicData.setFrameArray(new QuicFrame[totalFrames]);
@@ -108,6 +124,8 @@ public class SendQuicData extends QuicData {
         }
         log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
         startGlobalTimeoutTimer();
+        // 新增：启动重传定时器
+        startRetransmitTimer();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
             if (frame != null) {
@@ -174,6 +192,85 @@ public class SendQuicData extends QuicData {
 
 
 
+    /**
+     * 新增：启动重传定时器（周期性检查未ACK帧并重传）
+     */
+    private void startRetransmitTimer() {
+        synchronized (this) {
+            if (retransmitTimeout == null) {
+                retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
+                log.info("[重传定时器启动] 连接ID:{} 数据ID:{} 重传间隔:{}ms",
+                        getConnectionId(), getDataId(), RETRANSMIT_INTERVAL_MS);
+            }
+        }
+    }
+
+    /**
+     * 新增：重传任务（核心逻辑：筛选未ACK帧并重发，同时实现周期性执行）
+     */
+    private class RetransmitTask implements TimerTask {
+        @Override
+        public void run(Timeout timeout) throws Exception {
+            // 1. 先判断当前任务是否被取消，或传输已完成/失败，若已终止则不再继续
+            if (timeout.isCancelled()
+                    || (globalTimeout != null && globalTimeout.isCancelled())
+                    || ackedSequences.size() == getTotal()) {
+                log.debug("[重传任务终止] 连接ID:{} 数据ID:{}（任务已取消/传输完成）",
+                        getConnectionId(), getDataId());
+                retransmitTimeout = null;
+                return;
+            }
+
+            // 2. 筛选未收到ACK的帧并重传
+            int retransmitCount = 0;
+            QuicFrame[] frameArray = getFrameArray();
+            if (frameArray == null) {
+                log.warn("[重传失败] 帧数组为空，连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
+                // 重新注册下一次重传任务
+                reRegisterRetransmitTask();
+                return;
+            }
+
+            for (int sequence = 0; sequence < frameArray.length; sequence++) {
+                // 跳过已ACK的帧
+                if (ackedSequences.contains(sequence)) {
+                    continue;
+                }
+
+                QuicFrame frame = frameArray[sequence];
+                if (frame != null) {
+                    // 重传未ACK帧
+                    sendFrame(frame);
+                    retransmitCount++;
+                    log.info("[触发重传] 连接ID:{} 数据ID:{} 序列号:{}",
+                            getConnectionId(), getDataId(), sequence);
+                }
+            }
+
+            log.info("[重传检查完成] 连接ID:{} 数据ID:{} 本次重传帧数:{} 累计已ACK:{} 总帧数:{}",
+                    getConnectionId(), getDataId(), retransmitCount, ackedSequences.size(), getTotal());
+
+            // 3. 重新注册下一次重传任务（实现周期性执行）
+            reRegisterRetransmitTask();
+        }
+    }
+
+    /**
+     * 新增：重新注册重传任务（保证每300ms执行一次）
+     */
+    private void reRegisterRetransmitTask() {
+        synchronized (this) {
+            // 只有当重传定时器未被取消、传输未完成时，才重新注册
+            if (retransmitTimeout != null
+                    && !retransmitTimeout.isCancelled()
+                    && ackedSequences.size() < getTotal()
+                    && (globalTimeout == null || !globalTimeout.isCancelled())) {
+                retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
+            } else {
+                retransmitTimeout = null;
+            }
+        }
+    }
 
 
 
@@ -202,7 +299,11 @@ public class SendQuicData extends QuicData {
             globalTimeout.cancel();
             globalTimeout = null;
         }
-
+        // 取消重传定时器
+        if (retransmitTimeout != null) {
+            retransmitTimeout.cancel();
+            retransmitTimeout = null;
+        }
     }
 
 

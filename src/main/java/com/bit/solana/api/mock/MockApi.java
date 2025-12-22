@@ -64,7 +64,7 @@ public class MockApi {
     public String sendMsg(String nodeId) throws Exception {
         //节点回复反转换后的数据
 
-        int targetLength = 1024 * 1024 * 2;
+        int targetLength = 1024 * 1142 * 2;
         byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
         // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
         // 每个字节填充为字符'a'的ASCII码
