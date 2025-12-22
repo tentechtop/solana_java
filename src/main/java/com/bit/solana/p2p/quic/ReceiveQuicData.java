@@ -27,10 +27,10 @@ import static com.bit.solana.p2p.quic.QuicConstants.*;
 @Data
 public class ReceiveQuicData extends QuicData {
 
-    public final long GLOBAL_TIMEOUT_MS = 2000;
-
-    // 帧重传间隔
-    public  final long RETRANSMIT_INTERVAL_MS = 300;
+    //整体超时
+    public  final long GLOBAL_TIMEOUT_MS = 5000;
+    // 帧重传间隔 应该计算无错误发送一次数据完整用时
+    public  final long RETRANSMIT_INTERVAL_MS = 1000;
 
     //是否完成接收
     private volatile boolean isComplete = false;
