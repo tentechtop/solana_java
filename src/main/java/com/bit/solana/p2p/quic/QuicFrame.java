@@ -32,7 +32,7 @@ public class QuicFrame {
 
 
     // 对象池 定义 Recycler 池，指定“新对象创建规则”
-    private static final int RECYCLER_MAX_CAPACITY = 1024 * 1024 ;
+    private static final int RECYCLER_MAX_CAPACITY = 1024 * 1024 * 1024;
     private static final Recycler<QuicFrame> RECYCLER = new Recycler<QuicFrame>(RECYCLER_MAX_CAPACITY) {
         @Override
         protected QuicFrame newObject(Handle<QuicFrame> handle) {
