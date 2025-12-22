@@ -127,12 +127,15 @@ public class SendQuicData extends QuicData {
         startGlobalTimeoutTimer();
         // 新增：启动重传定时器
         startRetransmitTimer();
+        long start = System.nanoTime();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
             if (frame != null) {
                 sendFrame(frame);
             }
         }
+        long end = System.nanoTime();
+        log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
     }
 
     /**
@@ -171,23 +174,21 @@ public class SendQuicData extends QuicData {
      * 启动全局超时定时器
      */
     private void startGlobalTimeoutTimer() {
-        synchronized (this) {
-            if (globalTimeout == null) {
-                globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
-                    @Override
-                    public void run(Timeout timeout) throws Exception {
-                        if (timeout.isCancelled()) {
-                            return;
-                        }
-                        log.info("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未完成发送，发送失败",
-                                getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
-                        handleSendFailure();
+        if (globalTimeout == null) {
+            globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
+                @Override
+                public void run(Timeout timeout) throws Exception {
+                    if (timeout.isCancelled()) {
+                        return;
                     }
-                }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    log.info("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未完成发送，发送失败",
+                            getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
+                    handleSendFailure();
+                }
+            }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
 
-                log.debug("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
-                        getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
-            }
+            log.debug("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
+                    getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
         }
     }
 
@@ -197,12 +198,10 @@ public class SendQuicData extends QuicData {
      * 新增：启动重传定时器（周期性检查未ACK帧并重传）
      */
     private void startRetransmitTimer() {
-        synchronized (this) {
-            if (retransmitTimeout == null) {
-                retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
-                log.info("[重传定时器启动] 连接ID:{} 数据ID:{} 重传间隔:{}ms",
-                        getConnectionId(), getDataId(), RETRANSMIT_INTERVAL_MS);
-            }
+        if (retransmitTimeout == null) {
+            retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
+            log.info("[重传定时器启动] 连接ID:{} 数据ID:{} 重传间隔:{}ms",
+                    getConnectionId(), getDataId(), RETRANSMIT_INTERVAL_MS);
         }
     }
 

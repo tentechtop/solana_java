@@ -58,16 +58,17 @@ public class ReceiveQuicData extends QuicData {
 
 
         //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
-        int size = receivedSequences.size();
-        if (size>1 && size % 256 == 0) {
-            QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
-            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-            ackFrame.encode(buf);
-            DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-            Global_Channel.writeAndFlush(packet);
-            ackFrame.release();
-        }
-
+        Thread.ofVirtual().start(() -> {
+            int size = receivedSequences.size();
+            if (size>1 && size % 256 == 0) {
+                QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
+                ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                ackFrame.encode(buf);
+                DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+                Global_Channel.writeAndFlush(packet);
+                ackFrame.release();
+            }
+        });
 
         // ========== 重复帧处理 ==========
         if (receivedSequences.contains(sequence)) {
@@ -100,22 +101,20 @@ public class ReceiveQuicData extends QuicData {
 
     private void startGlobalTimeoutTimer() {
         // 双重校验锁，防止重复创建
-        synchronized (this) {
-            if (globalTimeout == null && !isComplete()) {
-                globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
-                    @Override
-                    public void run(Timeout timeout) throws Exception {
-                        if (timeout.isCancelled()) {
-                            return;
-                        }
-                        log.error("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未接收完所有帧，接收失败",
-                                getConnectionId(),  getDataId(), GLOBAL_TIMEOUT_MS);
-                        handleDataFailure();
+        if (globalTimeout == null && !isComplete()) {
+            globalTimeout = GLOBAL_TIMER.newTimeout(new TimerTask() {
+                @Override
+                public void run(Timeout timeout) throws Exception {
+                    if (timeout.isCancelled()) {
+                        return;
                     }
-                }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
-                log.debug("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
-                        getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
-            }
+                    log.error("[全局超时] 连接ID:{} 数据ID:{} 在{}ms内未接收完所有帧，接收失败",
+                            getConnectionId(),  getDataId(), GLOBAL_TIMEOUT_MS);
+                    handleDataFailure();
+                }
+            }, GLOBAL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            log.debug("[全局定时器启动] 连接ID:{} 数据ID:{} 超时时间:{}ms",
+                    getConnectionId(), getDataId(), GLOBAL_TIMEOUT_MS);
         }
     }
 
@@ -129,22 +128,24 @@ public class ReceiveQuicData extends QuicData {
         //回复ALL_ACK帧
         long connectionId = getConnectionId();
         long dataId = getDataId();
-        QuicFrame ackFrame =  QuicFrame.acquire();
-        ackFrame.setConnectionId(connectionId);
-        ackFrame.setDataId(dataId);
-        ackFrame.setSequence(0); // ACK帧序列号固定为0
-        ackFrame.setTotal(1); // ACK帧不分片
-        ackFrame.setFrameType(QuicFrameEnum.ALL_ACK_FRAME.getCode()); // 自定义：ACK帧类型
-        ackFrame.setRemoteAddress(getRemoteAddress());
-        // 计算总长度：固定头部 + 载荷长度
-        int totalLength = QuicFrame.FIXED_HEADER_LENGTH;
-        ackFrame.setFrameTotalLength(totalLength);
-        ackFrame.setPayload(null);
-        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-        ackFrame.encode(buf);
-        DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-        Global_Channel.writeAndFlush(packet);
-        ackFrame.release();
+        Thread.ofVirtual().start(() -> {
+            QuicFrame ackFrame =  QuicFrame.acquire();
+            ackFrame.setConnectionId(connectionId);
+            ackFrame.setDataId(dataId);
+            ackFrame.setSequence(0); // ACK帧序列号固定为0
+            ackFrame.setTotal(1); // ACK帧不分片
+            ackFrame.setFrameType(QuicFrameEnum.ALL_ACK_FRAME.getCode()); // 自定义：ACK帧类型
+            ackFrame.setRemoteAddress(getRemoteAddress());
+            // 计算总长度：固定头部 + 载荷长度
+            int totalLength = QuicFrame.FIXED_HEADER_LENGTH;
+            ackFrame.setFrameTotalLength(totalLength);
+            ackFrame.setPayload(null);
+            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+            ackFrame.encode(buf);
+            DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+            Global_Channel.writeAndFlush(packet);
+            ackFrame.release();
+        });
 
         setComplete(true);
         cancelAllRetransmitTimers();
@@ -162,7 +163,6 @@ public class ReceiveQuicData extends QuicData {
         quicMsg.setDataId(getDataId());
         quicMsg.setData(combinedFullData);
         pushCompleteMsg(quicMsg);
-
 
         R_CACHE.put(getDataId(),System.currentTimeMillis());
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());

@@ -129,7 +129,6 @@ public class QuicConstants {
             .build();
 
 
-
     public static final HashedWheelTimer HEARTBEAT_TIMER = new HashedWheelTimer(
             new DefaultThreadFactory("quic-heartbeat-timer", true),
             40, TimeUnit.MILLISECONDS, // 10ms精度
