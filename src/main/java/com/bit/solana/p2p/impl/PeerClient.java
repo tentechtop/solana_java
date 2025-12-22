@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static com.bit.solana.config.CommonConfig.RESPONSE_FUTURECACHE;
 import static com.bit.solana.p2p.protocol.P2PMessage.newRequestMessage;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.getConnection;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.getPeerConnection;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 
@@ -88,6 +89,7 @@ public class PeerClient {
         CompletableFuture<QuicMsg> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(bytesToHex(p2PMessage.getRequestId()), responseFuture);
         QuicConnection peerConnection = getPeerConnection(peerId);
+        log.info("节点ID{}",peerId);
         assert peerConnection != null;
         peerConnection.sendData(serialize);
         return responseFuture.get(time, TimeUnit.SECONDS).getData();

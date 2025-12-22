@@ -14,6 +14,7 @@ import io.netty.util.Timer;
 import io.netty.util.TimerTask;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.checkerframework.checker.nullness.qual.PolyNull;
 
 import java.net.InetSocketAddress;
@@ -369,18 +370,16 @@ public class QuicConnection {
     private void handleConnectRequestFrame(QuicFrame quicFrame) {
         QuicFrame acquire = QuicFrame.acquire();//已经释放
         try {
-            log.info("处理连接请求");
             long conId = quicFrame.getConnectionId();
             //发送连接响应帧
             long dataId = quicFrame.getDataId();
             byte[] payload = quicFrame.getPayload();
-            log.info("握手请求数据长度{}",payload.length);
 
             //解析成握手数据
             NetworkHandshake deserialize = NetworkHandshake.deserialize(payload);
 
             byte[] nodeId = deserialize.getNodeId();
-            String peerId = bytesToHex(nodeId);
+            String peerId = Base58.encode(nodeId);
             byte[] aPublicKey = deserialize.getSharedSecret();
 
             byte[][] BKeys = generateCurve25519KeyPair();
@@ -409,7 +408,7 @@ public class QuicConnection {
                 if (!future.isSuccess()) {
                     log.error("[连接响应发送失败] 节点ID:{}", conId, future.cause());
                 } else {
-                    log.debug("[连接响应发送成功] 节点ID:{}", conId);
+                    log.info("[连接响应发送成功] 节点ID:{}", conId);
                     //将该节点上线
                     addPeerConnect(peerId,conId);
                 }

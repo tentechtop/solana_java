@@ -1,10 +1,12 @@
 package com.bit.solana.p2p.quic;
 
 
+import com.bit.solana.p2p.impl.QuicNodeWrapper;
 import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
 import com.bit.solana.p2p.protocol.ProtocolEnum;
 import com.bit.solana.p2p.protocol.ProtocolHandler;
+import com.bit.solana.util.MultiAddress;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.buffer.ByteBuf;
@@ -14,6 +16,7 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -25,8 +28,7 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.bit.solana.config.CommonConfig.NODE_EXPIRATION_TIME;
-import static com.bit.solana.config.CommonConfig.self;
+import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.ByteUtils.hexToBytes;
@@ -137,12 +139,24 @@ public class QuicConnectionManager {
             .build();
 
 
-    public static QuicConnection connectRemoteByAddr(String peerId,InetSocketAddress remoteAddress)
+    public static QuicConnection connectRemoteByAddr(String multiAddressString)
             throws ExecutionException, InterruptedException, TimeoutException, IOException {
-
-        return null;
+        //不为空
+        if (multiAddressString == null || multiAddressString.isEmpty()) {
+            return null;
+        }
+        MultiAddress multiAddress = new MultiAddress(multiAddressString);
+        //仅仅支持IPV4 和 QUIC协议
+        if (!multiAddress.getIpType().equals("ip4") || !multiAddress.getProtocol().equals(MultiAddress.Protocol.QUIC)) {
+            return null;
+        }
+        String peerId = multiAddress.getPeerId();
+        log.info("节点ID{}",peerId);
+        String ipAddress = multiAddress.getIpAddress();
+        int port = multiAddress.getPort();
+        InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress, port);
+        return connectRemote(peerId,remoteAddress);
     }
-
 
     /**
      * 与指定的节点建立连接
@@ -154,6 +168,11 @@ public class QuicConnectionManager {
         if (remoteAddress == null) {
             log.error("远程地址不能为空");
             return null;
+        }
+        //判断是否存在
+        if (QuicConnectionManager.getPeerConnection(peerId) != null) {
+            log.error("该节点已存在连接");
+            return QuicConnectionManager.getPeerConnection(peerId);
         }
         long conId = generator.nextId();
         long dataId = generator.nextId();
@@ -227,7 +246,7 @@ public class QuicConnectionManager {
             quicConnection.setUDP(true);
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
-            QuicConnectionManager.addConnection(connectionId, quicConnection);
+            addConnection(connectionId, quicConnection);
         }
         quicConnection.updateLastSeen();
         return quicConnection;

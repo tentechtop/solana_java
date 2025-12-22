@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Random;
 
 import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.connectRemoteByAddr;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.getFirstConnection;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
@@ -57,6 +58,16 @@ public class MockApi {
         }
     }
 
+
+    @GetMapping("/connect")
+    public String connect(String addr) throws Exception {
+        QuicConnection quicConnection = connectRemoteByAddr(addr);
+        if (quicConnection!=null){
+            return "连接成功";
+        }else {
+            return "连接失败";
+        }
+    }
 
 
 

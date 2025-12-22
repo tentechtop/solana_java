@@ -26,6 +26,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .setViewName("forward:/account/TransferTx.html");
         registry.addViewController("/solana/quic/monitor")
                 .setViewName("forward:/quic/quic-monitor.html");
+
         registry.addViewController("/solana/quic/dashboard")
                 .setViewName("forward:/quic/quic-dashboard.html");
 
