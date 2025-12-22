@@ -124,7 +124,7 @@ public class SendQuicData extends QuicData {
             return;
         }
         log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
-        startGlobalTimeoutTimer();
+
         long start = System.nanoTime();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
@@ -134,6 +134,7 @@ public class SendQuicData extends QuicData {
         }
         long end = System.nanoTime();
         log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
+        startGlobalTimeoutTimer();
         startRetransmitTimer();
     }
 
