@@ -57,11 +57,9 @@ public class ReceiveQuicData extends QuicData {
         long connectionId = quicFrame.getConnectionId();
 
 
-
-
         //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
         int size = receivedSequences.size();
-        if (size>1 && size % 1024 == 0) {
+        if (size>1 && size % 256 == 0) {
             QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
             ackFrame.encode(buf);
@@ -147,7 +145,6 @@ public class ReceiveQuicData extends QuicData {
         DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
         Global_Channel.writeAndFlush(packet);
         ackFrame.release();
-
 
         setComplete(true);
         cancelAllRetransmitTimers();
@@ -274,7 +271,7 @@ public class ReceiveQuicData extends QuicData {
             int byteIndex = sequence / 8;
             int bitIndex = sequence % 8;
             // 对应比特位置1（采用大端序：第0位表示序列号0）
-            ackPayload[byteIndex] |= (1 << (7 - bitIndex));
+            ackPayload[byteIndex] |= (byte) (1 << (7 - bitIndex));
         }
 
         // 3. 设置帧总长度：固定头部长度 +  payload字节数
