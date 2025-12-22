@@ -75,7 +75,7 @@ public class MockApi {
     public String sendMsg(String nodeId) throws Exception {
         //节点回复反转换后的数据
 
-        int targetLength = 1024 * 1024 ;
+        int targetLength = 1024 ;
         byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
         // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
         // 每个字节填充为字符'a'的ASCII码
@@ -86,6 +86,19 @@ public class MockApi {
         byte[] data = deserialize.getData();
         log.info("节点回复：{}", parseUtf8(data));
         return parseUtf8(data);
+    }
+
+    @GetMapping("/rsendMsg")
+    public byte[] rsendMsg(String nodeId) throws Exception {
+        //节点回复反转换后的数据
+
+        int targetLength = 1024 * 1024 ;
+        byte[] mockData = new byte[targetLength]; // 初始化2048字节数组
+        // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
+        // 每个字节填充为字符'a'的ASCII码
+        Arrays.fill(mockData, (byte) 'a');
+
+        return mockData;
     }
 
     public static String parseUtf8(byte[] bytes) {

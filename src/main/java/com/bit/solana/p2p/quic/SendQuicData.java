@@ -125,8 +125,6 @@ public class SendQuicData extends QuicData {
         }
         log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
         startGlobalTimeoutTimer();
-        // 新增：启动重传定时器
-        startRetransmitTimer();
         long start = System.nanoTime();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
@@ -136,6 +134,7 @@ public class SendQuicData extends QuicData {
         }
         long end = System.nanoTime();
         log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
+        startRetransmitTimer();
     }
 
     /**
@@ -242,7 +241,7 @@ public class SendQuicData extends QuicData {
                     // 重传未ACK帧
                     sendFrame(frame);
                     retransmitCount++;
-                    log.info("[触发重传] 连接ID:{} 数据ID:{} 序列号:{}",
+                    log.debug("[触发重传] 连接ID:{} 数据ID:{} 序列号:{}",
                             getConnectionId(), getDataId(), sequence);
                 }
             }
