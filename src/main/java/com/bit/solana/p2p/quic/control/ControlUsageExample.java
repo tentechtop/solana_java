@@ -192,6 +192,17 @@ public class ControlUsageExample {
             }
         }
         
+        // 为了演示统计功能，手动添加一些数据包统计
+        log.info("手动添加统计数据来演示功能...");
+        for (int i = 0; i < 3; i++) {
+            connectionControl.onPacketSent(10 * 1024); // 模拟发送
+            connectionControl.onAckReceived(10 * 1024, 10 * 1024); // 模拟ACK
+        }
+        for (int i = 0; i < 1; i++) {
+            connectionControl.onPacketSent(10 * 1024); // 模拟发送
+            connectionControl.onPacketLoss(10 * 1024); // 模拟丢失
+        }
+        
         // 输出连接状态
         log.info("连接状态: {}", connectionControl.getConnectionControlStatus());
         log.info("详细报告:\n{}", connectionControl.getDetailedReport());
