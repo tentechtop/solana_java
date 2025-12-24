@@ -29,7 +29,7 @@ public class SendQuicData extends QuicData {
     public  final long GLOBAL_TIMEOUT_MS = 5000;
 
     // 帧重传间隔 应该计算无错误发送一次数据完整用时
-    public  final long RETRANSMIT_INTERVAL_MS = 1000;
+    public  final long RETRANSMIT_INTERVAL_MS = 100;
 
     // ACK确认集合：记录B已确认的序列号
     private final  Set<Integer> ackedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -39,11 +39,18 @@ public class SendQuicData extends QuicData {
     // 新增：重传定时器（每个SendQuicData实例独立）
     private Timeout retransmitTimeout = null;
 
+    // 新增：重传循环索引（0-9循环，用于匹配序列号结尾数字）
+    private int cycleRetransmitIndex = 0;
 
     // 传输完成回调
     private Runnable successCallback;
     // 传输失败回调
     private Runnable failCallback;
+
+    //是否失败
+    private boolean isFailed = false;
+
+
 
 
     /**
@@ -124,17 +131,16 @@ public class SendQuicData extends QuicData {
             return;
         }
         log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
-
+        startGlobalTimeoutTimer();
         long start = System.nanoTime();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
-            if (frame != null) {
+            if (frame != null && !isFailed) {
                 sendFrame(frame);
             }
         }
         long end = System.nanoTime();
         log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
-        startGlobalTimeoutTimer();
         startRetransmitTimer();
     }
 
@@ -142,31 +148,33 @@ public class SendQuicData extends QuicData {
      * 发送单个帧
      */
     private void sendFrame(QuicFrame frame) {
-        Thread.ofVirtual()
-                .name("send-virtual-thread")
-                .start(() -> {
-                    int sequence = frame.getSequence();
-                    ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-                    try {
-                        frame.encode(buf);
-                        DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
-                        Global_Channel.writeAndFlush(packet).addListener(future -> {
-                            // 核心：释放 ByteBuf（无论发送成功/失败）
-                            if (!future.isSuccess()) {
-                                log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                        getConnectionId(), getDataId(), sequence, future.cause());
-                                //handleSendFailure();重新发送
-                            } else {
-                                log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
-                                        getConnectionId(), getDataId(), sequence);
-                            }
-                        });
-                    } catch (Exception e) {
-                        // 异常时直接释放 buf，避免泄漏
-                        log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                getConnectionId(), getDataId(), sequence, e);
-                    }
-                });
+        if (!isFailed()){
+            Thread.ofVirtual()
+                    .name("send-virtual-thread")
+                    .start(() -> {
+                        int sequence = frame.getSequence();
+                        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                        try {
+                            frame.encode(buf);
+                            DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
+                            Global_Channel.writeAndFlush(packet).addListener(future -> {
+                                // 核心：释放 ByteBuf（无论发送成功/失败）
+                                if (!future.isSuccess()) {
+                                    log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                                            getConnectionId(), getDataId(), sequence, future.cause());
+                                    //handleSendFailure();重新发送
+                                } else {
+                                    log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
+                                            getConnectionId(), getDataId(), sequence);
+                                }
+                            });
+                        } catch (Exception e) {
+                            // 异常时直接释放 buf，避免泄漏
+                            log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                                    getConnectionId(), getDataId(), sequence, e);
+                        }
+                    });
+        }
     }
 
 
@@ -230,10 +238,17 @@ public class SendQuicData extends QuicData {
                 reRegisterRetransmitTask();
                 return;
             }
+            log.info("[重传检查开始] 连接ID:{} 数据ID:{} 本次匹配序列号结尾数字:{}",
+                    getConnectionId(), getDataId(), cycleRetransmitIndex);
 
             for (int sequence = 0; sequence < frameArray.length; sequence++) {
                 // 跳过已ACK的帧
                 if (ackedSequences.contains(sequence)) {
+                    continue;
+                }
+
+                // 核心修改：只重传 序列号%10 == 循环索引（即序列号结尾数字匹配）的帧
+                if (sequence % 10 != cycleRetransmitIndex) {
                     continue;
                 }
 
@@ -249,6 +264,9 @@ public class SendQuicData extends QuicData {
 
             log.info("[重传检查完成] 连接ID:{} 数据ID:{} 本次重传帧数:{} 累计已ACK:{} 总帧数:{}",
                     getConnectionId(), getDataId(), retransmitCount, ackedSequences.size(), getTotal());
+
+            // 3. 更新循环索引：0-9循环（执行完本次重传后更新，下次重传匹配下一个结尾数字）
+            cycleRetransmitIndex = (cycleRetransmitIndex + 1) % 10;
 
             // 3. 重新注册下一次重传任务（实现周期性执行）
             reRegisterRetransmitTask();
@@ -288,6 +306,7 @@ public class SendQuicData extends QuicData {
         if (failCallback != null) {
             failCallback.run();
         }
+        isFailed = true;
     }
 
     /**
@@ -387,7 +406,6 @@ public class SendQuicData extends QuicData {
                 if (sequence >= totalFrames) {
                     break;
                 }
-
                 // 检查当前比特是否为1（已确认）
                 boolean isAcked = (ackByte & (1 << (7 - bitIndex))) != 0;
                 if (isAcked) {

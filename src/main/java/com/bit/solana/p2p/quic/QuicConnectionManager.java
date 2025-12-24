@@ -52,9 +52,6 @@ public class QuicConnectionManager {
     public static final Map<String, Set<Long>> PeerConnect = new HashMap<>();
     public static DatagramChannel Global_Channel = null;// UDP通道
     private static final Map<Long, QuicConnection> CONNECTION_MAP  = new HashMap<>();
-    // 新增：帧控制器映射（连接ID -> 帧控制器）
-    private static final HashMap<Long, ConnectionFrameController> FRAME_CONTROLLER_MAP = new HashMap<>();
-
 
     //获取节点的连接
     public static QuicConnection getPeerConnection(String peerId) {
@@ -253,9 +250,7 @@ public class QuicConnectionManager {
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
             addConnection(connectionId, quicConnection);
-            //创建连接控制器
-            ConnectionFrameController connectionFrameController = new ConnectionFrameController(connectionId);
-            FRAME_CONTROLLER_MAP.put(connectionId, connectionFrameController);
+
         }
         quicConnection.updateLastSeen();
         return quicConnection;
@@ -322,7 +317,6 @@ public class QuicConnectionManager {
      */
     public static void removeConnection(long connectionId) {
         QuicConnection removed = CONNECTION_MAP.remove(connectionId);
-        FRAME_CONTROLLER_MAP.remove(connectionId);
         if (removed != null) {
             log.info("[连接移除] 连接ID:{}", connectionId);
         }
@@ -481,21 +475,6 @@ public class QuicConnectionManager {
         }
     }
 
-    /**
-     * 获取或创建连接的帧控制器
-     */
-    public static ConnectionFrameController getFrameController(long connectionId) {
-        if (!hasConnection(connectionId)) {
-            throw new IllegalArgumentException("Connection not exists: " + connectionId);
-        }
-        return FRAME_CONTROLLER_MAP.computeIfAbsent(connectionId, ConnectionFrameController::new);
-    }
 
-    /**
-     * 移除连接的帧控制器（连接关闭时调用）
-     */
-    public static void removeFrameController(long connectionId) {
-        FRAME_CONTROLLER_MAP.remove(connectionId);
-    }
 
 }
