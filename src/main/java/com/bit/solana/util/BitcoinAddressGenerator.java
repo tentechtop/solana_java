@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.bit.solana.util.ByteUtils.bytesToHex;
+
 @Slf4j
 public class BitcoinAddressGenerator {
     /**
@@ -98,85 +100,20 @@ public class BitcoinAddressGenerator {
         Address address = SegwitAddress.fromString(networkParams, p2wshAddress.toString());
         log.info("地址类型: " + address.getOutputScriptType());
 
+        byte[] hash = address.getHash();
+        log.info("地址hash: " + bytesToHex(hash));
+        log.info("地址hash: " + bytesToHex(p2pkhAddress.getHash()));
+        log.info("地址hash: " + bytesToHex(p2wpkhAddress.getHash()));
+
+
+
     }
 
 
-    /**
-     * 判断比特币地址类型
-     * @param addressStr 地址字符串（Base58/Bech32格式）
-     * @return 地址类型描述
-     * @throws AddressFormatException 地址格式非法
-     */
-    public static String judgeAddressType(String addressStr) throws AddressFormatException {
-        // 1. 先解析地址为 Address 实例
-        Address address = Address.fromString(null, addressStr);
-        String addressType;
 
-        // 2. 判断是 LegacyAddress（传统地址）还是 SegwitAddress（隔离见证地址）
-        if (address instanceof LegacyAddress) {
-            LegacyAddress legacyAddress = (LegacyAddress) address;
-            Script.ScriptType scriptType = legacyAddress.getOutputScriptType();
-            if (scriptType == Script.ScriptType.P2PKH) {
-                addressType = "P2PKH（传统单公钥地址，Base58编码，主网以1开头）";
-            } else if (scriptType == Script.ScriptType.P2SH) {
-                addressType = "P2SH（传统脚本/多签地址，Base58编码，主网以3开头）";
-            } else {
-                addressType = "未知传统地址类型";
-            }
-        } else if (address instanceof SegwitAddress) {
-            SegwitAddress segwitAddress = (SegwitAddress) address;
-            Script.ScriptType scriptType = segwitAddress.getOutputScriptType();
-            if (scriptType == Script.ScriptType.P2WPKH) {
-                addressType = "P2WPKH（隔离见证单公钥地址，Bech32编码，主网以bc1q开头）";
-            } else if (scriptType == Script.ScriptType.P2WSH) {
-                addressType = "P2WSH（隔离见证脚本/多签地址，Bech32编码，主网以bc1q开头）";
-            } else if (scriptType == Script.ScriptType.P2TR) {
-                addressType = "P2TR（Taproot隔离见证地址，Bech32编码，主网以bc1p开头）";
-            } else {
-                addressType = "未知隔离见证地址类型";
-            }
-        } else {
-            addressType = "不支持的地址类型";
-        }
 
-        // 补充地址网络信息
-        NetworkParameters params = address.getParameters();
-        String networkInfo = params == MainNetParams.get() ? "主网" : (params == TestNet3Params.get() ? "测试网" : "未知网络");
-        return String.format("[%s] - %s", networkInfo, addressType);
-    }
 
-    // ===================== 新增工具方法2：从地址恢复对应哈希（公钥哈希/脚本哈希） =====================
-    /**
-     * 从地址恢复哈希（单向不可逆，无法恢复原始公钥/脚本）
-     * @param addressStr 地址字符串
-     * @return 哈希信息（16进制格式）
-     * @throws AddressFormatException 地址格式非法
-     */
-    public static String recoverHashFromAddress(String addressStr) throws AddressFormatException {
-        Address address = Address.fromString(null, addressStr);
-        byte[] hash = address.getHash(); // 核心方法：获取地址对应的核心哈希
-        String hashType;
 
-        if (address instanceof LegacyAddress) {
-            LegacyAddress legacyAddress = (LegacyAddress) address;
-            if (legacyAddress.getOutputScriptType() == Script.ScriptType.P2PKH) {
-                hashType = "公钥哈希（PubKeyHash）";
-            } else {
-                hashType = "脚本哈希（ScriptHash）";
-            }
-        } else if (address instanceof SegwitAddress) {
-            SegwitAddress segwitAddress = (SegwitAddress) address;
-            if (segwitAddress.getOutputScriptType() == Script.ScriptType.P2WPKH) {
-                hashType = "公钥哈希（PubKeyHash，见证程序）";
-            } else {
-                hashType = "脚本SHA256哈希（ScriptSHA256Hash，见证程序）";
-            }
-        } else {
-            hashType = "未知哈希类型";
-        }
-
-        return String.format("%s：%s（长度：%d字节）", hashType, Utils.HEX.encode(hash), hash.length);
-    }
 
 
 
