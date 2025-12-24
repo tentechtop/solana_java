@@ -29,7 +29,7 @@ public class SendQuicData extends QuicData {
     public  final long GLOBAL_TIMEOUT_MS = 5000;
 
     // 帧重传间隔 应该计算无错误发送一次数据完整用时
-    public  final long RETRANSMIT_INTERVAL_MS = 100;
+    public  final long RETRANSMIT_INTERVAL_MS = 50;
 
     // ACK确认集合：记录B已确认的序列号
     private final  Set<Integer> ackedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -49,6 +49,9 @@ public class SendQuicData extends QuicData {
 
     //是否失败
     private boolean isFailed = false;
+
+    //是否已经完成
+    private boolean isCompleted = false;
 
 
 
@@ -152,26 +155,28 @@ public class SendQuicData extends QuicData {
             Thread.ofVirtual()
                     .name("send-virtual-thread")
                     .start(() -> {
-                        int sequence = frame.getSequence();
-                        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-                        try {
-                            frame.encode(buf);
-                            DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
-                            Global_Channel.writeAndFlush(packet).addListener(future -> {
-                                // 核心：释放 ByteBuf（无论发送成功/失败）
-                                if (!future.isSuccess()) {
-                                    log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                            getConnectionId(), getDataId(), sequence, future.cause());
-                                    //handleSendFailure();重新发送
-                                } else {
-                                    log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
-                                            getConnectionId(), getDataId(), sequence);
-                                }
-                            });
-                        } catch (Exception e) {
-                            // 异常时直接释放 buf，避免泄漏
-                            log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                    getConnectionId(), getDataId(), sequence, e);
+                        if (!isCompleted){
+                            int sequence = frame.getSequence();
+                            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                            try {
+                                frame.encode(buf);
+                                DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
+                                Global_Channel.writeAndFlush(packet).addListener(future -> {
+                                    // 核心：释放 ByteBuf（无论发送成功/失败）
+                                    if (!future.isSuccess()) {
+                                        log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                                                getConnectionId(), getDataId(), sequence, future.cause());
+                                        //handleSendFailure();重新发送
+                                    } else {
+                                        log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
+                                                getConnectionId(), getDataId(), sequence);
+                                    }
+                                });
+                            } catch (Exception e) {
+                                // 异常时直接释放 buf，避免泄漏
+                                log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                                        getConnectionId(), getDataId(), sequence, e);
+                            }
                         }
                     });
         }
@@ -238,9 +243,6 @@ public class SendQuicData extends QuicData {
                 reRegisterRetransmitTask();
                 return;
             }
-            log.info("[重传检查开始] 连接ID:{} 数据ID:{} 本次匹配序列号结尾数字:{}",
-                    getConnectionId(), getDataId(), cycleRetransmitIndex);
-
             for (int sequence = 0; sequence < frameArray.length; sequence++) {
                 // 跳过已ACK的帧
                 if (ackedSequences.contains(sequence)) {
@@ -347,6 +349,7 @@ public class SendQuicData extends QuicData {
      * 处理发送成功（所有帧均被确认）
      */
     private void handleSendSuccess() {
+        setCompleted(true);
         log.info("发送成功");
         // 取消全局超时定时器
         if (globalTimeout != null) {
