@@ -34,6 +34,8 @@ public class ReceiveQuicData extends QuicData {
 
     //是否完成接收
     private volatile boolean isComplete = false;
+    //是否失败
+    private volatile boolean isFailed = false;
 
     // 已经接收到的帧序列号
     private final Set<Integer> receivedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -47,28 +49,32 @@ public class ReceiveQuicData extends QuicData {
     private Runnable failCallback;
 
 
-
-
     //当收到数据帧时
-    public void handleFrame(QuicFrame quicFrame) {
+   synchronized public void handleFrame(QuicFrame quicFrame) {
         int sequence = quicFrame.getSequence();
         int total = quicFrame.getTotal();
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
 
-
         //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
-        Thread.ofVirtual().start(() -> {
-            int size = receivedSequences.size();
-            if (size>1 && size % 256 == 0) {
-                QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
-                ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-                ackFrame.encode(buf);
-                DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-                Global_Channel.writeAndFlush(packet);
-                ackFrame.release();
-            }
-        });
+
+
+       if (!isComplete() && !isFailed()){
+           Thread.ofVirtual().start(() -> {
+               int size = receivedSequences.size();
+               if (size>1 && size % 256 == 0) {
+                   QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
+                   if (ackFrame!=null){
+                       ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                       ackFrame.encode(buf);
+                       DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+                       Global_Channel.writeAndFlush(packet);
+                       ackFrame.release();
+                   }
+               }
+           });
+       }
+
 
         // ========== 重复帧处理 ==========
         if (receivedSequences.contains(sequence)) {
@@ -175,6 +181,7 @@ public class ReceiveQuicData extends QuicData {
      * 处理数据接收失败
      */
     private void handleDataFailure() {
+        setFailed(true);
         log.error("[数据接收失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
         //删除这个数据
         deleteReceiveDataByConnectIdAndDataId(getConnectionId(), getDataId());
@@ -243,43 +250,46 @@ public class ReceiveQuicData extends QuicData {
      * @param quicFrame 参考数据帧（用于获取连接ID、数据ID等元信息）
      * @return 批量ACK帧
      */
-    private QuicFrame buildBatchAckFrame(QuicFrame quicFrame) {
-        long connectionId = quicFrame.getConnectionId();
-        long dataId = quicFrame.getDataId();
-        int totalFrames = getTotal(); // 总帧数（从当前接收数据的元信息中获取）
+    synchronized private QuicFrame buildBatchAckFrame(QuicFrame quicFrame) {
+        if (!isComplete() && !isFailed() && quicFrame!=null){
+            long connectionId = quicFrame.getConnectionId();
+            long dataId = quicFrame.getDataId();
+            int totalFrames = getTotal(); // 总帧数（从当前接收数据的元信息中获取）
 
-        QuicFrame ackFrame = QuicFrame.acquire();
-        ackFrame.setConnectionId(connectionId);
-        ackFrame.setDataId(dataId);
-        ackFrame.setSequence(0); // 批量ACK帧序列号固定为0
-        ackFrame.setTotal(1); // 批量ACK帧自身不分片
-        ackFrame.setFrameType(QuicFrameEnum.BATCH_ACK_FRAME.getCode()); // 新增批量ACK帧类型
-        ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
+            QuicFrame ackFrame = QuicFrame.acquire();
+            ackFrame.setConnectionId(connectionId);
+            ackFrame.setDataId(dataId);
+            ackFrame.setSequence(0); // 批量ACK帧序列号固定为0
+            ackFrame.setTotal(1); // 批量ACK帧自身不分片
+            ackFrame.setFrameType(QuicFrameEnum.BATCH_ACK_FRAME.getCode()); // 新增批量ACK帧类型
+            ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
 
-        // 1. 计算比特槽位所需字节数：总帧数向上取整到8的倍数（1字节=8位）
-        int byteLength = (totalFrames + 7) / 8; // 例如2048帧需要256字节（2048/8=256）
-        byte[] ackPayload = new byte[byteLength];
+            // 1. 计算比特槽位所需字节数：总帧数向上取整到8的倍数（1字节=8位）
+            int byteLength = (totalFrames + 7) / 8; // 例如2048帧需要256字节（2048/8=256）
+            byte[] ackPayload = new byte[byteLength];
 
-        // 2. 填充比特槽位：已接收的序列号对应位置置为1
-        for (int sequence : receivedSequences) {
-            // 校验序列号合法性（防止越界）
-            if (sequence < 0 || sequence >= totalFrames) {
-                log.warn("[批量ACK异常] 序列号超出范围，忽略处理: sequence={}, total={}", sequence, totalFrames);
-                continue;
+            // 2. 填充比特槽位：已接收的序列号对应位置置为1
+            for (int sequence : receivedSequences) {
+                // 校验序列号合法性（防止越界）
+                if (sequence < 0 || sequence >= totalFrames) {
+                    log.warn("[批量ACK异常] 序列号超出范围，忽略处理: sequence={}, total={}", sequence, totalFrames);
+                    continue;
+                }
+                // 计算比特位在字节数组中的位置
+                int byteIndex = sequence / 8;
+                int bitIndex = sequence % 8;
+                // 对应比特位置1（采用大端序：第0位表示序列号0）
+                ackPayload[byteIndex] |= (byte) (1 << (7 - bitIndex));
             }
-            // 计算比特位在字节数组中的位置
-            int byteIndex = sequence / 8;
-            int bitIndex = sequence % 8;
-            // 对应比特位置1（采用大端序：第0位表示序列号0）
-            ackPayload[byteIndex] |= (byte) (1 << (7 - bitIndex));
+
+            // 3. 设置帧总长度：固定头部长度 +  payload字节数
+            int totalLength = QuicFrame.FIXED_HEADER_LENGTH + byteLength;
+            ackFrame.setFrameTotalLength(totalLength);
+            ackFrame.setPayload(ackPayload);
+            return ackFrame;
+        }else {
+            return null;
         }
-
-        // 3. 设置帧总长度：固定头部长度 +  payload字节数
-        int totalLength = QuicFrame.FIXED_HEADER_LENGTH + byteLength;
-        ackFrame.setFrameTotalLength(totalLength);
-        ackFrame.setPayload(ackPayload);
-
-        return ackFrame;
     }
 
 

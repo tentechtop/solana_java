@@ -70,46 +70,11 @@ public class CommonConfig {
     }
 
 
-    //连接保活时间300秒
-    public static final long CONNECT_KEEP_ALIVE_SECONDS = 300;
-    //临时流超时时间
-    public static final long TEMP_STREAM_TIMEOUT_SECONDS = 30;
-    // 消息过期时间
-    public static final long MESSAGE_EXPIRATION_TIME = 30;//秒
-    // 节点过期时间
-    public static final long NODE_EXPIRATION_TIME = 60;//秒
-    //节点心跳 15秒
-    public static final long HEARTBEAT_INTERVAL = 15;
-    // 最大重连次数
-    public static final int MAX_RECONNECT_ATTEMPTS = 10;
-    // 默认请求超时（毫秒）
-    public static final int DEFAULT_TIMEOUT = 5000;
+
     // 本地节点标识
     public static final byte[] PEER_KEY = "LOCAL_PEER".getBytes();
-    //最大流数量
-    public static final int MAX_STREAM_COUNT = 10000;
-
-    /**
-     * 全局调度器：固定4个核心线程，轻量处理定时任务（监控、清理、心跳等）
-     * DelayedWorkQueue（Java 内置），这个队列本身就是无界的（没有固定容量上限，理论上可无限添加任务，直到 JVM 内存耗尽）；
-     * 你的场景是「心跳、监控、简单定时任务」，核心特点是：
-     * 任务逻辑简单（无复杂业务、无大量计算）；
-     * 任务量小（心跳 / 监控通常每分钟 / 几秒一次，队列不会堆积）；
-     * 无严格的 “资源泄漏” 风险（心跳 / 监控任务无持有的重量级资源）；
-     */
-    public static final ScheduledExecutorService GLOBAL_SCHEDULER = Executors.newScheduledThreadPool(4, r -> {
-        Thread t = new Thread(r, "global-scheduler");
-        t.setDaemon(true); // 守护线程，避免阻塞应用退出
-        return t;
-    });
 
 
-    //已经连接且握手  节点心跳15秒一次 60秒过期
-    public static Cache<String, Peer> ONLINE_PEER_CACHE  = Caffeine.newBuilder()
-            .maximumSize(5120)//256位 * 20每个桶的大小
-            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS)
-            .recordStats()
-            .build();
 
     /**
      * 请求响应Future缓存：最大容量100万个，30秒过期（请求超时后自动清理，避免内存泄漏）
@@ -123,36 +88,14 @@ public class CommonConfig {
             .recordStats()
             .build();
 
-    /**
-     * 最多缓存1万个节点的重连计数
-     * 重连成功后重置 / 清理计数器
-     * 节点ID - >节点的重连计数
-     */
-    public final Cache<String, AtomicInteger> RECONNECT_COUNTER = Caffeine.newBuilder()
-            .maximumSize(10000)
-            .expireAfterWrite(10, TimeUnit.MINUTES)
-            .build();
 
-
-    /**
-     * UUIDV7 16字节ID - > 缓存时间 代表消息已经处理
-     */
-    public Cache<String, Long> MESSAGE_CACHE = Caffeine.newBuilder()
-            .maximumSize(10000)  // 最大缓存
-            .expireAfterWrite(10, TimeUnit.MINUTES)  // 10分钟过期
-            .build();// 缓存未命中时从数据源加载
 
 
 
     @PreDestroy
     public void shutdown() throws InterruptedException {
-        GLOBAL_SCHEDULER.shutdown();
         log.info("关闭全局调度器");
-
-
         RESPONSE_FUTURECACHE.invalidateAll();
-        RECONNECT_COUNTER.invalidateAll();
-        MESSAGE_CACHE.invalidateAll();
     }
 
 

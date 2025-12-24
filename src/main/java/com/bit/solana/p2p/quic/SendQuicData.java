@@ -51,10 +51,10 @@ public class SendQuicData extends QuicData {
     private Runnable failCallback;
 
     //是否失败
-    private boolean isFailed = false;
+    private volatile boolean isFailed = false;
 
     //是否已经完成
-    private boolean isCompleted = false;
+    private volatile boolean isCompleted = false;
 
 
 
@@ -389,56 +389,59 @@ public class SendQuicData extends QuicData {
      * 格式约定：每个比特代表一个序列号的确认状态（1=已确认，0=未确认），采用大端序（第0位对应序列号0）
      * @param ackList 批量ACK的比特位数组（长度为 (总帧数+7)/8 向上取整）
      */
-    public void batchAck(byte[] ackList) {
-        if (ackList == null || ackList.length == 0) {
-            log.warn("[批量ACK处理] ACK列表为空，连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
-            return;
-        }
+    synchronized public void batchAck(byte[] ackList) {
+        if (!isCompleted() && !isFailed()){
 
-        int totalFrames = getTotal();
-        int expectedByteLength = (totalFrames + 7) / 8; // 计算预期的字节长度
+            if (ackList == null || ackList.length == 0) {
+                log.warn("[批量ACK处理] ACK列表为空，连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
+                return;
+            }
 
-        // 校验ACK列表长度是否匹配总帧数（防止恶意或错误的ACK数据）
-        if (ackList.length != expectedByteLength) {
-            log.warn("[批量ACK处理] ACK列表长度不匹配，总帧数:{} 预期字节数:{} 实际字节数:{}，连接ID:{} 数据ID:{}",
-                    totalFrames, expectedByteLength, ackList.length, getConnectionId(), getDataId());
-            return;
-        }
+            int totalFrames = getTotal();
+            int expectedByteLength = (totalFrames + 7) / 8; // 计算预期的字节长度
 
-        int confirmedCount = 0; // 统计本次批量确认的新序列号数量
+            // 校验ACK列表长度是否匹配总帧数（防止恶意或错误的ACK数据）
+            if (ackList.length != expectedByteLength) {
+                log.warn("[批量ACK处理] ACK列表长度不匹配，总帧数:{} 预期字节数:{} 实际字节数:{}，连接ID:{} 数据ID:{}",
+                        totalFrames, expectedByteLength, ackList.length, getConnectionId(), getDataId());
+                return;
+            }
 
-        // 遍历每个字节解析比特位
-        for (int byteIndex = 0; byteIndex < ackList.length; byteIndex++) {
-            byte ackByte = ackList[byteIndex];
+            int confirmedCount = 0; // 统计本次批量确认的新序列号数量
 
-            // 遍历当前字节的8个比特（大端序：bitIndex=0对应最高位，代表序列号 byteIndex*8 + 0）
-            for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
-                int sequence = byteIndex * 8 + bitIndex; // 计算对应的序列号
+            // 遍历每个字节解析比特位
+            for (int byteIndex = 0; byteIndex < ackList.length; byteIndex++) {
+                byte ackByte = ackList[byteIndex];
 
-                // 序列号超出总帧数范围时终止（最后一个字节可能有无效比特）
-                if (sequence >= totalFrames) {
-                    break;
-                }
-                // 检查当前比特是否为1（已确认）
-                boolean isAcked = (ackByte & (1 << (7 - bitIndex))) != 0;
-                if (isAcked) {
-                    // 调用已有的单ACK处理逻辑（自动去重并检查是否全部确认）
-                    if (ackedSequences.add(sequence)) {
-                        confirmedCount++;
-                        log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
-                                getConnectionId(), getDataId(), sequence);
+                // 遍历当前字节的8个比特（大端序：bitIndex=0对应最高位，代表序列号 byteIndex*8 + 0）
+                for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+                    int sequence = byteIndex * 8 + bitIndex; // 计算对应的序列号
+
+                    // 序列号超出总帧数范围时终止（最后一个字节可能有无效比特）
+                    if (sequence >= totalFrames) {
+                        break;
+                    }
+                    // 检查当前比特是否为1（已确认）
+                    boolean isAcked = (ackByte & (1 << (7 - bitIndex))) != 0;
+                    if (isAcked) {
+                        // 调用已有的单ACK处理逻辑（自动去重并检查是否全部确认）
+                        if (ackedSequences.add(sequence)) {
+                            confirmedCount++;
+                            log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
+                                    getConnectionId(), getDataId(), sequence);
+                        }
                     }
                 }
             }
-        }
 
-        log.debug("[批量ACK处理完成] 连接ID:{} 数据ID:{} 总帧数:{} 本次确认新序列号:{} 累计确认:{}",
-                getConnectionId(), getDataId(), totalFrames, confirmedCount, ackedSequences.size());
+            log.debug("[批量ACK处理完成] 连接ID:{} 数据ID:{} 总帧数:{} 本次确认新序列号:{} 累计确认:{}",
+                    getConnectionId(), getDataId(), totalFrames, confirmedCount, ackedSequences.size());
 
-        // 检查是否所有帧都已确认（触发完成逻辑）
-        if (ackedSequences.size() == totalFrames) {
-            log.info("[所有帧通过批量ACK确认] 连接ID:{} 数据ID:{} 传输完成", getConnectionId(), getDataId());
-            handleSendSuccess();
+            // 检查是否所有帧都已确认（触发完成逻辑）
+            if (ackedSequences.size() == totalFrames) {
+                log.info("[所有帧通过批量ACK确认] 连接ID:{} 数据ID:{} 传输完成", getConnectionId(), getDataId());
+                handleSendSuccess();
+            }
         }
     }
 }
