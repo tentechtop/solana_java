@@ -54,12 +54,6 @@
             <version>1.78</version>
         </dependency>
 
-        <!-- 新增：PKIX/CMS/ECE 等证书相关功能 -->
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
-            <version>1.78</version>
-        </dependency>
 
         <dependency>
             <groupId>org.bitcoinj</groupId>
@@ -117,10 +111,6 @@
             <optional>true</optional>
         </dependency>
 
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-transport</artifactId>
-        </dependency>
 
         <!-- 系统信息监控库 -->
         <dependency>
@@ -136,26 +126,6 @@
             <version>3.1.8</version> <!-- 建议使用最新稳定版 -->
         </dependency>
 
-        <!-- Sentinel 核心包 -->
-        <dependency>
-            <groupId>com.alibaba.csp</groupId>
-            <artifactId>sentinel-core</artifactId>
-            <version>1.8.6</version> <!-- 推荐使用稳定版 -->
-        </dependency>
-
-        <!-- 若需要控制台监控（可选） -->
-<!--        <dependency>
-            <groupId>com.alibaba.csp</groupId>
-            <artifactId>sentinel-transport-simple-http</artifactId>
-            <version>1.8.6</version>
-        </dependency>-->
-
-        <!--不入侵代码-->
-        <dependency>
-            <groupId>com.alibaba.csp</groupId>
-            <artifactId>sentinel-annotation-aspectj</artifactId>
-            <version>1.8.6</version>
-        </dependency>
 
         <!-- Protocol Buffers 核心依赖 -->
         <dependency>
@@ -177,7 +147,6 @@
             <artifactId>java-uuid-generator</artifactId>
             <version>5.1.0</version>
         </dependency>
-
     </dependencies>
 
 
