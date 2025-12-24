@@ -111,3 +111,20 @@ A已经和X连接且正常通信 B已经和X连接且正常通信
 
 -Xms16G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:ParallelGCThreads=8
 -Xlog:gc,gc+heap,gc+metaspace,gc+age=info:file=gc.log:time,uptime,pid,tags:filecount=5,filesize=100M
+
+-Xms16G -Xmx16G
+-XX:MetaspaceSize=256m
+-XX:MaxMetaspaceSize=512m
+-XX:ReservedCodeCacheSize=256m
+-XX:+UseG1GC
+-XX:+UnlockExperimentalVMOptions
+-XX:G1HeapRegionSize=32m
+-XX:MaxGCPauseMillis=10
+-XX:G1NewSizePercent=5
+-XX:G1MaxNewSizePercent=60
+-XX:G1ReservePercent=15
+-XX:ParallelGCThreads=8
+-XX:ConcGCThreads=2
+
+
+-Xms16G -Xmx16G -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=256m -XX:+UseG1GC   -XX:+UnlockExperimentalVMOptions  -XX:G1HeapRegionSize=32m   -XX:MaxGCPauseMillis=10  -XX:G1NewSizePercent=5   -XX:G1MaxNewSizePercent=60  -XX:G1ReservePercent=15  -XX:ParallelGCThreads=8  -XX:ConcGCThreads=2

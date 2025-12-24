@@ -29,7 +29,10 @@ public class SendQuicData extends QuicData {
     public  final long GLOBAL_TIMEOUT_MS = 5000;
 
     // 帧重传间隔 应该计算无错误发送一次数据完整用时
-    public  final long RETRANSMIT_INTERVAL_MS = 50;
+    public  final long RETRANSMIT_INTERVAL_MS = 20;
+
+    // 新增：首次重传扫描延迟时间（30ms）
+    public  final long FIRST_RETRANSMIT_DELAY_MS = 500;
 
     // ACK确认集合：记录B已确认的序列号
     private final  Set<Integer> ackedSequences = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -155,7 +158,7 @@ public class SendQuicData extends QuicData {
             Thread.ofVirtual()
                     .name("send-virtual-thread")
                     .start(() -> {
-                        if (!isCompleted){
+                        if (!isCompleted && !isFailed() && frame != null){
                             int sequence = frame.getSequence();
                             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
                             try {
@@ -211,10 +214,11 @@ public class SendQuicData extends QuicData {
      * 新增：启动重传定时器（周期性检查未ACK帧并重传）
      */
     private void startRetransmitTimer() {
-        if (retransmitTimeout == null) {
-            retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
-            log.info("[重传定时器启动] 连接ID:{} 数据ID:{} 重传间隔:{}ms",
-                    getConnectionId(), getDataId(), RETRANSMIT_INTERVAL_MS);
+        if (retransmitTimeout == null && !isCompleted() && !isFailed()) {
+            // 修改点1：首次重传延迟使用FIRST_RETRANSMIT_DELAY_MS（30ms）
+            retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), FIRST_RETRANSMIT_DELAY_MS, TimeUnit.MILLISECONDS);
+            log.info("[重传定时器启动] 连接ID:{} 数据ID:{} 首次重传延迟:{}ms 后续重传间隔:{}ms",
+                    getConnectionId(), getDataId(), FIRST_RETRANSMIT_DELAY_MS, RETRANSMIT_INTERVAL_MS);
         }
     }
 
@@ -261,12 +265,15 @@ public class SendQuicData extends QuicData {
                     retransmitCount++;
                     log.debug("[触发重传] 连接ID:{} 数据ID:{} 序列号:{}",
                             getConnectionId(), getDataId(), sequence);
+
+                    // ========== 新增：判断重传帧数是否达到200，达到则终止本次遍历 ==========
+                    if (retransmitCount == 256) {
+                        break; // 跳出for循环，终止本次重传遍历
+                    }
                 }
             }
-
             log.info("[重传检查完成] 连接ID:{} 数据ID:{} 本次重传帧数:{} 累计已ACK:{} 总帧数:{}",
                     getConnectionId(), getDataId(), retransmitCount, ackedSequences.size(), getTotal());
-
             // 3. 更新循环索引：0-9循环（执行完本次重传后更新，下次重传匹配下一个结尾数字）
             cycleRetransmitIndex = (cycleRetransmitIndex + 1) % 10;
 
@@ -284,7 +291,10 @@ public class SendQuicData extends QuicData {
             if (retransmitTimeout != null
                     && !retransmitTimeout.isCancelled()
                     && ackedSequences.size() < getTotal()
-                    && (globalTimeout == null || !globalTimeout.isCancelled())) {
+                    && (globalTimeout == null || !globalTimeout.isCancelled())
+                    && !isCompleted
+                    && !isFailed
+            ) {
                 retransmitTimeout = GLOBAL_TIMER.newTimeout(new RetransmitTask(), RETRANSMIT_INTERVAL_MS, TimeUnit.MILLISECONDS);
             } else {
                 retransmitTimeout = null;
