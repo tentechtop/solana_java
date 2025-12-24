@@ -135,15 +135,15 @@ public class SolanaEd25519Signer {
     // Ed25519核心密钥长度（公钥/私钥均为32字节）
     public static final int CORE_KEY_LENGTH = 32;
     // X.509公钥编码头部长度（固定12字节）
-    private static final int X509_HEADER_LENGTH = 12;
+    static final int X509_HEADER_LENGTH = 12;
     // PKCS#8私钥编码头部长度（固定16字节）
-    private static final int PKCS8_HEADER_LENGTH = 16;
+    static final int PKCS8_HEADER_LENGTH = 16;
     // X.509公钥固定头部（用于补全32字节核心公钥）
-    private static final byte[] X509_PUBLIC_HEADER = new byte[]{
+    static final byte[] X509_PUBLIC_HEADER = new byte[]{
             0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
     };
     // PKCS#8私钥固定头部（用于补全32字节核心私钥）
-    private static final byte[] PKCS8_PRIVATE_HEADER = new byte[]{
+    static final byte[] PKCS8_PRIVATE_HEADER = new byte[]{
             0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
     };
 

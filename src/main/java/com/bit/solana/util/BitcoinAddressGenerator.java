@@ -8,6 +8,7 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.script.ScriptBuilder;
+import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.DeterministicSeed;
 import org.bitcoinj.wallet.UnreadableWalletException;
 import org.bitcoinj.wallet.Wallet;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.bit.solana.util.ByteUtils.bytesToHex;
@@ -106,9 +108,18 @@ public class BitcoinAddressGenerator {
         log.info("地址hash: " + bytesToHex(p2wpkhAddress.getHash()));
 
 
+        //生成助记词
+        //根据 路径 派生出私钥
+
+
+
+
 
     }
 
+    // 网络参数：主网（MainNet）/ 测试网（TestNet3）
+    private static final NetworkParameters NET_PARAMS = NetworkParameters.fromID(NetworkParameters.ID_MAINNET);
+    // private static final NetworkParameters NET_PARAMS = NetworkParameters.fromID(NetworkParameters.ID_TESTNET3);
 
 
 
