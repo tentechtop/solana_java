@@ -239,7 +239,6 @@ public class QuicConnection {
         // 4. 清空成员变量引用（辅助GC，减少引用链）
         remoteAddress = null;
 
-
         //清除所有正在发送的数据
         deleteAllSendDataByConnectId(connectionId);
         deleteAllReceiveDataByConnectId(connectionId);

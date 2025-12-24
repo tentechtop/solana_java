@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -48,7 +49,11 @@ public class QuicConnectionManager {
 
 
     //节点ID - > 连接ID
-    public static final Map<String, Set<Long>> PeerConnect = new ConcurrentHashMap<>();
+    public static final Map<String, Set<Long>> PeerConnect = new HashMap<>();
+    public static DatagramChannel Global_Channel = null;// UDP通道
+    private static final Map<Long, QuicConnection> CONNECTION_MAP  = new HashMap<>();
+    // 新增：帧控制器映射（连接ID -> 帧控制器）
+    private static final HashMap<Long, ConnectionFrameController> FRAME_CONTROLLER_MAP = new HashMap<>();
 
 
     //获取节点的连接
@@ -87,6 +92,9 @@ public class QuicConnectionManager {
             if (PeerConnect.containsKey(peerId)){
                 Set<Long> longs = PeerConnect.get(peerId);
                 longs.remove(connectionId);
+                if (longs.isEmpty()){
+                    PeerConnect.remove(peerId);
+                }
             }
         }
     }
@@ -130,13 +138,7 @@ public class QuicConnectionManager {
     }
 
 
-    public static DatagramChannel Global_Channel = null;// UDP通道
 
-    private static final Cache<Long, QuicConnection> CONNECTION_MAP  = Caffeine.newBuilder()
-            .maximumSize(10000)
-            .expireAfterAccess(NODE_EXPIRATION_TIME, TimeUnit.SECONDS) //按访问过期，长期不活跃直接淘汰
-            .recordStats()
-            .build();
 
 
     public static QuicConnection connectRemoteByAddr(String multiAddressString)
@@ -232,8 +234,12 @@ public class QuicConnectionManager {
      * 与指定远程节点断开连接
      * UDP是无连接的，停止心跳并清理资源即可
      */
-    public static void disconnectRemote(InetSocketAddress remoteAddress) {
-
+    public static void disconnectRemote(String peerId) {
+        QuicConnection connection = QuicConnectionManager.getPeerConnection(peerId);
+        if (connection != null) {
+            connection.stopHeartbeat();
+            connection.release();
+        }
     }
 
     public static QuicConnection createOrGetConnection(DatagramChannel channel, InetSocketAddress local, InetSocketAddress remote, long connectionId) {
@@ -247,6 +253,9 @@ public class QuicConnectionManager {
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
             addConnection(connectionId, quicConnection);
+            //创建连接控制器
+            ConnectionFrameController connectionFrameController = new ConnectionFrameController(connectionId);
+            FRAME_CONTROLLER_MAP.put(connectionId, connectionFrameController);
         }
         quicConnection.updateLastSeen();
         return quicConnection;
@@ -282,14 +291,14 @@ public class QuicConnectionManager {
      * 获取连接
      */
     public static QuicConnection getConnection(long connectionId) {
-        return CONNECTION_MAP.getIfPresent(connectionId);
+        return CONNECTION_MAP.get(connectionId);
     }
 
     /**
      * 获取第一个连接
      */
     public static QuicConnection getFirstConnection() {
-        return CONNECTION_MAP.asMap().values().stream().findFirst().orElse(null);
+        return CONNECTION_MAP.values().stream().findFirst().orElse(null);
     }
 
 
@@ -297,7 +306,7 @@ public class QuicConnectionManager {
      * 获取连接数
      */
     public static int getConnectionCount() {
-        return CONNECTION_MAP.asMap().size();
+        return CONNECTION_MAP.size();
     }
 
     /**
@@ -312,7 +321,8 @@ public class QuicConnectionManager {
      * 移除连接
      */
     public static void removeConnection(long connectionId) {
-        QuicConnection removed = CONNECTION_MAP.asMap().remove(connectionId);
+        QuicConnection removed = CONNECTION_MAP.remove(connectionId);
+        FRAME_CONTROLLER_MAP.remove(connectionId);
         if (removed != null) {
             log.info("[连接移除] 连接ID:{}", connectionId);
         }
@@ -322,22 +332,22 @@ public class QuicConnectionManager {
      * 检查连接是否存在
      */
     public static boolean hasConnection(long connectionId) {
-        return CONNECTION_MAP.getIfPresent(connectionId) != null;
+        return CONNECTION_MAP.get(connectionId) != null;
     }
 
     /**
      * 获取所有连接ID
      */
     public static java.util.Set<Long> getAllConnectionIds() {
-        return CONNECTION_MAP.asMap().keySet();
+        return CONNECTION_MAP.keySet();
     }
 
     /**
      * 清空所有连接
      */
     public static void clearAllConnections() {
-        int count = CONNECTION_MAP.asMap().size();
-        CONNECTION_MAP.invalidateAll();
+        int count = CONNECTION_MAP.size();
+        CONNECTION_MAP.clear();
         log.info("[清空连接] 清除了{}个连接", count);
     }
 
@@ -471,7 +481,21 @@ public class QuicConnectionManager {
         }
     }
 
+    /**
+     * 获取或创建连接的帧控制器
+     */
+    public static ConnectionFrameController getFrameController(long connectionId) {
+        if (!hasConnection(connectionId)) {
+            throw new IllegalArgumentException("Connection not exists: " + connectionId);
+        }
+        return FRAME_CONTROLLER_MAP.computeIfAbsent(connectionId, ConnectionFrameController::new);
+    }
 
-
+    /**
+     * 移除连接的帧控制器（连接关闭时调用）
+     */
+    public static void removeFrameController(long connectionId) {
+        FRAME_CONTROLLER_MAP.remove(connectionId);
+    }
 
 }
