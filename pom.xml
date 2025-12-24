@@ -86,10 +86,20 @@
             <version>1.15</version>
         </dependency>
 
-        <!--netty-->
+        <!-- 替换为：只引入需要的模块 -->
         <dependency>
             <groupId>io.netty</groupId>
-            <artifactId>netty-all</artifactId>
+            <artifactId>netty-common</artifactId>
+            <version>4.1.66.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+            <version>4.1.66.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
             <version>4.1.66.Final</version>
         </dependency>
         <dependency>

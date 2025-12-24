@@ -48,7 +48,6 @@ public class QuicConnection {
     private volatile Timeout connectionTimeout; // 保存定时任务引用，用于取消
     private byte[] sharedSecret;//共享加密密钥
 
-
     //全局超时时间
     public long GLOBAL_TIMEOUT_MS = 5000;
     // 帧重传间隔
@@ -56,23 +55,19 @@ public class QuicConnection {
     //mtu  创建连接时探测
     public int MAX_FRAME_PAYLOAD = 1024 ;
 
-
-    // 新增：RTT统计相关字段
-    private volatile long minRtt = Long.MAX_VALUE; // 最小RTT（最理想网络状况）
-    private volatile long maxRtt = 0; // 最大RTT
-    private volatile long avgRtt = 0; // 平均RTT
-    private volatile long lastRtt = 0; // 上一次RTT
-    private volatile long rttVariance = 0; // RTT方差（抖动）
-    private volatile int rttCount = 0; // RTT样本数量（用于计算平均）
-
-
-
     //是否过期
     private volatile boolean expired = false;
     //最后访问时间
     private volatile long lastSeen = System.currentTimeMillis();
     //true 是出站连接 false是入站连接
     private boolean isOutbound;
+
+
+    //对连接MTU探测
+
+    //对连接动态调整发送数据大小 默认对方是最差网速 逐步提升
+
+
 
     /**
      * 启动连接任务（差异化：出站=主动心跳，入站=仅过期检查）

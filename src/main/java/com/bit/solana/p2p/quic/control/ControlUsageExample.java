@@ -41,7 +41,6 @@ public class ControlUsageExample {
             
             boolean canSend = flowController.trySend(dataSize);
             log.info("尝试发送{}KB: {}", dataSize / 1024, canSend ? "成功" : "被限流");
-            
             if (!canSend) {
                 // 等待令牌补充
                 try {
