@@ -143,7 +143,7 @@ public class ConnectFrameFlowController {
      */
     public void onBatchFramesAcked(int batchSize) {
         if (batchSize <= 0) {
-            throw new IllegalArgumentException("已ACK的批量帧数量不能小于等于0");
+            return;
         }
         // 1. 递减在途帧数量（保证不小于0）
         inFlightFrames.updateAndGet(count -> Math.max(count - batchSize, 0));

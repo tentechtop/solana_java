@@ -20,8 +20,7 @@ import java.util.List;
 import java.util.Random;
 
 import static com.bit.solana.p2p.protocol.ProtocolEnum.TEXT_V1;
-import static com.bit.solana.p2p.quic.QuicConnectionManager.connectRemoteByAddr;
-import static com.bit.solana.p2p.quic.QuicConnectionManager.getFirstConnection;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.*;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
 import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
 import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
@@ -68,6 +67,16 @@ public class MockApi {
             return "连接失败";
         }
     }
+
+    @GetMapping("/disconnect")
+    public String disconnect(String peerId) throws Exception {
+        if (disConnectRemoteByPeerId(peerId)){
+            return "断开连接成功";
+        }else {
+            return "断开连接失败";
+        }
+    }
+
 
 
 
@@ -122,10 +131,18 @@ public class MockApi {
         KeyPair keyPair = keyGen.generateKeyPair();
         PrivateKey privateKey = keyPair.getPrivate();
         PublicKey publicKey = keyPair.getPublic();
-
-
         return Result.OK();
     }
+
+
+    /**
+     * 获取所有的节点和连接
+     */
+
+
+
+
+
 
     /**
      * 18:33:53.621 [main] INFO org.bitcoinj.crypto.MnemonicCode -- PBKDF2 took 88.71 ms

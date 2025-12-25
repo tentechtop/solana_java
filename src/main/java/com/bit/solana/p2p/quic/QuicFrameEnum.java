@@ -20,18 +20,11 @@ public enum QuicFrameEnum {
 
 
 
-    OFF_FRAME((byte)9, "下线帧"),//通知类帧 无回复
-
-
+    OFF_FRAME((byte)9, "连接下线帧"),//通知类帧 无回复
+    PEER_OFF_FRAME((byte)10, "节点下线帧"),//通知类帧 无回复
 
 
     ;
-
-    /**
-     * 立即索取帧 即接收方收到 123 5 在收到5的时候发现自己缺少4 4可能在途 即刻建立20ms延时任务 如果20ms 4到达就核销掉
-     */
-
-
 
     private final byte code;
     private final String name;

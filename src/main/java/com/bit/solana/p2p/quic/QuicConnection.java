@@ -221,17 +221,14 @@ public class QuicConnection {
         }
         expired = true;
         log.warn("连接已过期... 时间{}",System.currentTimeMillis());
-
         // 1. 移除连接管理器的核心引用（重中之重）
         QuicConnectionManager.removeConnection(connectionId);
-
         // 2. 彻底清理定时任务（避免Timer持有对象引用）
         if (connectionTimeout != null) {
             connectionTimeout.cancel();
             connectionTimeout = null;
         }
         connectionTask = null; // 清空任务引用
-
         // 3. 清理Netty通道相关引用（避免IO线程持有）
         if (tcpChannel != null) {
             tcpChannel.close().addListener(future -> {
@@ -267,7 +264,7 @@ public class QuicConnection {
             //是否处理过
             Long ifPresent = R_CACHE.getIfPresent(quicFrame.getDataId());
             if (ifPresent!=null){
-                log.info("数据已经处理过了");
+                log.debug("数据已经处理过了");
                 //回复ALL_ACK
                 long connectionId = getConnectionId();
                 long dataId = quicFrame.getDataId();
@@ -320,6 +317,9 @@ public class QuicConnection {
             case OFF_FRAME:
                 handleOffFrame(quicFrame);
                 break;
+            case PEER_OFF_FRAME:
+                handlePeerOffFrame(quicFrame);
+                break;
             case CONNECT_REQUEST_FRAME:
                 handleConnectRequestFrame(quicFrame);
                 break;
@@ -329,6 +329,8 @@ public class QuicConnection {
                 break;
         }
     }
+
+
 
     private void handleBatchACKFrame(QuicFrame quicFrame) {
         log.debug("处理批量ACK");
@@ -352,7 +354,6 @@ public class QuicConnection {
         // 标记该序列号为已确认
         if (sendQuicData != null){
             sendQuicData.allReceived();
-            int unconfirmedCount = sendQuicData.getUnconfirmedCount();
         }
         quicFrame.release();
     }
@@ -431,8 +432,36 @@ public class QuicConnection {
 
 
     private void handleOffFrame(QuicFrame quicFrame) {
-        log.info("处理节点下线");
+        log.info("处理连接下线");
         //取消心跳关闭连接
+        byte[] payload = quicFrame.getPayload();
+        String peerId = Base58.encode(payload);
+        QuicConnection connection = getConnection(getConnectionId());
+        connection.release();
+        if (PeerConnect.containsKey(peerId)){
+            Long conId = PeerConnect.remove(peerId);
+            //释放连接
+            QuicConnection quicConnection = getConnection(conId);
+            if (quicConnection!=null){
+                quicConnection.release();
+            }
+        }
+        quicFrame.release();
+    }
+
+    private void handlePeerOffFrame(QuicFrame quicFrame) {
+        byte[] payload = quicFrame.getPayload();
+        String peerId = Base58.encode(payload);
+        //删除掉该节点的所有信息并释放所有连接
+        if (PeerConnect.containsKey(peerId)){
+            Long conId = PeerConnect.remove(peerId);
+            //释放连接
+            QuicConnection quicConnection = getConnection(conId);
+            if (quicConnection!=null){
+                quicConnection.release();
+            }
+        }
+        quicFrame.release();
     }
 
     private void handlePingFrame(QuicFrame quicFrame) {

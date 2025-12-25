@@ -49,19 +49,16 @@ public class QuicConnectionManager {
 
 
     //节点ID - > 连接ID
-    public static final Map<String, Set<Long>> PeerConnect = new HashMap<>();
+    public static final Map<String, Long> PeerConnect = new HashMap<>();
     public static DatagramChannel Global_Channel = null;// UDP通道
     private static final Map<Long, QuicConnection> CONNECTION_MAP  = new HashMap<>();
-    public static GlobalFrameFlowController globalController = GlobalFrameFlowController.getDefaultInstance();
 
 
     //获取节点的连接
     public static QuicConnection getPeerConnection(String peerId) {
         if (PeerConnect.containsKey(peerId)){
-            Set<Long> longs = PeerConnect.get(peerId);
-            if (!longs.isEmpty()){
-                //随机选择一个
-                long connectionId = longs.iterator().next();
+            Long connectionId = PeerConnect.get(peerId);
+            if (connectionId!=null){
                 return QuicConnectionManager.getConnection(connectionId);
             }else {
                 return null;
@@ -74,14 +71,29 @@ public class QuicConnectionManager {
 
     //给节点添加一个连接
     public static void addPeerConnect(String peerId, long connectionId) {
-        if (!PeerConnect.containsKey(peerId)){
-            ConcurrentSkipListSet<Long> longs = new ConcurrentSkipListSet<>();
-            longs.add(connectionId);
-            PeerConnect.put(peerId, longs);
+        if (PeerConnect.containsKey(peerId)){
+            //包含
+            Long oldConnectId = PeerConnect.get(peerId);
+            if (oldConnectId.equals(connectionId)){
+                //相等
+                log.info("节点连接已经存在");
+            }else {
+                //不相等 移除之前的连接替换为新的连接
+                QuicConnection connection = getConnection(oldConnectId);
+                if (connection!=null){
+                    connection.release();
+                }
+                //添加为新的连接
+                PeerConnect.put(peerId,connectionId);
+            }
         }else {
-            Set<Long> longs = PeerConnect.get(peerId);
-            longs.add(connectionId);
-            PeerConnect.put(peerId, longs);
+            //不包含 判断连接是否存在
+            QuicConnection connection = getConnection(connectionId);
+            if (connection!=null){
+                PeerConnect.put(peerId,connectionId);
+            }else {
+                log.info("连接是空的,无法为节点添加");
+            }
         }
     }
 
@@ -89,10 +101,11 @@ public class QuicConnectionManager {
     public static void removePeerConnect(String peerId, long connectionId) {
         if (peerId!=null){
             if (PeerConnect.containsKey(peerId)){
-                Set<Long> longs = PeerConnect.get(peerId);
-                longs.remove(connectionId);
-                if (longs.isEmpty()){
+                if (PeerConnect.get(peerId).equals(connectionId)){
                     PeerConnect.remove(peerId);
+                    //释放连接
+                    QuicConnection connection = getConnection(connectionId);
+                    connection.release();
                 }
             }
         }
@@ -111,19 +124,20 @@ public class QuicConnectionManager {
         Set<String> onlinePeers = new HashSet<>();
 
         // 遍历所有节点的连接映射
-        for (Map.Entry<String, Set<Long>> entry : PeerConnect.entrySet()) {
+        for (Map.Entry<String, Long> entry : PeerConnect.entrySet()) {
             String peerId = entry.getKey();
-            Set<Long> connectionIds = entry.getValue();
-
-            // 检查该节点是否有至少一个有效连接
-            boolean hasValidConnection = connectionIds.stream()
-                    .anyMatch(connId -> {
-                        QuicConnection connection = getConnection(connId);
-                        return isConnectionValid(connection);
-                    });
-
-            if (hasValidConnection) {
-                onlinePeers.add(peerId);
+            Long connectionIds = entry.getValue();
+            if (connectionIds!=null){
+                QuicConnection connection = getConnection(connectionIds);
+                if (connection!=null){
+                    onlinePeers.add(peerId);
+                }else {
+                    //移除
+                    PeerConnect.remove(peerId);
+                }
+            }else {
+                //移除
+                PeerConnect.remove(peerId);
             }
         }
 
@@ -158,6 +172,23 @@ public class QuicConnectionManager {
         InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress, port);
         return connectRemote(peerId,remoteAddress);
     }
+
+
+    public static boolean disConnectRemoteByPeerId(String peerId){
+        //断开节点下所有的连接
+        if (PeerConnect.containsKey(peerId)){
+            //发送节点下线帧
+            Long conId = PeerConnect.remove(peerId);
+            if (conId!=null){
+                QuicConnection connection = getConnection(conId);
+                if (connection!=null){
+                    connection.release();
+                }
+            }
+        }
+        return true;
+    }
+
 
     /**
      * 与指定的节点建立连接
@@ -252,7 +283,7 @@ public class QuicConnectionManager {
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
             addConnection(connectionId, quicConnection);
-            globalController.registerConnection(connectionId);
+
         }
         quicConnection.updateLastSeen();
         return quicConnection;
@@ -319,7 +350,6 @@ public class QuicConnectionManager {
      */
     public static void removeConnection(long connectionId) {
         QuicConnection removed = CONNECTION_MAP.remove(connectionId);
-        globalController.unregisterConnection(connectionId);
         if (removed != null) {
             log.info("[连接移除] 连接ID:{}", connectionId);
         }

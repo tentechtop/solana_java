@@ -139,7 +139,7 @@ public class ReceiveQuicData extends QuicData {
             ackFrame.setConnectionId(connectionId);
             ackFrame.setDataId(dataId);
             ackFrame.setSequence(0); // ACK帧序列号固定为0
-            ackFrame.setTotal(1); // ACK帧不分片
+            ackFrame.setTotal(getTotal()); //携带全部的帧
             ackFrame.setFrameType(QuicFrameEnum.ALL_ACK_FRAME.getCode()); // 自定义：ACK帧类型
             ackFrame.setRemoteAddress(getRemoteAddress());
             // 计算总长度：固定头部 + 载荷长度
