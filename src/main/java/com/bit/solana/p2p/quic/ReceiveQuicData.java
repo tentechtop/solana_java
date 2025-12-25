@@ -56,26 +56,6 @@ public class ReceiveQuicData extends QuicData {
         long dataId = quicFrame.getDataId();
         long connectionId = quicFrame.getConnectionId();
 
-        //当已经接收的帧数量是1024的倍数时 回复一次ACK帧 8192个序列号
-
-
-       if (!isComplete() && !isFailed()){
-           Thread.ofVirtual().start(() -> {
-               int size = receivedSequences.size();
-               if (size>1 && size % 256 == 0) {
-                   QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
-                   if (ackFrame!=null){
-                       ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-                       ackFrame.encode(buf);
-                       DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
-                       Global_Channel.writeAndFlush(packet);
-                       ackFrame.release();
-                   }
-               }
-           });
-       }
-
-
         // ========== 重复帧处理 ==========
         if (receivedSequences.contains(sequence)) {
             log.debug("[重复帧] 连接ID:{} 数据ID:{} 序列号:{} 总帧数:{}，直接回复ACK",
@@ -96,6 +76,20 @@ public class ReceiveQuicData extends QuicData {
         receivedSequences.add(sequence);
         log.debug("[接收帧] 连接ID:{} 数据ID:{} 序列号:{} 已接收:{}/{}",
                 connectionId, dataId, sequence, receivedSequences.size(), total);
+
+       if (!isComplete() && !isFailed()){
+           int size = receivedSequences.size();
+           if ((size>1 && size % 128 == 0) || total<=128 || size==total) {
+               QuicFrame ackFrame = buildBatchAckFrame(quicFrame);
+               if (ackFrame!=null){
+                   ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                   ackFrame.encode(buf);
+                   DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
+                   Global_Channel.writeAndFlush(packet);
+                   ackFrame.release();
+               }
+           }
+       }
 
         if (receivedSequences.size() == total) {
             log.info("所有帧接收完成");
@@ -134,7 +128,7 @@ public class ReceiveQuicData extends QuicData {
         //回复ALL_ACK帧
         long connectionId = getConnectionId();
         long dataId = getDataId();
-        Thread.ofVirtual().start(() -> {
+ /*       Thread.ofVirtual().start(() -> {
             QuicFrame ackFrame =  QuicFrame.acquire();
             ackFrame.setConnectionId(connectionId);
             ackFrame.setDataId(dataId);
@@ -151,7 +145,7 @@ public class ReceiveQuicData extends QuicData {
             DatagramPacket packet = new DatagramPacket(buf, ackFrame.getRemoteAddress());
             Global_Channel.writeAndFlush(packet);
             ackFrame.release();
-        });
+        });*/
 
         setComplete(true);
         cancelAllRetransmitTimers();

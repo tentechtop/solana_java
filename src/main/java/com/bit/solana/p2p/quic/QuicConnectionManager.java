@@ -47,11 +47,11 @@ public class QuicConnectionManager {
     @Autowired
     private QuicDataProcessor quicDataProcessor;
 
-
     //节点ID - > 连接ID
     public static final Map<String, Long> PeerConnect = new HashMap<>();
     public static DatagramChannel Global_Channel = null;// UDP通道
     private static final Map<Long, QuicConnection> CONNECTION_MAP  = new HashMap<>();
+    public static GlobalFrameFlowController GlobalSendController = GlobalFrameFlowController.getDefaultInstance();
 
 
     //获取节点的连接
@@ -283,7 +283,7 @@ public class QuicConnectionManager {
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
             addConnection(connectionId, quicConnection);
-
+            GlobalSendController.registerConnection(connectionId);
         }
         quicConnection.updateLastSeen();
         return quicConnection;
@@ -350,6 +350,7 @@ public class QuicConnectionManager {
      */
     public static void removeConnection(long connectionId) {
         QuicConnection removed = CONNECTION_MAP.remove(connectionId);
+        GlobalSendController.unregisterConnection(connectionId);
         if (removed != null) {
             log.info("[连接移除] 连接ID:{}", connectionId);
         }

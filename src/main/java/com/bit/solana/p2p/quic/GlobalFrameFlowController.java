@@ -17,7 +17,7 @@ public class GlobalFrameFlowController {
     // 全局单例（确保所有连接共享同一个全局流量控制器）
     private static volatile GlobalFrameFlowController INSTANCE;
 
-    private final int globalMaxSendRate;                  // 全局最大发送速率（帧/秒，如需动态调整也可改为AtomicInteger）
+    private final int globalMaxSendRate;
     // 存储所有连接的流量控制器（ConcurrentHashMap保证线程安全）
     private final Map<Long, ConnectFrameFlowController> connectionFlowControllers = new ConcurrentHashMap<>();
     // 全局当前秒发送帧数量（用于控制全局速率）

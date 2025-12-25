@@ -302,9 +302,9 @@ public class QuicConnection {
             case DATA_ACK_FRAME:
                 handleACKFrame(quicFrame);
                 break;
-            case ALL_ACK_FRAME:
+/*            case ALL_ACK_FRAME:
                 handleALLACKFrame(quicFrame);
-                break;
+                break;*/
             case BATCH_ACK_FRAME:
                 handleBatchACKFrame(quicFrame);
                 break;
@@ -346,7 +346,7 @@ public class QuicConnection {
     }
 
     private void handleALLACKFrame(QuicFrame quicFrame) {
-        log.debug("处理所有帧完成");
+        log.info("收到ALL_ACK");
         long connectionId1 = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         int sequence = quicFrame.getSequence();
@@ -497,6 +497,7 @@ public class QuicConnection {
     }
 
     private void handleACKFrame( QuicFrame quicFrame) {
+        GlobalSendController.onFrameAcked(getConnectionId());
         long connectionId1 = quicFrame.getConnectionId();
         long dataId = quicFrame.getDataId();
         int sequence = quicFrame.getSequence();

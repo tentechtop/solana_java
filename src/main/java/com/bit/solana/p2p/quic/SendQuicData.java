@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.bit.solana.p2p.quic.QuicConnectionManager.GlobalSendController;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 
@@ -64,6 +65,9 @@ public class SendQuicData extends QuicData {
 
     //单帧平均用时
     private long averageSendTime;
+
+    //总共通过UDP发送多少帧
+    private AtomicInteger totalSendCount = new AtomicInteger(0);
 
 
     /**
@@ -144,7 +148,6 @@ public class SendQuicData extends QuicData {
             return;
         }
         log.info("[开始发送] 连接ID:{} 数据ID:{} 总帧数:{}", getConnectionId(), getDataId(), getTotal());
-        long start = System.nanoTime();
         startGlobalTimeoutTimer();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
@@ -160,8 +163,10 @@ public class SendQuicData extends QuicData {
                 }
             }
         }
-        long end = System.nanoTime();
-        log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
+
+        ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
+        int inFlightFrames = connectionFlowController.getInFlightFrames();
+        log.info("[发送完成] 发送总帧数:{} 在途帧{}", getTotal(),inFlightFrames);
         setSendTime(System.nanoTime());
         if (!isCompleted && !isFailed()){
             startRetransmitTimer();
@@ -191,6 +196,9 @@ public class SendQuicData extends QuicData {
                                         } else {
                                             log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                                     getConnectionId(), getDataId(), sequence);
+                                            //发送成功
+                                            GlobalSendController.onFrameSent(getConnectionId());
+                                            totalSendCount.incrementAndGet();
                                         }
                                     });
                                 }
@@ -343,7 +351,7 @@ public class SendQuicData extends QuicData {
                 return false;
             }
             // 退出条件2：获取发送权限
-            if (true){
+            if (GlobalSendController.canSendSingleFrame(getConnectionId())){
                 return true;
             }
             // 退出条件3：自旋超时（50ms）
@@ -367,6 +375,7 @@ public class SendQuicData extends QuicData {
      * 处理发送失败
      */
     private void handleSendFailure() {
+        GlobalSendController.onFrameSendFailed(getConnectionId(),totalSendCount.get());
         log.info("[处理发送失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
         // 从发送Map中移除
         deleteSendDataByConnectIdAndDataId(getConnectionId(), getDataId());
@@ -420,8 +429,12 @@ public class SendQuicData extends QuicData {
     private void handleSendSuccess() {
         setCompleteTime(System.nanoTime());
         //设置平均时间
-        setAverageSendTime((getCompleteTime() - getSendTime()) / getTotal());
+        setAverageSendTime((getCompleteTime() - getSendTime()) / totalSendCount.get());
         setCompleted(true);
+        GlobalSendController.addFrameAverageSendTime(getConnectionId(),getAverageSendTime());
+        ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
+        int inFlightFrames = connectionFlowController.getInFlightFrames();
+        log.info("发送完毕且接收完毕 连接在途帧{} 共计发送{}",inFlightFrames,totalSendCount.get());
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -491,6 +504,7 @@ public class SendQuicData extends QuicData {
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
                         }
+                        GlobalSendController.onFrameAcked(getConnectionId());
                     }
                 }
             }
