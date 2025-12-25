@@ -154,7 +154,7 @@ public class SendQuicData extends QuicData {
         }
         long end = System.nanoTime();
         log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
-        setSendTime(System.currentTimeMillis());
+        setSendTime(System.nanoTime());
         startRetransmitTimer();
     }
 

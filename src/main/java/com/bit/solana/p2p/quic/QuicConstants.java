@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class QuicConstants {
 
     //将完整的二进制数据放在缓存中 等待消费者消费 一次全部取走
-    private static final BlockingQueue<QuicMsg> MSG_QUEUE = new LinkedBlockingQueue<>(1000_00);
+    private static final BlockingQueue<QuicMsg> MSG_QUEUE = new LinkedBlockingQueue<>(1000_0);
 
     /**
      * 推送完整Quic消息到静态队列（非阻塞，避免阻塞Netty IO线程）
