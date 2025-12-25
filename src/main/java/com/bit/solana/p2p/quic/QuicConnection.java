@@ -67,6 +67,9 @@ public class QuicConnection {
 
     //对连接动态调整发送数据大小 默认对方是最差网速 逐步提升
 
+    //发送时间收集 数据大小 - > 所用时间
+    private static final Map<Long, Long> connectionSendTimeMap = new ConcurrentHashMap<>();
+
 
 
     /**

@@ -56,6 +56,9 @@ public class SendQuicData extends QuicData {
     //是否已经完成
     private volatile boolean isCompleted = false;
 
+    //发送时间 用来计算 平均每帧所需要的时间
+    private long sendTime;
+
 
 
 
@@ -158,7 +161,7 @@ public class SendQuicData extends QuicData {
             Thread.ofVirtual()
                     .name("send-virtual-thread")
                     .start(() -> {
-                        if (!isCompleted && !isFailed() && frame != null){
+                        if (!isCompleted && !isFailed() && frame != null && !ackedSequences.contains(frame.getSequence())){
                             int sequence = frame.getSequence();
                             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
                             try {
