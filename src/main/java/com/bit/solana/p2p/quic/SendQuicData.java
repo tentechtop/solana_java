@@ -59,7 +59,11 @@ public class SendQuicData extends QuicData {
     //发送时间 用来计算 平均每帧所需要的时间
     private long sendTime;
 
+    //完成时间
+    private long completeTime;
 
+    //单帧平均用时
+    private long averageSendTime;
 
 
     /**
@@ -150,6 +154,7 @@ public class SendQuicData extends QuicData {
         }
         long end = System.nanoTime();
         log.info("[发送完成] 耗时:{} 毫秒, 帧数:{}", TimeUnit.NANOSECONDS.toMillis(end - start), getTotal());
+        setSendTime(System.currentTimeMillis());
         startRetransmitTimer();
     }
 
@@ -362,8 +367,11 @@ public class SendQuicData extends QuicData {
      * 处理发送成功（所有帧均被确认）
      */
     private void handleSendSuccess() {
+        setCompleteTime(System.nanoTime());
+        //设置平均时间
+        setAverageSendTime((getCompleteTime() - getSendTime()) / getTotal());
         setCompleted(true);
-        log.info("发送成功");
+        log.info("发送成功 平均用时 {}",getAverageSendTime());
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
