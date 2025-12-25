@@ -166,7 +166,7 @@ public class SendQuicData extends QuicData {
 
         ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
         int inFlightFrames = connectionFlowController.getInFlightFrames();
-        log.info("[发送完成] 发送总帧数:{} 在途帧{}", getTotal(),inFlightFrames);
+        log.info("[发送完成] 发送总帧数:{} 在途帧{} 发送速度{}", getTotal(),inFlightFrames,connectionFlowController.getCurrentSendRate());
         setSendTime(System.nanoTime());
         if (!isCompleted && !isFailed()){
             startRetransmitTimer();
@@ -434,7 +434,7 @@ public class SendQuicData extends QuicData {
         GlobalSendController.addFrameAverageSendTime(getConnectionId(),getAverageSendTime());
         ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
         int inFlightFrames = connectionFlowController.getInFlightFrames();
-        log.info("发送完毕且接收完毕 连接在途帧{} 共计发送{}",inFlightFrames,totalSendCount.get());
+        log.info("发送完毕且接收完毕 连接在途帧{} 共计发送{} 发送速度{}",inFlightFrames,totalSendCount.get(),connectionFlowController.getCurrentSendRate());
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();

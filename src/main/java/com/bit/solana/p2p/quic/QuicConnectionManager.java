@@ -105,7 +105,9 @@ public class QuicConnectionManager {
                     PeerConnect.remove(peerId);
                     //释放连接
                     QuicConnection connection = getConnection(connectionId);
-                    connection.release();
+                    if (connection!=null){
+                        connection.release();
+                    }
                 }
             }
         }
@@ -170,7 +172,12 @@ public class QuicConnectionManager {
         String ipAddress = multiAddress.getIpAddress();
         int port = multiAddress.getPort();
         InetSocketAddress remoteAddress = new InetSocketAddress(ipAddress, port);
-        return connectRemote(peerId,remoteAddress);
+        long start = System.currentTimeMillis();
+        QuicConnection quicConnection = connectRemote(peerId, remoteAddress);
+        long end = System.currentTimeMillis();
+        log.info("分析一 [连接节点] 节点ID{}，连接成功，耗时{}ms", peerId, end - start);
+
+        return quicConnection;
     }
 
 
@@ -206,8 +213,11 @@ public class QuicConnectionManager {
             log.error("该节点已存在连接");
             return QuicConnectionManager.getPeerConnection(peerId);
         }
+        long start = System.currentTimeMillis();
         long conId = generator.nextId();
         long dataId = generator.nextId();
+        long end = System.currentTimeMillis();
+        log.info("分析二 [连接节点] 节点ID{}，开始连接，耗时{}ms", peerId, end - start);
 
         //给远程地址发送连接请求请求帧 等待回复 回复成功后建立连接
         QuicFrame reqQuicFrame = QuicFrame.acquire();//已经释放
@@ -217,21 +227,42 @@ public class QuicConnectionManager {
         reqQuicFrame.setFrameType(QuicFrameEnum.CONNECT_REQUEST_FRAME.getCode());
 
         //连接包 包含节点ID 加密公钥
+        long cryptoStart = System.currentTimeMillis();
         NetworkHandshake networkHandshake = new NetworkHandshake();
         networkHandshake.setNodeId(self.getId());
+
+        long genStart = System.currentTimeMillis();
         byte[][] AKeys = generateCurve25519KeyPair();
         byte[] aPrivateKey = AKeys[0];
         byte[] aPublicKey = AKeys[1];
+        long genEnd = System.currentTimeMillis();
+        log.info("分析四 密钥生成耗时：{}ms", genEnd - genStart);
+
+        //序列化耗时
+        long serStart = System.currentTimeMillis();
         networkHandshake.setSharedSecret(aPublicKey);
         byte[] serialize = networkHandshake.serialize();
+        long serEnd = System.currentTimeMillis();
+        log.info("分析五 密钥序列化耗时：{}ms", serEnd - serStart);
+
+
         int length = serialize.length;
         log.info("握手长度！{}",length);
         reqQuicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH+length);
         reqQuicFrame.setPayload(serialize);//携带节点ID 这样被连接的节点就能立马让P2P节点上线
         reqQuicFrame.setRemoteAddress(remoteAddress);
+        long startCon = System.currentTimeMillis();
         QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
+        long endCon = System.currentTimeMillis();
+        log.info("分析握手 [连接节点] 节点ID{}，连接成功，耗时{}ms", peerId, endCon - startCon);
+
+
         log.info("响应帧{}",resQuicFrame);
+        long cryptoEnd = System.currentTimeMillis();
+        log.info("分析三 密钥生成+握手数据序列化耗时：{}ms", cryptoEnd - cryptoStart);
         reqQuicFrame.release();
+
+        long sendStart = System.currentTimeMillis();
         if (resQuicFrame != null){
             QuicConnection connection = getConnection(conId);
             byte[] payload = resQuicFrame.getPayload();
@@ -243,7 +274,6 @@ public class QuicConnectionManager {
             //协商
             byte[] sharedSecret = generateSharedSecret(aPrivateKey, bPublicKey);
             log.info("协商共享密钥是:{}", bytesToHex(sharedSecret));
-
             connection.setPeerId(peerId);
             connection.stopHeartbeat();
             connection.setUDP(true);
@@ -255,6 +285,11 @@ public class QuicConnectionManager {
             addConnection(conId, connection);
             addPeerConnect(peerId,conId);
             resQuicFrame.release();
+
+            long sendEnd = System.currentTimeMillis();
+            log.info("分析四 发送连接请求并等待响应耗时：{}ms（核心耗时）", sendEnd - sendStart);
+
+
             return connection;
         }
         return null;

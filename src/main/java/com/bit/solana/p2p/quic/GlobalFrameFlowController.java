@@ -25,6 +25,8 @@ public class GlobalFrameFlowController {
     // 全局当前秒时间戳
     private volatile long globalCurrentSecondTimestamp;
 
+
+
     /**
      * 私有构造方法
      * @param globalMaxSendRate 全局最大发送速率（帧/秒）
