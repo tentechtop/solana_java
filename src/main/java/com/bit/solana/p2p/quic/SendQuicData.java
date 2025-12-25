@@ -148,7 +148,7 @@ public class SendQuicData extends QuicData {
         long start = System.nanoTime();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
-            if (frame != null && !isFailed) {
+            if (frame != null) {
                 sendFrame(frame);
             }
         }
@@ -372,6 +372,7 @@ public class SendQuicData extends QuicData {
         setAverageSendTime((getCompleteTime() - getSendTime()) / getTotal());
         setCompleted(true);
         log.info("发送成功 平均用时 {}",getAverageSendTime());
+
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -455,4 +456,17 @@ public class SendQuicData extends QuicData {
             }
         }
     }
+
+
+    //已经确认的帧数量
+    public int getConfirmedCount(){
+        return ackedSequences.size();
+    }
+
+    //未确认帧数量
+    public int getUnconfirmedCount(){
+        return getTotal() - getConfirmedCount();
+    }
+
+
 }

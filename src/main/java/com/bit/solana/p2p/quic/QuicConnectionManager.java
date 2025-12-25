@@ -52,7 +52,6 @@ public class QuicConnectionManager {
     public static final Map<String, Set<Long>> PeerConnect = new HashMap<>();
     public static DatagramChannel Global_Channel = null;// UDP通道
     private static final Map<Long, QuicConnection> CONNECTION_MAP  = new HashMap<>();
-    public static GlobalFrameFlowController globalController = GlobalFrameFlowController.getDefaultInstance();
 
 
     //获取节点的连接

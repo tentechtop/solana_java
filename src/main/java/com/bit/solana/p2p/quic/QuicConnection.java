@@ -352,6 +352,7 @@ public class QuicConnection {
         // 标记该序列号为已确认
         if (sendQuicData != null){
             sendQuicData.allReceived();
+            int unconfirmedCount = sendQuicData.getUnconfirmedCount();
         }
         quicFrame.release();
     }
