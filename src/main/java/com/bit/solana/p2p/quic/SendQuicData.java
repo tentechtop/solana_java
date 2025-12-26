@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.bit.solana.p2p.quic.QuicConnectionManager.GlobalSendController;
 import static com.bit.solana.p2p.quic.QuicConnectionManager.Global_Channel;
+import static com.bit.solana.p2p.quic.QuicConnectionManager.getConnection;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 
 
@@ -163,10 +163,6 @@ public class SendQuicData extends QuicData {
                 }
             }
         }
-
-        ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
-        int inFlightFrames = connectionFlowController.getInFlightFrames();
-        log.info("[发送完成] 发送总帧数:{} 在途帧{} 发送速度{}", getTotal(),inFlightFrames,connectionFlowController.getCurrentSendRate());
         setSendTime(System.nanoTime());
         if (!isCompleted && !isFailed()){
             startRetransmitTimer();
@@ -185,7 +181,8 @@ public class SendQuicData extends QuicData {
                             int sequence = frame.getSequence();
                             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
                             try {
-                                if (frame!=null){
+                                QuicConnection connection = getConnection(getConnectionId());
+                                if (frame!=null && getConnectionId()!=0 && connection!=null){
                                     frame.encode(buf);
                                     DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
                                     Global_Channel.writeAndFlush(packet).addListener(future -> {
@@ -196,9 +193,8 @@ public class SendQuicData extends QuicData {
                                         } else {
                                             log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                                     getConnectionId(), getDataId(), sequence);
-                                            //发送成功
-                                            GlobalSendController.onFrameSent(getConnectionId());
                                             totalSendCount.incrementAndGet();
+                                            connection.onFrameSent();
                                         }
                                     });
                                 }
@@ -351,8 +347,13 @@ public class SendQuicData extends QuicData {
                 return false;
             }
             // 退出条件2：获取发送权限
-            if (GlobalSendController.canSendSingleFrame(getConnectionId())){
-                return true;
+            QuicConnection connection = getConnection(getConnectionId());
+            if (connection==null){
+                return false;
+            }else {
+                if (connection.canSendSingleFrame()){
+                    return true;
+                }
             }
             // 退出条件3：自旋超时（50ms）
             long elapsedNanos = System.nanoTime() - startNanos;
@@ -375,7 +376,6 @@ public class SendQuicData extends QuicData {
      * 处理发送失败
      */
     private void handleSendFailure() {
-        GlobalSendController.onFrameSendFailed(getConnectionId(),totalSendCount.get());
         log.info("[处理发送失败] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
         // 从发送Map中移除
         deleteSendDataByConnectIdAndDataId(getConnectionId(), getDataId());
@@ -427,14 +427,17 @@ public class SendQuicData extends QuicData {
      * 处理发送成功（所有帧均被确认）
      */
     private void handleSendSuccess() {
+        log.info("数据发送完毕");
         setCompleteTime(System.nanoTime());
         //设置平均时间
         setAverageSendTime((getCompleteTime() - getSendTime()) / totalSendCount.get());
         setCompleted(true);
-        GlobalSendController.addFrameAverageSendTime(getConnectionId(),getAverageSendTime());
-        ConnectFrameFlowController connectionFlowController = GlobalSendController.getConnectionFlowController(getConnectionId());
-        int inFlightFrames = connectionFlowController.getInFlightFrames();
-        log.info("发送完毕且接收完毕 连接在途帧{} 共计发送{} 发送速度{}",inFlightFrames,totalSendCount.get(),connectionFlowController.getCurrentSendRate());
+        QuicConnection connection = getConnection(getConnectionId());
+        if (connection!=null){
+            connection.addFrameAverageSendTime(getAverageSendTime());
+            log.info("发送完毕且接收完毕  共计发送{} 帧平均时间{} 总体平均时间{}",totalSendCount.get(),getAverageSendTime(),connection.getCurrentFrameAverageSendTime());
+            log.info("在途帧{}",connection.getInFlightFrames());
+        }
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -464,7 +467,8 @@ public class SendQuicData extends QuicData {
      * @param ackList 批量ACK的比特位数组（长度为 (总帧数+7)/8 向上取整）
      */
     synchronized public void batchAck(byte[] ackList) {
-        if (!isCompleted() && !isFailed()){
+        QuicConnection connection = getConnection(getConnectionId());
+        if (!isCompleted() && !isFailed() && connection!=null){
 
             if (ackList == null || ackList.length == 0) {
                 log.warn("[批量ACK处理] ACK列表为空，连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
@@ -504,7 +508,7 @@ public class SendQuicData extends QuicData {
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
                         }
-                        GlobalSendController.onFrameAcked(getConnectionId());
+                        connection.onFrameAcked();
                     }
                 }
             }

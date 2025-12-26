@@ -17,6 +17,7 @@ public class SolanaApplication {
     public static void main(String[] args) {
         System.setProperty("io.netty.leakDetection.level", "PARANOID");
         SpringApplication.run(SolanaApplication.class, args);
+
         long start = System.currentTimeMillis();
         generateCurve25519KeyPair();
         Secp256k1Signer.generateKeyPair();
