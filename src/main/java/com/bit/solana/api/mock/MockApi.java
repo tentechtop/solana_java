@@ -90,7 +90,7 @@ public class MockApi {
         // 每个字节填充为字符'a'的ASCII码
         Arrays.fill(mockData, (byte) 'a');
         //发送一百次
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 1; i++) {
             byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, mockData, 5);
             P2PMessage deserialize = P2PMessage.deserialize(bytes);
             byte[] data = deserialize.getData();

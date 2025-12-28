@@ -281,7 +281,7 @@ public class SendQuicData extends QuicData {
                         retransmitCount++;
                         log.debug("[触发重传] 连接ID:{} 数据ID:{} 序列号:{}",
                                 getConnectionId(), getDataId(), sequence);
-                        if (retransmitCount == 256) {
+                        if (retransmitCount == 128) {
                             break; // 跳出for循环，终止本次重传遍历
                         }
                     } else {
