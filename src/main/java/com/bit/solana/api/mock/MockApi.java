@@ -89,12 +89,16 @@ public class MockApi {
         // 可选：填充固定字符（比如用 'a' 填充，避免全零数据）
         // 每个字节填充为字符'a'的ASCII码
         Arrays.fill(mockData, (byte) 'a');
+        //发送一百次
+        for (int i = 0; i < 100; i++) {
+            byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, mockData, 5);
+            P2PMessage deserialize = P2PMessage.deserialize(bytes);
+            byte[] data = deserialize.getData();
+            log.info("节点回复：{}", parseUtf8(data));
+        }
 
-        byte[] bytes = peerClient.sendData(nodeId, TEXT_V1, mockData, 5);
-        P2PMessage deserialize = P2PMessage.deserialize(bytes);
-        byte[] data = deserialize.getData();
-        log.info("节点回复：{}", parseUtf8(data));
-        return parseUtf8(data);
+
+        return "123";
     }
 
     @GetMapping("/rsendMsg")

@@ -151,16 +151,8 @@ public class SendQuicData extends QuicData {
         startGlobalTimeoutTimer();
         for (int sequence = 0; sequence < getTotal(); sequence++) {
             QuicFrame frame = getFrameArray()[sequence];
-            if (frame != null) {
-                // 先自旋等待50ms，直到可以发送或超时
-                boolean canSendAfterSpin = spinWaitForSendPermission();
-                if (canSendAfterSpin && !isFailed()) {
-                    sendFrame(frame);
-                } else {
-                    log.warn("[首次发送自旋超时/失败] 连接ID:{} 数据ID:{} 序列号:{} 50ms内无法获取发送权限",
-                            getConnectionId(), getDataId(), sequence);
-                    // 后续由重传定时器处理
-                }
+            if (frame != null && !isFailed()) {
+                sendFrame(frame);
             }
         }
         setSendTime(System.nanoTime());
@@ -173,38 +165,37 @@ public class SendQuicData extends QuicData {
      * 发送单个帧
      */
     private void sendFrame(QuicFrame frame) {
-        if (!isFailed() && frame!=null){
-            Thread.ofVirtual()
-                    .name("send-virtual-thread")
-                    .start(() -> {
-                        if (!isCompleted && !isFailed() && frame != null && !ackedSequences.contains(frame.getSequence())){
-                            int sequence = frame.getSequence();
-                            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
-                            try {
-                                QuicConnection connection = getConnection(getConnectionId());
-                                if (frame!=null && getConnectionId()!=0 && connection!=null){
-                                    frame.encode(buf);
-                                    DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
-                                    Global_Channel.writeAndFlush(packet).addListener(future -> {
-                                        // 核心：释放 ByteBuf（无论发送成功/失败）
-                                        if (!future.isSuccess()) {
-                                            log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                                    getConnectionId(), getDataId(), sequence, future.cause());
-                                        } else {
-                                            log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
-                                                    getConnectionId(), getDataId(), sequence);
-                                            totalSendCount.incrementAndGet();
-                                            connection.onFrameSent();
-                                        }
-                                    });
-                                }
-                            } catch (Exception e) {
-                                // 异常时直接释放 buf，避免泄漏
-                                log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
-                                        getConnectionId(), getDataId(), sequence, e);
-                            }
+        if (!isFailed() && frame!=null && !ackedSequences.contains(frame.getSequence())  && !isCompleted()){
+            int sequence = frame.getSequence();
+            ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+            try {
+                QuicConnection connection = getConnection(getConnectionId());
+                if (getConnectionId()!=0 && connection!=null){
+                    frame.encode(buf);
+                    DatagramPacket packet = new DatagramPacket(buf, frame.getRemoteAddress());
+                    Global_Channel.writeAndFlush(packet).addListener(future -> {
+                        // 核心：释放 ByteBuf（无论发送成功/失败）
+                        if (!future.isSuccess()) {
+                            log.error("[帧发送失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                                    getConnectionId(), getDataId(), sequence, future.cause());
+                        } else {
+                            log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
+                                    getConnectionId(), getDataId(), sequence);
+                            totalSendCount.incrementAndGet();
+                            connection.onFrameSent();
                         }
                     });
+                }
+            } catch (Exception e) {
+                // 异常时直接释放 buf，避免泄漏
+                log.error("[帧编码失败] 连接ID:{} 数据ID:{} 序列号:{}",
+                        getConnectionId(), getDataId(), sequence, e);
+            }
+     /*       Thread.ofVirtual()
+                    .name("send-virtual-thread")
+                    .start(() -> {
+
+                    });*/
         }
     }
 
@@ -283,7 +274,6 @@ public class SendQuicData extends QuicData {
 
                 QuicFrame frame = frameArray[sequence];
                 if (frame != null) {
-                    // 自旋等待50ms获取发送权限
                     boolean canSendAfterSpin = spinWaitForSendPermission();
                     if (canSendAfterSpin && !isFailed()) {
                         // 重传未ACK帧
@@ -330,44 +320,21 @@ public class SendQuicData extends QuicData {
         }
     }
 
-    // 自旋超时时间：50ms（用户要求）
-    private static final long SPIN_TIMEOUT_NANOS = 50_000_000L; // 50ms = 50*10^6纳秒
-    // 自旋间隔：10微秒（降低CPU占用，兼顾响应性）
-    private static final long SPIN_INTERVAL_NANOS = 10_000L;
+
 
     /**
      * 通用自旋等待方法：等待50ms，直到获取发送权限/连接失败/超时
      * @return true=获取发送权限，false=超时/连接失败
      */
     private boolean spinWaitForSendPermission() {
-        long startNanos = System.nanoTime();
-        while (true) {
-            // 退出条件1：连接已失败/传输已完成
-            if (isFailed() || isCompleted) {
-                return false;
-            }
-            // 退出条件2：获取发送权限
-            QuicConnection connection = getConnection(getConnectionId());
-            if (connection==null){
-                return false;
-            }else {
-                if (connection.canSendSingleFrame()){
-                    return true;
-                }
-            }
-            // 退出条件3：自旋超时（50ms）
-            long elapsedNanos = System.nanoTime() - startNanos;
-            if (elapsedNanos >= SPIN_TIMEOUT_NANOS) {
-                return false;
-            }
-            // 短暂休眠，降低CPU占用（虚拟线程低开销）
-            try {
-                Thread.sleep(0, (int) SPIN_INTERVAL_NANOS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("[自旋等待被中断] 连接ID:{} 数据ID:{}", getConnectionId(), getDataId());
-                return false;
-            }
+        if (isFailed() || isCompleted) {
+            return false;
+        }
+        QuicConnection connection = getConnection(getConnectionId());
+        if (connection==null){
+            return false;
+        }else {
+            return connection.canSendSingleFrame();
         }
     }
 
@@ -413,7 +380,6 @@ public class SendQuicData extends QuicData {
         if (ackedSequences.add(sequence)) {
             log.debug("[ACK处理] 连接ID:{} 数据ID:{} 序列号:{} 已确认，取消重传定时器",
                     getConnectionId(), getDataId(), sequence);
-
             // 检查是否所有帧都已确认
             if (ackedSequences.size() == getTotal()) {
                 log.info("[所有帧确认] 连接ID:{} 数据ID:{} 传输完成", getConnectionId(), getDataId());
