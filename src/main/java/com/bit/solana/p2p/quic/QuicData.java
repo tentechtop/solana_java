@@ -13,8 +13,11 @@ public class QuicData {
     private long connectionId;//连接ID
     private long dataId;//数据ID
     private int total;//数据帧总数
+    private int size;//字节数量
     private QuicFrame[] frameArray;//帧数据按照序列号存入
     private InetSocketAddress remoteAddress;
+
+
 
     public byte[] getCombinedFullData() {
         // 校验帧数组是否存在

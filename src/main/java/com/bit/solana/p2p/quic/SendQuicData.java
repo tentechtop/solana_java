@@ -63,11 +63,7 @@ public class SendQuicData extends QuicData {
     //完成时间
     private long completeTime;
 
-    //单帧平均用时
-    private long averageSendTime;
 
-    //总共通过UDP发送多少帧
-    private AtomicInteger totalSendCount = new AtomicInteger(0);
 
 
     /**
@@ -106,7 +102,6 @@ public class SendQuicData extends QuicData {
         // 计算分片总数：向上取整（避免因整数除法丢失最后一个不完整分片）
         quicData.setTotal(totalFrames);//分片总数
         quicData.setFrameArray(new QuicFrame[totalFrames]);
-
         // 2. 分片构建QuicFrame
         try {
             for (int sequence = 0; sequence < totalFrames; sequence++) {
@@ -133,6 +128,7 @@ public class SendQuicData extends QuicData {
                 log.debug("构建分片完成: connectionId={}, dataId={}, 序列号={}, 载荷长度={}, 总长度={}",
                         connectionId, dataId, sequence, currentPayloadLength, frame.getFrameTotalLength());
             }
+            quicData.setSize(sendData.length);
         } catch (Exception e) {
             log.error("构建QuicData失败 connectionId={}, dataId={}", connectionId, dataId, e);
             // 异常时释放已创建的帧
@@ -181,7 +177,6 @@ public class SendQuicData extends QuicData {
                         } else {
                             log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                     getConnectionId(), getDataId(), sequence);
-                            totalSendCount.incrementAndGet();
                             connection.onFrameSent();
                         }
                     });
@@ -395,15 +390,7 @@ public class SendQuicData extends QuicData {
     private void handleSendSuccess() {
         log.info("数据发送完毕");
         setCompleteTime(System.nanoTime());
-        //设置平均时间
-        setAverageSendTime((getCompleteTime() - getSendTime()) / totalSendCount.get());
         setCompleted(true);
-        QuicConnection connection = getConnection(getConnectionId());
-        if (connection!=null){
-            connection.addFrameAverageSendTime(getAverageSendTime());
-            log.info("发送完毕且接收完毕  共计发送{} 帧平均时间{} 总体平均时间{}",totalSendCount.get(),getAverageSendTime(),connection.getCurrentFrameAverageSendTime());
-            log.info("在途帧{}",connection.getInFlightFrames());
-        }
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -433,6 +420,7 @@ public class SendQuicData extends QuicData {
      * @param ackList 批量ACK的比特位数组（长度为 (总帧数+7)/8 向上取整）
      */
     synchronized public void batchAck(byte[] ackList) {
+        long rtime = System.nanoTime();
         QuicConnection connection = getConnection(getConnectionId());
         if (!isCompleted() && !isFailed() && connection!=null){
 
@@ -470,6 +458,7 @@ public class SendQuicData extends QuicData {
                     if (isAcked) {
                         // 调用已有的单ACK处理逻辑（自动去重并检查是否全部确认）
                         if (ackedSequences.add(sequence)) {
+                            //帧接收时间
                             confirmedCount++;
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
