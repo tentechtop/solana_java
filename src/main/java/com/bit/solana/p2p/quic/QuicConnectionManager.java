@@ -18,6 +18,7 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,8 +48,14 @@ import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 @Component
 public class QuicConnectionManager {
 
-    @Autowired
-    private QuicDataProcessor quicDataProcessor;
+    public static byte[][] SelfKey = null;
+
+
+    @PostConstruct
+    private void init(){
+        SelfKey = ECCWithAESGCM.generateCurve25519KeyPair();
+    }
+
 
     //节点ID - > 连接ID
     public static final Map<String, Long> PeerConnect = new HashMap<>();
@@ -186,7 +193,24 @@ public class QuicConnectionManager {
             if (conId!=null){
                 QuicConnection connection = getConnection(conId);
                 if (connection!=null){
-                    connection.release();
+                    //发送下线帧
+                    QuicFrame quicFrame = QuicFrame.acquire();
+                    try {
+                        quicFrame.setConnectionId(conId);
+                        quicFrame.setDataId(0);
+                        quicFrame.setFrameType(QuicFrameEnum.OFF_FRAME.getCode());
+                        quicFrame.setTotal(1);
+                        quicFrame.setSequence(0);
+                        quicFrame.setFrameTotalLength(QuicFrame.FIXED_HEADER_LENGTH);
+                        quicFrame.setRemoteAddress(connection.getRemoteAddress());
+                        ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
+                        quicFrame.encode(buf);
+                        DatagramPacket packet = new DatagramPacket(buf, quicFrame.getRemoteAddress());
+                        Global_Channel.writeAndFlush(packet);
+                        connection.release();
+                    }finally {
+                        quicFrame.release();
+                    }
                 }
             }
         }
@@ -223,7 +247,7 @@ public class QuicConnectionManager {
 
         NetworkHandshake networkHandshake = new NetworkHandshake();
         networkHandshake.setNodeId(self.getId());
-        byte[][] AKeys = ECCWithAESGCM.generateCurve25519KeyPair();
+        byte[][] AKeys = SelfKey;
         byte[] aPrivateKey = AKeys[0];
         byte[] aPublicKey = AKeys[1];
         //序列化耗时

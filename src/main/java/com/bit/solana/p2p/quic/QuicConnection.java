@@ -308,9 +308,6 @@ public class QuicConnection {
             case OFF_FRAME:
                 handleOffFrame(quicFrame);
                 break;
-            case PEER_OFF_FRAME:
-                handlePeerOffFrame(quicFrame);
-                break;
             case CONNECT_REQUEST_FRAME:
                 handleConnectRequestFrame(quicFrame);
                 break;
@@ -372,7 +369,7 @@ public class QuicConnection {
             String peerId = Base58.encode(nodeId);
             byte[] aPublicKey = deserialize.getSharedSecret();
 
-            byte[][] BKeys = generateCurve25519KeyPair();
+            byte[][] BKeys = SelfKey;
             byte[] bPrivateKey = BKeys[0];
             byte[] bPublicKey = BKeys[1];
             byte[] sharedSecret = ECCWithAESGCM.generateSharedSecret(bPrivateKey, aPublicKey);
@@ -440,20 +437,7 @@ public class QuicConnection {
         quicFrame.release();
     }
 
-    private void handlePeerOffFrame(QuicFrame quicFrame) {
-        byte[] payload = quicFrame.getPayload();
-        String peerId = Base58.encode(payload);
-        //删除掉该节点的所有信息并释放所有连接
-        if (PeerConnect.containsKey(peerId)){
-            Long conId = PeerConnect.remove(peerId);
-            //释放连接
-            QuicConnection quicConnection = getConnection(conId);
-            if (quicConnection!=null){
-                quicConnection.release();
-            }
-        }
-        quicFrame.release();
-    }
+
 
     private void handlePingFrame(QuicFrame quicFrame) {
         QuicFrame pongFrame = QuicFrame.acquire();//已经释放

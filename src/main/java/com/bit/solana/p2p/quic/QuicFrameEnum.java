@@ -20,8 +20,8 @@ public enum QuicFrameEnum {
 
 
 
-    OFF_FRAME((byte)9, "连接下线帧"),//通知类帧 无回复
-    PEER_OFF_FRAME((byte)10, "节点下线帧"),//通知类帧 无回复
+    OFF_FRAME((byte)9, "下线帧"),//通知类帧 无回复
+
 
 
     ;
