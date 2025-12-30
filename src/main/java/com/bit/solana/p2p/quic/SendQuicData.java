@@ -64,6 +64,8 @@ public class SendQuicData extends QuicData {
     private long completeTime;
 
 
+    //总共通过UDP发送多少帧
+    private AtomicInteger totalSendCount = new AtomicInteger(0);
 
 
     /**
@@ -177,7 +179,7 @@ public class SendQuicData extends QuicData {
                         } else {
                             log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                     getConnectionId(), getDataId(), sequence);
-                            connection.onFrameSent();
+                            totalSendCount.incrementAndGet();
                         }
                     });
                 }
@@ -269,8 +271,7 @@ public class SendQuicData extends QuicData {
 
                 QuicFrame frame = frameArray[sequence];
                 if (frame != null) {
-                    boolean canSendAfterSpin = spinWaitForSendPermission();
-                    if (canSendAfterSpin && !isFailed()) {
+                    if (!isFailed()) {
                         // 重传未ACK帧
                         sendFrame(frame);
                         retransmitCount++;
@@ -317,21 +318,7 @@ public class SendQuicData extends QuicData {
 
 
 
-    /**
-     * 通用自旋等待方法：等待50ms，直到获取发送权限/连接失败/超时
-     * @return true=获取发送权限，false=超时/连接失败
-     */
-    private boolean spinWaitForSendPermission() {
-        if (isFailed() || isCompleted) {
-            return false;
-        }
-        QuicConnection connection = getConnection(getConnectionId());
-        if (connection==null){
-            return false;
-        }else {
-            return connection.canSendSingleFrame();
-        }
-    }
+
 
 
     /**
@@ -391,6 +378,8 @@ public class SendQuicData extends QuicData {
         log.info("数据发送完毕");
         setCompleteTime(System.nanoTime());
         setCompleted(true);
+        //增加一个发送信息 用来分析连接
+
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -463,7 +452,6 @@ public class SendQuicData extends QuicData {
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
                         }
-                        connection.onFrameAcked();
                     }
                 }
             }
