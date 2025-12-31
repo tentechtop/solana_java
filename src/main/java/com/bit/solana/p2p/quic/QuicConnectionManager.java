@@ -1,32 +1,23 @@
 package com.bit.solana.p2p.quic;
 
 
-import com.bit.solana.p2p.impl.QuicNodeWrapper;
-import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
+import com.bit.solana.config.SystemConfig;
+import com.bit.solana.database.DataBase;
+import com.bit.solana.database.rocksDb.TableEnum;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
-import com.bit.solana.p2p.protocol.ProtocolEnum;
-import com.bit.solana.p2p.protocol.ProtocolHandler;
-import com.bit.solana.structure.key.KeyInfo;
 import com.bit.solana.util.ECCWithAESGCM;
 import com.bit.solana.util.MultiAddress;
-import com.bit.solana.util.Secp256k1Signer;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
-import io.netty.util.HashedWheelTimer;
-import io.netty.util.Timer;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.bitcoinj.core.Base58;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.KeyPair;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,11 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.bit.solana.config.CommonConfig.*;
 import static com.bit.solana.p2p.quic.QuicConstants.*;
 import static com.bit.solana.util.ByteUtils.bytesToHex;
-import static com.bit.solana.util.ByteUtils.hexToBytes;
 import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
 import static com.bit.solana.util.ECCWithAESGCM.generateSharedSecret;
-import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
-import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 
 
 /**
@@ -48,12 +36,48 @@ import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
 @Component
 public class QuicConnectionManager {
 
+    public static final byte[] PEER_SECURITY_KEY = "peer_security_key".getBytes();
+
+
     public static byte[][] SelfKey = null;
 
+    @Autowired
+    private SystemConfig config;
 
     @PostConstruct
     private void init(){
-        SelfKey = ECCWithAESGCM.generateCurve25519KeyPair();
+        DataBase dataBase = config.getDataBase();
+        byte[] key = dataBase.get(TableEnum.PEER, PEER_SECURITY_KEY);
+        if (key==null){
+            log.info("key是空的");
+            byte[][] bytes = generateCurve25519KeyPair();
+            byte[] privateKey = bytes[0];
+            byte[] publicKey = bytes[1];
+            //拼接成一个 byte[]
+            byte[] saveBytes = new byte[64];
+            System.arraycopy(privateKey, 0, saveBytes, 0, 32);
+            System.arraycopy(publicKey, 0, saveBytes, 32, 32);
+            SelfKey=bytes;
+            //保存
+            dataBase.insert(TableEnum.PEER, PEER_SECURITY_KEY, saveBytes);
+        }else {
+            log.info("key不为空");
+            //切割 32|32
+            //取前32字节
+            byte[] privateKey = Arrays.copyOfRange(key, 0, 32);
+            //取后32字节
+            byte[] publicKey = Arrays.copyOfRange(key, 32, 64);
+            //组合成byte[][]
+            SelfKey = new byte[][]{privateKey, publicKey};
+        }
+    }
+
+
+    //mian函数
+    public static void main(String[] args) {
+        byte[][] bytes = generateCurve25519KeyPair();
+        System.out.println(bytes[0].length);
+        System.out.println(bytes[1].length);
     }
 
 
@@ -260,12 +284,6 @@ public class QuicConnectionManager {
         reqQuicFrame.setRemoteAddress(remoteAddress);
         QuicFrame resQuicFrame = sendFrame(reqQuicFrame);//这里会得到一个入站连接
         log.info("响应帧{}",resQuicFrame);
-
-        long start = System.currentTimeMillis();
-        KeyPair keyPair = Secp256k1Signer.generateKeyPair();
-        long end = System.currentTimeMillis();
-        log.info("生成助记词耗时{}ms",end-start);
-
 
         reqQuicFrame.release();
         if (resQuicFrame != null){

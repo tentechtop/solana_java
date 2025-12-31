@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统监控仪表盘</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+    <!-- 配置Tailwind自定义颜色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                        dark: '#1D2129',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .card-shadow {
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            }
+            .stat-card {
+                @apply bg-white rounded-lg p-4 card-shadow transition-all duration-300 hover:shadow-lg;
+            }
+            .chart-container {
+                @apply bg-white rounded-lg p-4 card-shadow h-[300px] mt-4;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-dark">
+<div class="container mx-auto px-4 py-6">
+    <!-- 页面标题 -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark">
+            <i class="fa fa-tachometer mr-2 text-primary"></i>系统监控仪表盘
+        </h1>
+        <div class="flex items-center text-sm text-gray-500">
+            <span id="update-time">最后更新：--</span>
+            <button id="refresh-btn" class="ml-4 px-3 py-1 bg-primary text-white rounded hover:bg-primary/90 transition-colors">
+                <i class="fa fa-refresh mr-1"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 状态卡片区域 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- CPU使用率卡片 -->
+        <div class="stat-card">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-gray-500 text-sm">CPU使用率</p>
+                    <h3 id="cpu-usage" class="text-2xl font-bold mt-1">--%</h3>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <i class="fa fa-microchip text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3 text-sm">
+                <span>逻辑核心：<span id="cpu-logical" class="font-medium">--</span></span>
+                <span class="mx-2">|</span>
+                <span>物理核心：<span id="cpu-physical" class="font-medium">--</span></span>
+            </div>
+        </div>
+
+        <!-- 系统内存使用率卡片 -->
+        <div class="stat-card">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-gray-500 text-sm">系统内存使用率</p>
+                    <h3 id="mem-usage" class="text-2xl font-bold mt-1">--%</h3>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center text-success">
+                    <i class="fa fa-memory text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3 text-sm">
+                <span>已用：<span id="mem-used" class="font-medium">--</span></span>
+                <span class="mx-2">|</span>
+                <span>总容量：<span id="mem-total" class="font-medium">--</span></span>
+            </div>
+        </div>
+
+        <!-- JVM堆内存使用率卡片 -->
+        <div class="stat-card">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-gray-500 text-sm">JVM堆内存使用率</p>
+                    <h3 id="jvm-heap-usage" class="text-2xl font-bold mt-1">--%</h3>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center text-warning">
+                    <i class="fa fa-code-fork text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3 text-sm">
+                <span>已用：<span id="jvm-heap-used" class="font-medium">--</span></span>
+                <span class="mx-2">|</span>
+                <span>最大：<span id="jvm-heap-max" class="font-medium">--</span></span>
+            </div>
+        </div>
+
+        <!-- 网络速率卡片 -->
+        <div class="stat-card">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-gray-500 text-sm">网络速率</p>
+                    <h3 class="text-2xl font-bold mt-1">
+                        <span id="net-recv" class="text-success">--</span> /
+                        <span id="net-send" class="text-danger">--</span>
+                    </h3>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+                    <i class="fa fa-wifi text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3 text-sm">
+                <span>接收：<span id="net-recv-total" class="font-medium">--</span></span>
+                <span class="mx-2">|</span>
+                <span>发送：<span id="net-send-total" class="font-medium">--</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- CPU趋势图 -->
+        <div class="chart-container">
+            <h3 class="text-lg font-medium mb-3">CPU使用率趋势</h3>
+            <canvas id="cpu-chart"></canvas>
+        </div>
+
+        <!-- 内存趋势图 -->
+        <div class="chart-container">
+            <h3 class="text-lg font-medium mb-3">内存使用率趋势</h3>
+            <canvas id="memory-chart"></canvas>
+        </div>
+
+        <!-- 磁盘信息表 -->
+        <div class="chart-container">
+            <h3 class="text-lg font-medium mb-3">磁盘信息</h3>
+            <div class="overflow-auto h-[240px]">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                    <tr>
+                        <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">设备</th>
+                        <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总容量</th>
+                        <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">已用</th>
+                        <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">使用率</th>
+                    </tr>
+                    </thead>
+                    <tbody id="disk-table" class="bg-white divide-y divide-gray-200">
+                    <!-- 磁盘数据将通过JS动态填充 -->
+                    <tr><td colspan="4" class="px-3 py-2 text-center text-gray-500">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 网络趋势图 -->
+        <div class="chart-container">
+            <h3 class="text-lg font-medium mb-3">网络速率趋势</h3>
+            <canvas id="network-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 初始化图表
+    const initCharts = () => {
+        // 时间格式化工具
+        const formatTime = () => {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        };
+
+        // CPU趋势图
+        const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
+        const cpuChart = new Chart(cpuCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '系统CPU使用率(%)',
+                    data: [],
+                    borderColor: '#165DFF',
+                    backgroundColor: 'rgba(22, 93, 255, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }, {
+                    label: '进程CPU使用率(%)',
+                    data: [],
+                    borderColor: '#722ED1',
+                    backgroundColor: 'rgba(114, 46, 209, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100 },
+                    x: { ticks: { maxRotation: 0 } }
+                },
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        // 内存趋势图
+        const memoryCtx = document.getElementById('memory-chart').getContext('2d');
+        const memoryChart = new Chart(memoryCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '系统内存使用率(%)',
+                    data: [],
+                    borderColor: '#00B42A',
+                    backgroundColor: 'rgba(0, 180, 42, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }, {
+                    label: 'JVM堆内存使用率(%)',
+                    data: [],
+                    borderColor: '#FF7D00',
+                    backgroundColor: 'rgba(255, 125, 0, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100 },
+                    x: { ticks: { maxRotation: 0 } }
+                },
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        // 网络趋势图
+        const networkCtx = document.getElementById('network-chart').getContext('2d');
+        const networkChart = new Chart(networkCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '接收速率(KB/s)',
+                    data: [],
+                    borderColor: '#00B42A',
+                    backgroundColor: 'rgba(0, 180, 42, 0.1)',
+                    tension: 0.3,
+                    fill: true,
+                    yAxisID: 'y'
+                }, {
+                    label: '发送速率(KB/s)',
+                    data: [],
+                    borderColor: '#F53F3F',
+                    backgroundColor: 'rgba(245, 63, 63, 0.1)',
+                    tension: 0.3,
+                    fill: true,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { type: 'linear', position: 'left', title: { display: true, text: '接收速率(KB/s)' } },
+                    y1: { type: 'linear', position: 'right', title: { display: true, text: '发送速率(KB/s)' }, grid: { drawOnChartArea: false } },
+                    x: { ticks: { maxRotation: 0 } }
+                },
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        return { cpuChart, memoryChart, networkChart, formatTime };
+    };
+
+    // 单位转换工具（字节转人类可读格式）
+    const formatBytes = (bytes, decimals = 2) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    };
+
+    // 刷新数据
+    const refreshData = (charts) => {
+        const { cpuChart, memoryChart, networkChart, formatTime } = charts;
+
+        // 1. 获取CPU数据
+        fetch('/monitor/system/cpu')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('cpu-usage').textContent = data.systemCpuUsage.toFixed(1) + '%';
+                document.getElementById('cpu-logical').textContent = data.logicalCores;
+                document.getElementById('cpu-physical').textContent = data.physicalCores;
+
+                // 更新CPU图表
+                const time = formatTime();
+                if (cpuChart.data.labels.length > 20) { // 只保留最近20个数据点
+                    cpuChart.data.labels.shift();
+                    cpuChart.data.datasets[0].data.shift();
+                    cpuChart.data.datasets[1].data.shift();
+                }
+                cpuChart.data.labels.push(time);
+                cpuChart.data.datasets[0].data.push(data.systemCpuUsage);
+                cpuChart.data.datasets[1].data.push(data.processCpuUsage || 0);
+                cpuChart.update();
+            });
+
+        // 2. 获取系统内存数据
+        fetch('/monitor/system/memory')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('mem-usage').textContent = data.usedPercent.toFixed(1) + '%';
+                document.getElementById('mem-used').textContent = formatBytes(data.used);
+                document.getElementById('mem-total').textContent = formatBytes(data.total);
+
+                // 内存图表数据（后续结合JVM数据一起更新）
+                window.systemMemoryData = data;
+            });
+
+        // 3. 获取JVM内存数据
+        fetch('/monitor/system/jvm/memory')
+            .then(res => res.json())
+            .then(data => {
+                const heapUsedPercent = data.heapMax > 0 ? (data.heapUsed / data.heapMax) * 100 : 0;
+                document.getElementById('jvm-heap-usage').textContent = heapUsedPercent.toFixed(1) + '%';
+                document.getElementById('jvm-heap-used').textContent = formatBytes(data.heapUsed);
+                document.getElementById('jvm-heap-max').textContent = formatBytes(data.heapMax);
+
+                // 更新内存图表
+                if (window.systemMemoryData && memoryChart.data.labels.length > 20) {
+                    memoryChart.data.labels.shift();
+                    memoryChart.data.datasets[0].data.shift();
+                    memoryChart.data.datasets[1].data.shift();
+                }
+                if (window.systemMemoryData) {
+                    const time = formatTime();
+                    memoryChart.data.labels.push(time);
+                    memoryChart.data.datasets[0].data.push(window.systemMemoryData.usedPercent);
+                    memoryChart.data.datasets[1].data.push(heapUsedPercent);
+                    memoryChart.update();
+                }
+            });
+
+        // 4. 获取磁盘数据
+        fetch('/monitor/system/disk')
+            .then(res => res.json())
+            .then(disks => {
+                const diskTable = document.getElementById('disk-table');
+                diskTable.innerHTML = '';
+                disks.forEach(disk => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                            <td class="px-3 py-2">${disk.device}</td>
+                            <td class="px-3 py-2">${formatBytes(disk.totalSpace)}</td>
+                            <td class="px-3 py-2">${formatBytes(disk.usedSpace)}</td>
+                            <td class="px-3 py-2">
+                                <div class="flex items-center">
+                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-2">
+                                        <div class="bg-primary h-2 rounded-full" style="width: ${disk.usedPercent}%"></div>
+                                    </div>
+                                    <span>${disk.usedPercent.toFixed(1)}%</span>
+                                </div>
+                            </td>
+                        `;
+                    diskTable.appendChild(row);
+                });
+            });
+
+        // 5. 获取网络数据
+        fetch('/monitor/system/network')
+            .then(res => res.json())
+            .then(networks => {
+                if (networks.length === 0) return;
+                // 取第一个网卡的数据（可根据实际需求调整）
+                const net = networks[0];
+
+                document.getElementById('net-recv').textContent = formatBytes(net.receiveRate) + '/s';
+                document.getElementById('net-send').textContent = formatBytes(net.sendRate) + '/s';
+                document.getElementById('net-recv-total').textContent = formatBytes(net.receivedBytes);
+                document.getElementById('net-send-total').textContent = formatBytes(net.sentBytes);
+
+                // 更新网络图表
+                const time = formatTime();
+                if (networkChart.data.labels.length > 20) {
+                    networkChart.data.labels.shift();
+                    networkChart.data.datasets[0].data.shift();
+                    networkChart.data.datasets[1].data.shift();
+                }
+                networkChart.data.labels.push(time);
+                networkChart.data.datasets[0].data.push(net.receiveRate / 1024); // 转KB/s
+                networkChart.data.datasets[1].data.push(net.sendRate / 1024);     // 转KB/s
+                networkChart.update();
+            });
+
+        // 更新最后刷新时间
+        document.getElementById('update-time').textContent = `最后更新：${new Date().toLocaleString()}`;
+    };
+
+    // 页面加载完成后初始化
+    window.onload = () => {
+        const charts = initCharts();
+
+        // 首次加载数据
+        refreshData(charts);
+
+        // 定时刷新（3秒一次）
+        const interval = setInterval(() => refreshData(charts), 3000);
+
+        // 手动刷新按钮
+        document.getElementById('refresh-btn').addEventListener('click', () => refreshData(charts));
+    };
+</script>
+</body>
+</html>

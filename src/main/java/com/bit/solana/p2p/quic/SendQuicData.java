@@ -63,9 +63,12 @@ public class SendQuicData extends QuicData {
     //完成时间
     private long completeTime;
 
-
     //总共通过UDP发送多少帧
     private AtomicInteger totalSendCount = new AtomicInteger(0);
+
+    //重传轮数
+    private int retransmitCount = 0;
+
 
 
     /**
@@ -380,24 +383,6 @@ public class SendQuicData extends QuicData {
         long end = System.nanoTime();
         setCompleteTime(end);
         setCompleted(true);
-        //增加一个发送信息 用来分析连接
-        QuicConnection connection = getConnection(getConnectionId());
-        if (connection != null){
-            SendInfo sendInfo = new SendInfo();
-            sendInfo.setTotal(getTotal());
-            sendInfo.setSize(getSize());
-            long l = end - getSendTime();
-            sendInfo.setTotalTime(l);
-            sendInfo.setSendTotalFrame(totalSendCount.get());
-            connection.addSendInfo(sendInfo);
-            log.info("当前数据耗时{}",l);
-            double recentAverageFrameTimeMs = connection.getAverageSendTimeInNanos();
-            log.info("平均每帧耗时{}",recentAverageFrameTimeMs);
-        }
-
-
-
-
         // 取消全局超时定时器
         if (globalTimeout != null) {
             globalTimeout.cancel();
@@ -469,12 +454,6 @@ public class SendQuicData extends QuicData {
                             confirmedCount++;
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
-
-                            QuicFrame frameBySequence = getFrameBySequence(sequence);
-                            SendFrameInfo sendFrameInfo = new SendFrameInfo();
-                            sendFrameInfo.setTotalTime(rtime-frameBySequence.getTime());
-                            sendFrameInfo.setSize(frameBySequence.getPayload().length);
-                            connection.addSendFrameInfo(sendFrameInfo);
                         }
                     }
                 }

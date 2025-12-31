@@ -110,6 +110,7 @@ public class Peer {
 
 
 
+
     // 衍生字段（无需序列化，通过address+port动态构建）
     private InetSocketAddress inetSocketAddress;
 
@@ -122,9 +123,7 @@ public class Peer {
     }
 
 
-    //序列化
 
-    //
 
     // ==================== 序列化/反序列化 ====================
     /**

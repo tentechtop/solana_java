@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能铁路道口管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        danger: '#F53F3F',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        dark: '#1D2129',
+                        'rail-gray': '#4E5969',
+                        'track-color': '#272E3B'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow': '0 0 15px rgba(22, 93, 255, 0.5)',
+                        'glow-danger': '0 0 15px rgba(245, 63, 63, 0.5)',
+                        'glow-success': '0 0 15px rgba(0, 180, 42, 0.5)',
+                    }
+                },
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .track-main {
+                @apply bg-track-color h-6 w-full rounded-full relative;
+            }
+            .track-detail {
+                @apply absolute top-1/2 left-0 w-full h-1.5 bg-primary/70 transform -translate-y-1/2;
+            }
+            .track-sleeper {
+                @apply absolute w-12 h-4 bg-rail-gray rounded-sm transform -translate-y-1/4;
+            }
+            .sensor-active {
+                @apply ring-4 ring-warning scale-110 animate-pulse;
+            }
+            .gate-transition {
+                @apply transition-all duration-1500 ease-in-out transform origin-top;
+            }
+            .signal-pulse {
+                animation: pulse 2s infinite;
+            }
+            .camera-detecting {
+                @apply ring-2 ring-warning animate-ping;
+            }
+            .train-animation {
+                transition: transform 12s linear;
+            }
+            .log-highlight {
+                animation: highlight 3s ease-out;
+            }
+            .panel-gradient {
+                background: linear-gradient(145deg, #f5f7fa, #e4e6eb);
+            }
+            .glass-effect {
+                background: rgba(255, 255, 255, 0.7);
+                backdrop-filter: blur(10px);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        @keyframes highlight {
+            0% { background-color: rgba(22, 93, 255, 0.1); }
+            100% { background-color: transparent; }
+        }
+
+        @keyframes walk {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(80px); }
+            100% { transform: translateX(0); }
+        }
+
+        .pedestrian {
+            animation: walk 8s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-dark min-h-screen">
+<!-- 顶部导航栏 -->
+<header class="bg-primary text-white shadow-lg">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <i class="fa fa-train text-2xl"></i>
+            <h1 class="text-xl md:text-2xl font-bold">智能铁路道口管理系统</h1>
+        </div>
+        <div class="hidden md:flex items-center space-x-6">
+            <div class="flex items-center">
+                <i class="fa fa-clock-o mr-2"></i>
+                <span id="current-time">加载中...</span>
+            </div>
+            <div class="flex items-center">
+                <i class="fa fa-server mr-2"></i>
+                <span id="system-status" class="text-secondary">系统正常运行中</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="container mx-auto px-4 py-6 md:py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 主模拟区域 -->
+        <div class="lg:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div class="bg-primary/10 px-6 py-4 border-b border-primary/20">
+                <h2 class="text-xl font-bold text-primary flex items-center">
+                    <i class="fa fa-map-marker mr-2"></i>道口实时监控
+                </h2>
+            </div>
+
+            <!-- 模拟场景 -->
+            <div class="p-4 md:p-6 relative h-[580px] bg-gray-100">
+                <!-- 铁轨区域 -->
+                <div class="absolute top-1/2 left-0 right-0 transform -translate-y-1/2 px-8">
+                    <!-- 铁轨 -->
+                    <div class="track-main mb-8">
+                        <div class="track-detail"></div>
+                        <!-- 铁轨枕木 -->
+                        <div class="track-sleeper" style="left: 10%;"></div>
+                        <div class="track-sleeper" style="left: 25%;"></div>
+                        <div class="track-sleeper" style="left: 40%;"></div>
+                        <div class="track-sleeper" style="left: 55%;"></div>
+                        <div class="track-sleeper" style="left: 70%;"></div>
+                        <div class="track-sleeper" style="left: 85%;"></div>
+                    </div>
+                    <div class="track-main">
+                        <div class="track-detail"></div>
+                        <!-- 铁轨枕木 -->
+                        <div class="track-sleeper" style="left: 10%;"></div>
+                        <div class="track-sleeper" style="left: 25%;"></div>
+                        <div class="track-sleeper" style="left: 40%;"></div>
+                        <div class="track-sleeper" style="left: 55%;"></div>
+                        <div class="track-sleeper" style="left: 70%;"></div>
+                        <div class="track-sleeper" style="left: 85%;"></div>
+                    </div>
+                </div>
+
+                <!-- 过道区域 -->
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-56 bg-white rounded-lg border-4 border-rail-gray shadow-md flex flex-col items-center justify-center z-10">
+                    <div class="text-rail-gray font-bold text-lg mb-2">行人过道</div>
+                    <div class="w-48 h-px bg-rail-gray/30 my-1"></div>
+                    <div id="pedestrian" class="pedestrian hidden absolute w-6 h-10 bg-warning rounded-full" style="top: 15px; left: 15px;"></div>
+                </div>
+
+                <!-- 磁感应器 -->
+                <div id="sensor-f1" class="absolute top-1/2 left-[8%] transform -translate-y-1/2 z-20">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg transition-all duration-300">
+                        F1
+                    </div>
+                    <div class="text-xs text-center mt-1 text-rail-gray font-medium">远端传感器</div>
+                </div>
+
+                <div id="sensor-c1" class="absolute top-1/2 left-[30%] transform -translate-y-1/2 z-20">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg transition-all duration-300">
+                        C1
+                    </div>
+                    <div class="text-xs text-center mt-1 text-rail-gray font-medium">近端传感器</div>
+                </div>
+
+                <div id="sensor-c2" class="absolute top-1/2 right-[30%] transform -translate-y-1/2 z-20">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg transition-all duration-300">
+                        C2
+                    </div>
+                    <div class="text-xs text-center mt-1 text-rail-gray font-medium">近端传感器</div>
+                </div>
+
+                <div id="sensor-f2" class="absolute top-1/2 right-[8%] transform -translate-y-1/2 z-20">
+                    <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg transition-all duration-300">
+                        F2
+                    </div>
+                    <div class="text-xs text-center mt-1 text-rail-gray font-medium">远端传感器</div>
+                </div>
+
+                <!-- 道闸 -->
+                <div class="absolute top-[calc(50%-18px)] left-[calc(30%+80px)] transform -translate-y-1/2 z-30">
+                    <div id="gate-left" class="w-5 bg-rail-gray rounded-t-lg gate-transition h-0"></div>
+                </div>
+
+                <div class="absolute top-[calc(50%-18px)] right-[calc(30%+80px)] transform -translate-y-1/2 z-30">
+                    <div id="gate-right" class="w-5 bg-rail-gray rounded-t-lg gate-transition h-0"></div>
+                </div>
+
+                <!-- 道口信号灯 -->
+                <div class="absolute top-[calc(50%-120px)] left-1/2 transform -translate-x-1/2 z-30 bg-white p-3 rounded-xl shadow-lg">
+                    <div class="flex flex-col items-center">
+                        <div id="signal-red" class="w-8 h-8 rounded-full bg-gray-300 mb-2"></div>
+                        <div id="signal-green" class="w-8 h-8 rounded-full bg-success"></div>
+                        <div class="text-xs font-medium mt-2 text-rail-gray">道口信号</div>
+                    </div>
+                </div>
+
+                <!-- 摄像机 -->
+                <div class="absolute top-[calc(50%-180px)] left-[calc(30%+40px)] z-30">
+                    <div id="camera-left" class="w-12 h-12 bg-rail-gray rounded-full flex items-center justify-center text-white shadow-lg">
+                        <i class="fa fa-video-camera text-xl"></i>
+                    </div>
+                    <div class="text-xs text-center mt-1 font-medium text-rail-gray">左侧摄像机</div>
+                </div>
+
+                <div class="absolute top-[calc(50%-180px)] right-[calc(30%+40px)] z-30">
+                    <div id="camera-right" class="w-12 h-12 bg-rail-gray rounded-full flex items-center justify-center text-white shadow-lg">
+                        <i class="fa fa-video-camera text-xl"></i>
+                    </div>
+                    <div class="text-xs text-center mt-1 font-medium text-rail-gray">右侧摄像机</div>
+                </div>
+
+                <!-- 声音报警器 -->
+                <div class="absolute bottom-[15%] left-1/2 transform -translate-x-1/2 z-30 flex items-center bg-white px-4 py-2 rounded-lg shadow-md">
+                    <div id="alarm" class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+                        <i class="fa fa-bell-o text-gray-500 text-xl"></i>
+                    </div>
+                    <div class="text-sm font-medium text-rail-gray">声光报警器</div>
+                </div>
+
+                <!-- 火车 -->
+                <div id="train" class="absolute w-32 h-20 bg-primary rounded-md shadow-lg flex items-center justify-center text-white font-bold z-20 hidden" style="top: calc(50% - 40px);">
+                    <span>列车</span>
+                </div>
+
+                <!-- 方向标识 -->
+                <div class="absolute top-[10%] left-[10%] bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-medium text-rail-gray shadow-sm">
+                    A方向 (左→右)
+                </div>
+                <div class="absolute top-[10%] right-[10%] bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-medium text-rail-gray shadow-sm">
+                    F方向 (右→左)
+                </div>
+            </div>
+
+            <!-- 控制按钮 -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex flex-wrap justify-center gap-4">
+                <button id="btn-start-a" class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all flex items-center shadow-md hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa fa-train mr-2"></i>
+                    启动A方向列车
+                </button>
+                <button id="btn-start-f" class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-all flex items-center shadow-md hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa fa-train mr-2 fa-flip-horizontal"></i>
+                    启动F方向列车
+                </button>
+                <button id="btn-add-pedestrian" class="bg-warning hover:bg-warning/90 text-white px-5 py-3 rounded-lg transition-all flex items-center shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa fa-user mr-2"></i>
+                    添加行人
+                </button>
+            </div>
+        </div>
+
+        <!-- 信息面板区域 -->
+        <div class="space-y-6">
+            <!-- 系统状态面板 -->
+            <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div class="bg-primary/10 px-6 py-4 border-b border-primary/20">
+                    <h2 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa fa-dashboard mr-2"></i>系统状态
+                    </h2>
+                </div>
+                <div class="p-5 space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 font-medium">道口状态</span>
+                            <span id="status-crossing" class="px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success">
+                  开放中
+                </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="progress-crossing" class="bg-success h-full rounded-full transition-all duration-1000" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 font-medium">列车方向</span>
+                            <span id="status-direction" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">
+                  无列车
+                </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="progress-direction" class="bg-gray-400 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 font-medium">传感器状态</span>
+                            <span id="status-sensors" class="px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success">
+                  正常
+                </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="progress-sensors" class="bg-success h-full rounded-full transition-all duration-500" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-600 font-medium">行人检测</span>
+                            <span id="status-pedestrian" class="px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success">
+                  无人
+                </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="progress-pedestrian" class="bg-success h-full rounded-full transition-all duration-500" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h3 class="text-sm font-semibold text-gray-500 mb-3">传感器信号强度</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center">
+                                <span class="text-xs w-8 text-gray-600">F1</span>
+                                <div class="flex-1 mx-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="signal-f1" class="h-full bg-primary rounded-full transition-all duration-500" style="width: 10%"></div>
+                                </div>
+                                <span id="value-f1" class="text-xs w-8 text-right text-gray-600">10%</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-xs w-8 text-gray-600">C1</span>
+                                <div class="flex-1 mx-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="signal-c1" class="h-full bg-primary rounded-full transition-all duration-500" style="width: 10%"></div>
+                                </div>
+                                <span id="value-c1" class="text-xs w-8 text-right text-gray-600">10%</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-xs w-8 text-gray-600">C2</span>
+                                <div class="flex-1 mx-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="signal-c2" class="h-full bg-primary rounded-full transition-all duration-500" style="width: 10%"></div>
+                                </div>
+                                <span id="value-c2" class="text-xs w-8 text-right text-gray-600">10%</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-xs w-8 text-gray-600">F2</span>
+                                <div class="flex-1 mx-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="signal-f2" class="h-full bg-primary rounded-full transition-all duration-500" style="width: 10%"></div>
+                                </div>
+                                <span id="value-f2" class="text-xs w-8 text-right text-gray-600">10%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 事件日志面板 -->
+            <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div class="bg-primary/10 px-6 py-4 border-b border-primary/20">
+                    <h2 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa fa-history mr-2"></i>事件日志
+                    </h2>
+                </div>
+                <div class="p-4">
+                    <div id="event-log" class="h-64 overflow-y-auto pr-2 space-y-2 text-sm">
+                        <div class="p-2 rounded-lg log-highlight bg-gray-50 border border-gray-100">
+                            <span class="text-gray-400">[系统启动]</span>
+                            <span class="ml-2">智能铁路道口管理系统初始化完成</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="mt-10 bg-dark text-white py-6">
+    <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+            <div class="mb-4 md:mb-0">
+                <div class="flex items-center">
+                    <i class="fa fa-train text-secondary mr-2"></i>
+                    <span class="font-bold text-lg">智能铁路道口管理系统</span>
+                </div>
+                <p class="text-gray-400 text-sm mt-1">精准模拟铁轨与过道工作流程</p>
+            </div>
+            <div class="text-gray-400 text-sm">
+                &copy; 2023 铁路安全管理系统 | 设计与开发
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // DOM元素获取
+    const train = document.getElementById('train');
+    const gateLeft = document.getElementById('gate-left');
+    const gateRight = document.getElementById('gate-right');
+    const signalRed = document.getElementById('signal-red');
+    const signalGreen = document.getElementById('signal-green');
+    const alarm = document.getElementById('alarm');
+    const pedestrian = document.getElementById('pedestrian');
+    const cameraLeft = document.getElementById('camera-left');
+    const cameraRight = document.getElementById('camera-right');
+
+    // 传感器元素
+    const sensorF1 = document.getElementById('sensor-f1').firstElementChild;
+    const sensorC1 = document.getElementById('sensor-c1').firstElementChild;
+    const sensorC2 = document.getElementById('sensor-c2').firstElementChild;
+    const sensorF2 = document.getElementById('sensor-f2').firstElementChild;
+
+    // 信号强度元素
+    const signalF1 = document.getElementById('signal-f1');
+    const signalC1 = document.getElementById('signal-c1');
+    const signalC2 = document.getElementById('signal-c2');
+    const signalF2 = document.getElementById('signal-f2');
+    const valueF1 = document.getElementById('value-f1');
+    const valueC1 = document.getElementById('value-c1');
+    const valueC2 = document.getElementById('value-c2');
+    const valueF2 = document.getElementById('value-f2');
+
+    // 状态显示元素
+    const statusCrossing = document.getElementById('status-crossing');
+    const progressCrossing = document.getElementById('progress-crossing');
+    const statusDirection = document.getElementById('status-direction');
+    const progressDirection = document.getElementById('progress-direction');
+    const statusSensors = document.getElementById('status-sensors');
+    const progressSensors = document.getElementById('progress-sensors');
+    const statusPedestrian = document.getElementById('status-pedestrian');
+    const progressPedestrian = document.getElementById('progress-pedestrian');
+    const eventLog = document.getElementById('event-log');
+    const currentTime = document.getElementById('current-time');
+
+    // 按钮元素
+    const btnStartA = document.getElementById('btn-start-a');
+    const btnStartF = document.getElementById('btn-start-f');
+    const btnAddPedestrian = document.getElementById('btn-add-pedestrian');
+
+    // 系统状态变量
+    let isTrainRunning = false;
+    let currentDirection = null;
+    let hasPedestrian = false;
+
+    // 更新时间显示
+    function updateTime() {
+        const now = new Date();
+        currentTime.textContent = now.toLocaleTimeString();
+    }
+
+    // 初始化时间并每秒更新
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // 添加日志条目
+    function addLogEntry(message) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = 'p-2 rounded-lg log-highlight bg-gray-50 border border-gray-100';
+        logEntry.innerHTML = `<span class="text-gray-400">[${timeString}]</span><span class="ml-2">${message}</span>`;
+
+        eventLog.prepend(logEntry);
+
+        // 限制日志数量
+        if (eventLog.children.length > 20) {
+            eventLog.removeChild(eventLog.lastChild);
+        }
+    }
+
+    // 更新道口状态
+    function updateCrossingStatus(isClosed) {
+        if (isClosed) {
+            statusCrossing.textContent = '关闭中';
+            statusCrossing.className = 'px-3 py-1 rounded-full text-xs font-bold bg-danger/10 text-danger';
+            progressCrossing.className = 'bg-danger h-full rounded-full transition-all duration-1000';
+            progressCrossing.style.width = '100%';
+        } else {
+            statusCrossing.textContent = '开放中';
+            statusCrossing.className = 'px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success';
+            progressCrossing.className = 'bg-success h-full rounded-full transition-all duration-1000';
+            progressCrossing.style.width = '100%';
+        }
+    }
+
+    // 更新列车方向状态
+    function updateDirectionStatus(direction) {
+        if (direction === 'A') {
+            statusDirection.textContent = 'A方向 (左→右)';
+            statusDirection.className = 'px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary';
+            progressDirection.className = 'bg-primary h-full rounded-full transition-all duration-1000';
+            progressDirection.style.width = '100%';
+        } else if (direction === 'F') {
+            statusDirection.textContent = 'F方向 (右→左)';
+            statusDirection.className = 'px-3 py-1 rounded-full text-xs font-bold bg-secondary/10 text-secondary';
+            progressDirection.className = 'bg-secondary h-full rounded-full transition-all duration-1000';
+            progressDirection.style.width = '100%';
+        } else {
+            statusDirection.textContent = '无列车';
+            statusDirection.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500';
+            progressDirection.className = 'bg-gray-400 h-full rounded-full transition-all duration-1000';
+            progressDirection.style.width = '0%';
+        }
+    }
+
+    // 更新传感器状态
+    function updateSensorStatus(isActive) {
+        if (isActive) {
+            statusSensors.textContent = '检测到信号';
+            statusSensors.className = 'px-3 py-1 rounded-full text-xs font-bold bg-warning/10 text-warning';
+            progressSensors.className = 'bg-warning h-full rounded-full transition-all duration-500';
+            progressSensors.style.width = '100%';
+        } else {
+            statusSensors.textContent = '正常';
+            statusSensors.className = 'px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success';
+            progressSensors.className = 'bg-success h-full rounded-full transition-all duration-500';
+            progressSensors.style.width = '100%';
+        }
+    }
+
+    // 更新行人检测状态
+    function updatePedestrianStatus(hasPerson) {
+        hasPedestrian = hasPerson;
+        if (hasPerson) {
+            statusPedestrian.textContent = '有人';
+            statusPedestrian.className = 'px-3 py-1 rounded-full text-xs font-bold bg-warning/10 text-warning';
+            progressPedestrian.className = 'bg-warning h-full rounded-full transition-all duration-500';
+            progressPedestrian.style.width = '100%';
+
+            // 如果道口关闭时有行人，触发警报
+            if (statusCrossing.textContent === '关闭中') {
+                addLogEntry('<span class="text-warning font-medium">警告：道口关闭时检测到行人！</span>');
+                activateAlarm(true);
+            }
+
+            // 摄像机检测动画
+            cameraLeft.classList.add('camera-detecting');
+            cameraRight.classList.add('camera-detecting');
+        } else {
+            statusPedestrian.textContent = '无人';
+            statusPedestrian.className = 'px-3 py-1 rounded-full text-xs font-bold bg-success/10 text-success';
+            progressPedestrian.className = 'bg-success h-full rounded-full transition-all duration-500';
+            progressPedestrian.style.width = '100%';
+
+            // 停止警报（如果没有其他警报原因）
+            if (statusCrossing.textContent === '开放中') {
+                activateAlarm(false);
+            }
+
+            // 停止摄像机检测动画
+            cameraLeft.classList.remove('camera-detecting');
+            cameraRight.classList.remove('camera-detecting');
+        }
+    }
+
+    // 更新传感器信号强度
+    function updateSensorSignal(sensor, value) {
+        sensor.style.width = `${value}%`;
+        sensor.nextElementSibling.textContent = `${value}%`;
+    }
+
+    // 激活传感器
+    function activateSensor(sensorElement, signalElement, valueElement, active) {
+        if (active) {
+            sensorElement.classList.add('sensor-active');
+            updateSensorSignal(signalElement, 100);
+            valueElement.textContent = '100%';
+            updateSensorStatus(true);
+        } else {
+            sensorElement.classList.remove('sensor-active');
+            updateSensorSignal(signalElement, 10);
+            valueElement.textContent = '10%';
+            updateSensorStatus(false);
+        }
+    }
+
+    // 控制道闸
+    function controlGates(close) {
+        if (close) {
+            gateLeft.style.height = '40px';
+            gateRight.style.height = '40px';
+            signalRed.className = 'w-8 h-8 rounded-full bg-danger mb-2 signal-pulse';
+            signalGreen.className = 'w-8 h-8 rounded-full bg-gray-300';
+            updateCrossingStatus(true);
+            addLogEntry('道口已关闭，禁止通行');
+
+            // 如果有行人，启动警报
+            if (hasPedestrian) {
+                activateAlarm(true);
+            }
+        } else {
+            gateLeft.style.height = '0';
+            gateRight.style.height = '0';
+            signalRed.className = 'w-8 h-8 rounded-full bg-gray-300 mb-2';
+            signalGreen.className = 'w-8 h-8 rounded-full bg-success';
+            updateCrossingStatus(false);
+            addLogEntry('道口已开放，可以通行');
+
+            // 停止警报
+            activateAlarm(false);
+        }
+    }
+
+    // 激活报警器
+    function activateAlarm(activate) {
+        if (activate) {
+            alarm.className = 'w-10 h-10 rounded-full bg-danger flex items-center justify-center mr-3 shadow-glow-danger signal-pulse';
+            alarm.innerHTML = '<i class="fa fa-bell text-white text-xl"></i>';
+        } else {
+            alarm.className = 'w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3';
+            alarm.innerHTML = '<i class="fa fa-bell-o text-gray-500 text-xl"></i>';
+        }
+    }
+
+    // 模拟A方向列车（左→右）
+    function simulateTrainA() {
+        if (isTrainRunning) return;
+        isTrainRunning = true;
+        currentDirection = 'A';
+
+        // 禁用按钮
+        btnStartA.disabled = true;
+        btnStartF.disabled = true;
+
+        // 更新状态
+        updateDirectionStatus('A');
+
+        // 初始化列车位置
+        train.style.left = '-150px';
+        train.style.transform = 'none';
+        train.classList.remove('hidden');
+        addLogEntry('A方向列车开始行驶');
+
+        // 触发列车动画
+        setTimeout(() => {
+            train.style.transform = 'translateX(calc(100vw - 100px))';
+
+            // 远端传感器F1检测到列车
+            setTimeout(() => {
+                activateSensor(sensorF1, signalF1, valueF1, true);
+                addLogEntry('远端传感器F1检测到列车接近');
+                addLogEntry('开始关闭道口...');
+                controlGates(true);
+
+                // 传感器F1信号消失
+                setTimeout(() => {
+                    activateSensor(sensorF1, signalF1, valueF1, false);
+                }, 1200);
+            }, 1000);
+
+            // 近端传感器C1检测到列车
+            setTimeout(() => {
+                activateSensor(sensorC1, signalC1, valueC1, true);
+                addLogEntry('近端传感器C1检测到列车通过');
+
+                // 传感器C1信号消失
+                setTimeout(() => {
+                    activateSensor(sensorC1, signalC1, valueC1, false);
+                }, 1200);
+            }, 3500);
+
+            // 列车通过道口
+            setTimeout(() => {
+                addLogEntry('列车正在通过道口');
+            }, 5000);
+
+            // 近端传感器C2检测到列车
+            setTimeout(() => {
+                activateSensor(sensorC2, signalC2, valueC2, true);
+                addLogEntry('近端传感器C2检测到列车通过');
+
+                // 传感器C2信号消失
+                setTimeout(() => {
+                    activateSensor(sensorC2, signalC2, valueC2, false);
+                }, 1200);
+            }, 6500);
+
+            // 远端传感器F2检测到列车
+            setTimeout(() => {
+                activateSensor(sensorF2, signalF2, valueF2, true);
+                addLogEntry('远端传感器F2检测到列车离开');
+
+                // 检查是否有行人，决定何时开放道口
+                setTimeout(() => {
+                    if (hasPedestrian) {
+                        addLogEntry('<span class="text-warning">检测到行人，延迟开放道口</span>');
+                        setTimeout(() => {
+                            controlGates(false);
+                            activateSensor(sensorF2, signalF2, valueF2, false);
+                        }, 3000);
+                    } else {
+                        controlGates(false);
+                        activateSensor(sensorF2, signalF2, valueF2, false);
+                    }
+
+                    // 列车离开视野，重置状态
+                    setTimeout(() => {
+                        train.classList.add('hidden');
+                        updateDirectionStatus(null);
+                        isTrainRunning = false;
+                        currentDirection = null;
+
+                        // 启用按钮
+                        btnStartA.disabled = false;
+                        btnStartF.disabled = false;
+
+                        addLogEntry('A方向列车已完全离开');
+                    }, 1500);
+                }, 1000);
+            }, 9000);
+        }, 100);
+    }
+
+    // 模拟F方向列车（右→左）
+    function simulateTrainF() {
+        if (isTrainRunning) return;
+        isTrainRunning = true;
+        currentDirection = 'F';
+
+        // 禁用按钮
+        btnStartA.disabled = true;
+        btnStartF.disabled = true;
+
+        // 更新状态
+        updateDirectionStatus('F');
+
+        // 初始化列车位置
+        train.style.left = 'calc(100% - 100px)';
+        train.style.transform = 'none';
+        train.classList.remove('hidden');
+        addLogEntry('F方向列车开始行驶');
+
+        // 触发列车动画
+        setTimeout(() => {
+            train.style.transform = 'translateX(-100vw)';
+
+            // 远端传感器F2检测到列车
+            setTimeout(() => {
+                activateSensor(sensorF2, signalF2, valueF2, true);
+                addLogEntry('远端传感器F2检测到列车接近');
+                addLogEntry('开始关闭道口...');
+                controlGates(true);
+
+                // 传感器F2信号消失
+                setTimeout(() => {
+                    activateSensor(sensorF2, signalF2, valueF2, false);
+                }, 1200);
+            }, 1000);
+
+            // 近端传感器C2检测到列车
+            setTimeout(() => {
+                activateSensor(sensorC2, signalC2, valueC2, true);
+                addLogEntry('近端传感器C2检测到列车通过');
+
+                // 传感器C2信号消失
+                setTimeout(() => {
+                    activateSensor(sensorC2, signalC2, valueC2, false);
+                }, 1200);
+            }, 3500);
+
+            // 列车通过道口
+            setTimeout(() => {
+                addLogEntry('列车正在通过道口');
+            }, 5000);
+
+            // 近端传感器C1检测到列车
+            setTimeout(() => {
+                activateSensor(sensorC1, signalC1, valueC1, true);
+                addLogEntry('近端传感器C1检测到列车通过');
+
+                // 传感器C1信号消失
+                setTimeout(() => {
+                    activateSensor(sensorC1, signalC1, valueC1, false);
+                }, 1200);
+            }, 6500);
+
+            // 远端传感器F1检测到列车
+            setTimeout(() => {
+                activateSensor(sensorF1, signalF1, valueF1, true);
+                addLogEntry('远端传感器F1检测到列车离开');
+
+                // 检查是否有行人，决定何时开放道口
+                setTimeout(() => {
+                    if (hasPedestrian) {
+                        addLogEntry('<span class="text-warning">检测到行人，延迟开放道口</span>');
+                        setTimeout(() => {
+                            controlGates(false);
+                            activateSensor(sensorF1, signalF1, valueF1, false);
+                        }, 3000);
+                    } else {
+                        controlGates(false);
+                        activateSensor(sensorF1, signalF1, valueF1, false);
+                    }
+
+                    // 列车离开视野，重置状态
+                    setTimeout(() => {
+                        train.classList.add('hidden');
+                        updateDirectionStatus(null);
+                        isTrainRunning = false;
+                        currentDirection = null;
+
+                        // 启用按钮
+                        btnStartA.disabled = false;
+                        btnStartF.disabled = false;
+
+                        addLogEntry('F方向列车已完全离开');
+                    }, 1500);
+                }, 1000);
+            }, 9000);
+        }, 100);
+    }
+
+    // 切换行人状态
+    function togglePedestrian() {
+        if (pedestrian.classList.contains('hidden')) {
+            pedestrian.classList.remove('hidden');
+            updatePedestrianStatus(true);
+            addLogEntry('检测到行人进入过道');
+        } else {
+            pedestrian.classList.add('hidden');
+            updatePedestrianStatus(false);
+            addLogEntry('行人已离开过道');
+        }
+    }
+
+    // 绑定事件监听
+    btnStartA.addEventListener('click', simulateTrainA);
+    btnStartF.addEventListener('click', simulateTrainF);
+    btnAddPedestrian.addEventListener('click', togglePedestrian);
+
+    // 初始化系统
+    addLogEntry('系统就绪，等待列车信号');
+</script>
+</body>
+</html>

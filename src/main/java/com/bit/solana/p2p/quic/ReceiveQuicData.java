@@ -253,8 +253,8 @@ public class ReceiveQuicData extends QuicData {
             QuicFrame ackFrame = QuicFrame.acquire();
             ackFrame.setConnectionId(connectionId);
             ackFrame.setDataId(dataId);
-            ackFrame.setSequence(0); // 批量ACK帧序列号固定为0
-            ackFrame.setTotal(1); // 批量ACK帧自身不分片
+            ackFrame.setSequence(0); //提供窗口大小
+            ackFrame.setTotal(1);
             ackFrame.setFrameType(QuicFrameEnum.BATCH_ACK_FRAME.getCode()); // 新增批量ACK帧类型
             ackFrame.setRemoteAddress(quicFrame.getRemoteAddress());
 
