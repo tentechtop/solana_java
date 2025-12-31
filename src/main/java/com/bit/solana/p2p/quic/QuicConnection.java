@@ -52,8 +52,8 @@ public class QuicConnection {
     public long GLOBAL_TIMEOUT_MS = 5000;
     // 帧重传间隔
     public long RETRANSMIT_INTERVAL_MS = 1000;
-    //mtu  创建连接时探测
-    public int MAX_FRAME_PAYLOAD = 1024 ;
+    //帧最大负载
+    public int MAX_FRAME_PAYLOAD = 1400 ;
 
     //是否过期
     private volatile boolean expired = false;
@@ -61,6 +61,93 @@ public class QuicConnection {
     private volatile long lastSeen = System.currentTimeMillis();
     //true 是出站连接 false是入站连接
     private boolean isOutbound;
+
+
+    //在途字节
+    private  final AtomicInteger inFlightBytes = new AtomicInteger(0);
+    //最大在途字节 不能超过2M
+    private int MAX_IN_FLIGHT_BYTES = 1024 * 1024 * 2;
+    //当前发送速度 字节/秒
+    private  final AtomicInteger sendSpeed = new AtomicInteger(0);
+    //最大发送速度 字节/秒
+    private int MAX_SEND_SPEED = 1024 * 1024 * 2;
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //发送的数据
+    private  final SendInfo[] SendList = new SendInfo[1024*10];
+    private  final AtomicInteger SendCount = new AtomicInteger(0);
+    public  void addSendInfo(SendInfo sendInfo) {
+        if (sendInfo == null) {
+            throw new IllegalArgumentException("发送信息不能为空");
+        }
+        int currentCount = SendCount.getAndIncrement();
+        int slotIndex = currentCount % SendList.length;
+        SendList[slotIndex] = sendInfo;
+    }
+
+    //发送的帧
+    private  final SendFrameInfo[] SendFrameList = new SendFrameInfo[1024*1024];
+    private  final AtomicInteger SendFrameCount = new AtomicInteger(0);
+    public  void addSendFrameInfo(SendFrameInfo sendFrameInfo) {
+        if (sendFrameInfo == null) {
+            throw new IllegalArgumentException("发送信息不能为空");
+        }
+        int currentCount = SendFrameCount.getAndIncrement();
+        int slotIndex = currentCount % SendFrameList.length;
+        SendFrameList[slotIndex] = sendFrameInfo;
+    }
+
+    /**
+     * 计算所有已发送帧的平均耗时（纳秒）
+     * <p>
+     * 该方法会遍历当前缓冲区中所有有效的帧，计算它们的平均耗时。
+     * 如果没有发送过任何帧，则返回 0。
+     * 结果为整数，小数部分会被自动舍弃。
+     * </p>
+     * @return 平均耗时（纳秒）
+     */
+    public long getAverageSendTimeInNanos() {
+        int totalFrames = SendFrameCount.get();
+
+        // 如果没有发送过任何帧，直接返回0
+        if (totalFrames == 0) {
+            return 0;
+        }
+
+        long totalNanos = 0;
+        // 计算需要遍历的有效元素数量，它是缓冲区大小和总帧数之间的较小值
+        int countToIterate = Math.min(totalFrames, SendFrameList.length);
+
+        // 遍历所有有效的帧并累加总耗时
+        for (int i = 0; i < countToIterate; i++) {
+            // 由于addSendFrameInfo的逻辑，这里的SendFrameList[i]不会是null
+            totalNanos += SendFrameList[i].getTotalTime();
+        }
+
+        // 计算平均值。整数除法会自动截断小数部分。
+        return totalNanos / countToIterate;
+    }
+
+
+
+
+
+
+
+
+
+
 
 
     /**

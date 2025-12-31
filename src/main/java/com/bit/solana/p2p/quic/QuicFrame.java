@@ -26,6 +26,10 @@ public class QuicFrame {
     //扩展字段 接收时写入
     private InetSocketAddress remoteAddress;
 
+    //发送时间 不参与序列化反序列化
+    private long time;
+
+
     // 固定头部长度 = connectionId(8) + dataId(8) + total(4) + frameType(1) + sequence(4) + frameTotalLength(4)
     public static final int FIXED_HEADER_LENGTH = 8 + 8 + 4 + 1 + 4 + 4;
 

@@ -162,7 +162,7 @@ public class SendQuicData extends QuicData {
     /**
      * 发送单个帧
      */
-    private void sendFrame(QuicFrame frame) {
+    synchronized private void sendFrame(QuicFrame frame) {
         if (!isFailed() && frame!=null && !ackedSequences.contains(frame.getSequence())  && !isCompleted()){
             int sequence = frame.getSequence();
             ByteBuf buf = QuicConstants.ALLOCATOR.buffer();
@@ -180,6 +180,7 @@ public class SendQuicData extends QuicData {
                             log.debug("[帧发送成功] 连接ID:{} 数据ID:{} 序列号:{}",
                                     getConnectionId(), getDataId(), sequence);
                             totalSendCount.incrementAndGet();
+                            frame.setTime(System.nanoTime());
                         }
                     });
                 }
@@ -376,9 +377,26 @@ public class SendQuicData extends QuicData {
      */
     private void handleSendSuccess() {
         log.info("数据发送完毕");
-        setCompleteTime(System.nanoTime());
+        long end = System.nanoTime();
+        setCompleteTime(end);
         setCompleted(true);
         //增加一个发送信息 用来分析连接
+        QuicConnection connection = getConnection(getConnectionId());
+        if (connection != null){
+            SendInfo sendInfo = new SendInfo();
+            sendInfo.setTotal(getTotal());
+            sendInfo.setSize(getSize());
+            long l = end - getSendTime();
+            sendInfo.setTotalTime(l);
+            sendInfo.setSendTotalFrame(totalSendCount.get());
+            connection.addSendInfo(sendInfo);
+            log.info("当前数据耗时{}",l);
+            double recentAverageFrameTimeMs = connection.getAverageSendTimeInNanos();
+            log.info("平均每帧耗时{}",recentAverageFrameTimeMs);
+        }
+
+
+
 
         // 取消全局超时定时器
         if (globalTimeout != null) {
@@ -451,6 +469,12 @@ public class SendQuicData extends QuicData {
                             confirmedCount++;
                             log.debug("[批量ACK确认] 连接ID:{} 数据ID:{} 序列号:{} 已确认",
                                     getConnectionId(), getDataId(), sequence);
+
+                            QuicFrame frameBySequence = getFrameBySequence(sequence);
+                            SendFrameInfo sendFrameInfo = new SendFrameInfo();
+                            sendFrameInfo.setTotalTime(rtime-frameBySequence.getTime());
+                            sendFrameInfo.setSize(frameBySequence.getPayload().length);
+                            connection.addSendFrameInfo(sendFrameInfo);
                         }
                     }
                 }
