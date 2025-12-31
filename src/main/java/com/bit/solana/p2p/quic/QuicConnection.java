@@ -2,6 +2,7 @@ package com.bit.solana.p2p.quic;
 
 import com.bit.solana.p2p.impl.handle.QuicDataProcessor;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
+import com.bit.solana.p2p.quic.control.FlowController;
 import com.bit.solana.util.ECCWithAESGCM;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -61,10 +62,8 @@ public class QuicConnection {
     private volatile long lastSeen = System.currentTimeMillis();
     //true 是出站连接 false是入站连接
     private boolean isOutbound;
-
-
-
-
+    //流控
+    private FlowController flowController;
 
 
 

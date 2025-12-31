@@ -5,6 +5,7 @@ import com.bit.solana.config.SystemConfig;
 import com.bit.solana.database.DataBase;
 import com.bit.solana.database.rocksDb.TableEnum;
 import com.bit.solana.p2p.protocol.NetworkHandshake;
+import com.bit.solana.p2p.quic.control.FlowController;
 import com.bit.solana.util.ECCWithAESGCM;
 import com.bit.solana.util.MultiAddress;
 import io.netty.buffer.ByteBuf;
@@ -335,6 +336,18 @@ public class QuicConnectionManager {
             quicConnection.setUDP(true);
             quicConnection.setOutbound(false);//非主动连接
             quicConnection.startHeartbeat();
+
+            FlowController controller = new FlowController(
+                    8L * 1024 * 1024,   // 初始速度 (5MB/s)
+                    8L * 1024 * 1024,  // 最大速度 (20MB/s)
+                    1024 * 1024,   // 最小速度 (1MB/s)
+                    2L * 1024 * 1024,  // 突发速度 (10MB)
+                    1.2,                // 增长因子
+                    0.8                 // 降速因子
+            );
+            controller.updateRtt(30);
+            quicConnection.setFlowController(controller);
+
             addConnection(connectionId, quicConnection);
         }
         quicConnection.updateLastSeen();

@@ -84,15 +84,18 @@ public class PeerClient {
 
     public byte[] sendData(String peerId, ProtocolEnum protocol, byte[] request, int time)
             throws IOException, InterruptedException, ExecutionException, TimeoutException {
-        P2PMessage p2PMessage = newRequestMessage(commonConfig.getSelf().getId(), protocol, request);
+        P2PMessage p2PMessage = newRequestMessage(CommonConfig.getSelf().getId(), protocol, request);
         byte[] serialize = p2PMessage.serialize();
         CompletableFuture<QuicMsg> responseFuture = new CompletableFuture<>();
         RESPONSE_FUTURECACHE.put(bytesToHex(p2PMessage.getRequestId()), responseFuture);
         QuicConnection peerConnection = getPeerConnection(peerId);
         log.info("节点ID{}",peerId);
         assert peerConnection != null;
-        peerConnection.sendData(serialize);
-        return responseFuture.get(time, TimeUnit.SECONDS).getData();
+        if (peerConnection.sendData(serialize)){
+            return responseFuture.get(time, TimeUnit.SECONDS).getData();
+        }else {
+            return null;
+        }
     }
 
 

@@ -244,9 +244,12 @@ public class SendQuicData extends QuicData {
         @Override
         public void run(Timeout timeout) throws Exception {
             // 1. 先判断当前任务是否被取消，或传输已完成/失败，若已终止则不再继续
+            QuicConnection connection = getConnection(getConnectionId());
             if (timeout.isCancelled()
                     || (globalTimeout != null && globalTimeout.isCancelled())
-                    || ackedSequences.size() == getTotal()) {
+                    || ackedSequences.size() == getTotal()
+                    || connection==null
+            ) {
                 log.debug("[重传任务终止] 连接ID:{} 数据ID:{}（任务已取消/传输完成）",
                         getConnectionId(), getDataId());
                 retransmitTimeout = null;
