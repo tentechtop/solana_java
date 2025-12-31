@@ -83,7 +83,6 @@ public class QuicConnection {
 
 
 
-
     //发送的数据
     private  final SendInfo[] SendList = new SendInfo[1024*10];
     private  final AtomicInteger SendCount = new AtomicInteger(0);
