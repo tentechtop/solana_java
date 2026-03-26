@@ -1,0 +1,34 @@
+[2025-12-24T22:11:46.509+0800][0.021s][46388][gc] Using G1
+[2025-12-24T22:11:46.558+0800][0.069s][46388][gc,metaspace] CDS archive(s) mapped at: [0x000001f880000000-0x000001f880c90000-0x000001f880c90000), size 13172736, SharedBaseAddress: 0x000001f880000000, ArchiveRelocationMode: 1.
+[2025-12-24T22:11:46.558+0800][0.069s][46388][gc,metaspace] Compressed class space mapped at: 0x000001f881000000-0x000001f8c1000000, reserved size: 1073741824
+[2025-12-24T22:11:46.558+0800][0.069s][46388][gc,metaspace] Narrow klass base: 0x000001f880000000, Narrow klass shift: 0, Narrow klass range: 0x100000000
+[2025-12-24T22:11:47.399+0800][0.911s][46388][gc,heap     ] GC(0) Eden regions: 9->0(100)
+[2025-12-24T22:11:47.399+0800][0.911s][46388][gc,heap     ] GC(0) Survivor regions: 0->2(13)
+[2025-12-24T22:11:47.409+0800][0.920s][46388][gc,heap     ] GC(0) Old regions: 0->0
+[2025-12-24T22:11:47.409+0800][0.920s][46388][gc,heap     ] GC(0) Humongous regions: 0->0
+[2025-12-24T22:11:47.409+0800][0.920s][46388][gc,metaspace] GC(0) Metaspace: 13130K(13376K)->13130K(13376K) NonClass: 11647K(11776K)->11647K(11776K) Class: 1483K(1600K)->1483K(1600K)
+[2025-12-24T22:11:47.409+0800][0.920s][46388][gc          ] GC(0) Pause Young (Concurrent Start) (CodeCache GC Threshold) 72M->8M(16384M) 14.111ms
+[2025-12-24T22:11:47.409+0800][0.920s][46388][gc          ] GC(1) Concurrent Mark Cycle
+[2025-12-24T22:11:47.413+0800][0.924s][46388][gc          ] GC(1) Pause Remark 16M->16M(16384M) 0.879ms
+[2025-12-24T22:11:47.413+0800][0.924s][46388][gc          ] GC(1) Pause Cleanup 16M->16M(16384M) 0.008ms
+[2025-12-24T22:11:47.485+0800][0.997s][46388][gc          ] GC(1) Concurrent Mark Cycle 76.627ms
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc,heap     ] GC(2) Eden regions: 9->0(100)
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc,heap     ] GC(2) Survivor regions: 2->2(13)
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc,heap     ] GC(2) Old regions: 0->0
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc,heap     ] GC(2) Humongous regions: 0->0
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc,metaspace] GC(2) Metaspace: 21964K(22336K)->21964K(22336K) NonClass: 19223K(19456K)->19223K(19456K) Class: 2740K(2880K)->2740K(2880K)
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc          ] GC(2) Pause Young (Concurrent Start) (Metadata GC Threshold) 80M->11M(16384M) 5.507ms
+[2025-12-24T22:11:47.835+0800][1.347s][46388][gc          ] GC(3) Concurrent Mark Cycle
+[2025-12-24T22:11:47.840+0800][1.350s][46388][gc          ] GC(3) Pause Remark 21M->21M(16384M) 1.134ms
+[2025-12-24T22:11:47.840+0800][1.351s][46388][gc          ] GC(3) Pause Cleanup 21M->21M(16384M) 0.009ms
+[2025-12-24T22:11:47.851+0800][1.362s][46388][gc          ] GC(3) Concurrent Mark Cycle 15.303ms
+[2025-12-24T22:11:48.754+0800][2.265s][46388][gc,heap     ] GC(4) Eden regions: 17->0(99)
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc,heap     ] GC(4) Survivor regions: 2->3(13)
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc,heap     ] GC(4) Old regions: 0->0
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc,heap     ] GC(4) Humongous regions: 0->0
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc,metaspace] GC(4) Metaspace: 36921K(37440K)->36921K(37440K) NonClass: 32183K(32448K)->32183K(32448K) Class: 4737K(4992K)->4737K(4992K)
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc          ] GC(4) Pause Young (Concurrent Start) (Metadata GC Threshold) 143M->18M(16384M) 16.958ms
+[2025-12-24T22:11:48.763+0800][2.274s][46388][gc          ] GC(5) Concurrent Mark Cycle
+[2025-12-24T22:11:48.769+0800][2.280s][46388][gc          ] GC(5) Pause Remark 26M->26M(16384M) 1.852ms
+[2025-12-24T22:11:48.769+0800][2.280s][46388][gc          ] GC(5) Pause Cleanup 26M->26M(16384M) 0.009ms
+[2025-12-24T22:11:48.778+0800][2.290s][46388][gc          ] GC(5) Concurrent Mark Cycle 16.200ms

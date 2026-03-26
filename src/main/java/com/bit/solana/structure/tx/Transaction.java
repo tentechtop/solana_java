@@ -40,25 +40,26 @@ public class Transaction {
     private byte[] txId;
 
     /**
-     * 签名列表（每个签名64字节）
+     * 签名列表（每个签名64字节） 签名列表（证明谁授权了这笔交易）
      * 与accounts中"isSigner=true"的账户一一对应，证明账户所有者授权交易
      */
     private List<Signature> signatures;
 
     /**
-     * 账户元数据列表（交易涉及的所有账户）
+     * 账户元数据列表（交易涉及的所有账户）  账户元数据列表（声明交易要用到的所有账户+权限）
      * 包含账户公钥、是否为签名账户、是否可写等信息
+     * 规则：第一个 isSigner=true + isWritable=true 的账户 = 付手续费的人
      */
     private List<AccountMeta> accounts;
 
     /**
-     * 指令列表（交易要执行的具体操作）
+     * 指令列表（交易要执行的具体操作） 指令列表（交易要执行的具体业务逻辑）
      * 每个指令由指定的程序（智能合约）处理
      */
     private List<Instruction> instructions;
 
     /**
-     * 最近区块哈希（32字节）
+     * 最近区块哈希（32字节） 最近区块哈希（防重放、控制交易有效期）
      * 用于防重放攻击和控制交易有效期（通常需在300个slot内，约2分钟）
      */
     private BlockHash recentBlockhash;

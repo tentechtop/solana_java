@@ -33,7 +33,7 @@ public class Instruction {
     private List<Integer> accounts;
 
     /**
-     * 指令数据（字节数组）
+     * 指令数据（字节数组） 指令参数（如转账金额）
      * 包含指令的具体参数（如转账金额、合约方法名及参数）
      * 格式由programId对应的程序定义（需程序自行解析）
      */

@@ -609,7 +609,7 @@ public class SolanaEd25519Signer {
         System.out.println("---------------------");
 
         // 4. 验证签名功能
-        byte[] testData = "Solana HD Wallet Test".getBytes(StandardCharsets.UTF_8);
+        byte[] testData = Sha.applySHA256("123 Solana HD Wallet Test".getBytes(StandardCharsets.UTF_8));
         PrivateKey privateKey = SolanaEd25519Signer.recoverPrivateKeyFromCore(corePriv);
         PublicKey publicKey = SolanaEd25519Signer.recoverPublicKeyFromCore(corePub);
         byte[] signature = SolanaEd25519Signer.applySignature(privateKey, testData);

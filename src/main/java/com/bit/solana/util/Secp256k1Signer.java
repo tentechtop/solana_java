@@ -663,7 +663,7 @@ public class Secp256k1Signer {
         List<byte[]> testDataList = new ArrayList<>();
         for (int i = 0; i < testCount; i++) {
             String data = "Test message " + i + " at " + System.currentTimeMillis();
-            testDataList.add(data.getBytes(StandardCharsets.UTF_8));
+            testDataList.add(Sha.applySHA256(data.getBytes(StandardCharsets.UTF_8)));
         }
         System.out.println("已生成 " + testCount + " 条测试数据");
         System.out.println("------------------------");
@@ -701,6 +701,7 @@ public class Secp256k1Signer {
 
         for (int i = 0; i < testCount; i++) {
             byte[] signature = fastSign(corePrivateKey, testDataList.get(i));
+            log.info("签名长度{}",signature.length);
             fastSignatures.add(signature);
 
             // 验证签名

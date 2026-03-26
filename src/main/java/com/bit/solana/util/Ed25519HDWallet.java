@@ -162,6 +162,8 @@ public class Ed25519HDWallet {
         System.out.println("私钥(hex): " + Hex.toHexString(keyInfo.getPrivateKey()));
         System.out.println("公钥(hex): " + Hex.toHexString(keyInfo.getPublicKey()));
         System.out.println("Solana地址: " + keyInfo.getAddress());
+        System.out.println("Solana地址长度"+keyInfo.getAddress().length());
+        System.out.println("Solana地址: " +  Hex.toHexString(Base58.decode(keyInfo.getAddress())));
 
         // 验证地址一致性
         KeyInfo keyInfo2 = getSolanaKeyPair(mnemonic, 0, 0);
