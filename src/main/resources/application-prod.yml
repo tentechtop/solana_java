@@ -2,6 +2,17 @@
 server:
   port: 18333
 
+node:
+  storage-path: "./data/solana-node-prod"
+  tick-interval-ms: 100
+  ticks-per-slot: 8
+  max-transactions-per-entry: 128
+  ingress-poll-ms: 25
+  execution-workers: 4
+  rent-base-lamports: 1000
+  rent-per-byte-lamports: 10
+  recent-blockhash-window: 150
+
 system:
   #数据存储路径 按照网络前缀分类
   path: "/solana/proddb"

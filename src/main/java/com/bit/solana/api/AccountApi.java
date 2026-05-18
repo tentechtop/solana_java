@@ -1,63 +1,59 @@
 package com.bit.solana.api;
 
-import com.bit.solana.result.Result;
 import com.bit.solana.account.AccountService;
-import com.bit.solana.structure.account.json.AccountDTO;
-import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
-import com.bit.solana.structure.tx.json.TransferTx;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import com.bit.solana.result.Result;
+import com.bit.solana.structure.dto.CreateLedgerAccountRequest;
+import com.bit.solana.structure.dto.CreateLedgerAccountResponse;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionRequest;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionResponse;
+import com.bit.solana.structure.vo.LedgerAccountVO;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-@Slf4j
 @RestController
 @RequestMapping("/account")
 public class AccountApi {
+    private final AccountService accountService;
 
-    @Autowired
-    private AccountService accountService;
-
-    //生成助手记词
-    @GetMapping("/createMnemonic")
-    public Result createMnemonic() {
-        return accountService.createMnemonic();
+    public AccountApi(AccountService accountService) {
+        this.accountService = accountService;
     }
 
-    //通过助记住词 和 账户分层 地址分层 创建账户和地址
     @PostMapping("/createAccount")
-    public Result createAccount(@RequestBody CreateAccountByMnemonicAndIndex createAccountByMnemonicAndIndex) {
-        return accountService.createAccount(createAccountByMnemonicAndIndex);
+    public Result<CreateLedgerAccountResponse> createAccount(
+            @RequestBody(required = false) CreateLedgerAccountRequest request
+    ) {
+        return accountService.createAccount(request);
     }
 
-    // 查询账户余额
-    @GetMapping("/balance")
-    public Result<Long> getBalance(@RequestParam String publicKey) {
-        return accountService.getBalance(publicKey);
+    @GetMapping("/{accountId}")
+    public Result<LedgerAccountVO> getAccount(@PathVariable String accountId) {
+        return accountService.getAccount(accountId);
     }
 
-    // 发起转账交易
-    @PostMapping("/transfer")
-    public Result<String> transfer(
-            @RequestParam String fromPublicKey,
-            @RequestParam String toPublicKey,
-            @RequestParam long lamports,
-            @RequestParam String privateKey) {
-        return accountService.transfer(fromPublicKey, toPublicKey, lamports, privateKey);
-    }
-
-    // 获取账户详情
     @GetMapping("/detail")
-    public Result<AccountDTO> getAccountDetail(@RequestParam String publicKey) {
-        return accountService.getAccountDetail(publicKey);
+    public Result<LedgerAccountVO> getAccountDetail(@RequestParam String accountId) {
+        return accountService.getAccount(accountId);
     }
 
-
-    // 发起一笔交易 如智能合约交易
-    @PostMapping("/submit")
-    public Result<String> submitTx(@RequestBody TransferTx transferTx) {
-        return accountService.submitTx(transferTx);
+    @GetMapping("/balance")
+    public Result<Long> getBalance(@RequestParam String accountId) {
+        return accountService.getBalance(accountId);
     }
 
+    @PostMapping("/transfer")
+    public Result<SubmitLedgerTransactionResponse> transfer(@RequestBody SubmitLedgerTransactionRequest request) {
+        return accountService.transfer(request);
+    }
 
-
+    @ExceptionHandler(IllegalArgumentException.class)
+    public Result<Void> handleIllegalArgument(IllegalArgumentException exception) {
+        return Result.error(exception.getMessage());
+    }
 }

@@ -1,32 +1,27 @@
 package com.bit.solana.tx.impl;
 
+import com.bit.solana.blockchain.impl.LedgerCoordinator;
 import com.bit.solana.result.Result;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionRequest;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionResponse;
+import com.bit.solana.structure.vo.LedgerTransactionVO;
 import com.bit.solana.tx.TxService;
-import com.bit.solana.structure.tx.Transaction;
-import com.bit.solana.txpool.TxPool;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Slf4j
-@Component
 public class TxServiceImpl implements TxService {
+    private final LedgerCoordinator ledgerCoordinator;
 
-    @Autowired
-    private TxPool txPool;
+    public TxServiceImpl(LedgerCoordinator ledgerCoordinator) {
+        this.ledgerCoordinator = ledgerCoordinator;
+    }
 
-    /**
-     * 通过Http 提交一笔交易
-     * @param tx
-     * @return
-     */
     @Override
-    public Result<String> submitTx(Transaction tx) {
-        // 1. 前置校验（空值与格式快速检查）
-        if (tx == null || tx.getSignatures() == null || tx.getSignatures().isEmpty()) {
-            return Result.error("无效交易：缺少签名");
-        }
+    public Result<SubmitLedgerTransactionResponse> submitTx(SubmitLedgerTransactionRequest request) {
+        return Result.OKData(ledgerCoordinator.submitTransaction(request));
+    }
 
-        return null;
+    @Override
+    public Result<LedgerTransactionVO> getTransaction(String transactionId) {
+        LedgerTransactionVO transaction = ledgerCoordinator.getTransaction(transactionId);
+        return transaction == null ? Result.error("Transaction not found") : Result.OKData(transaction);
     }
 }

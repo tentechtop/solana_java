@@ -11,6 +11,8 @@ import org.rocksdb.*;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static com.bit.solana.util.ByteUtils.bytesToHex;
 
 
 @Slf4j
@@ -26,17 +29,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class RocksDb implements DataBase {
 
     /**
-     * 增加布隆过滤器 快速准确判断 一个Key不存在  减少磁盘IO
-     */
-
-    /**
      * 高写入吞吐量（区块、交易等高频写入）；
      * 不可篡改性（数据一旦写入不轻易删除，仅追加）；
      * 范围查询高效（如按区块高度、时间范围查询）；
      * 数据一致性（尤其在节点同步场景）；
      * 持久化可靠性（避免数据丢失）。
      */
-
     // 类中添加缓存实例（全局唯一）加速高频访问的完整业务对象查询  按照表隔离
     private final Map<TableEnum, Cache<byte[], byte[]>> tableCaches = new ConcurrentHashMap<>();
 
@@ -55,11 +53,13 @@ public class RocksDb implements DataBase {
 
         // 初始化时为每个表创建缓存（在createDatabase中）
         for (TableEnum table : TableEnum.values()) {
-            Cache<byte[], byte[]> cache = Caffeine.newBuilder()
-                    .maximumSize(getCacheMaxSize(table)) // 按表配置大小
-                    .expireAfterWrite(getCacheTtl(table), TimeUnit.MINUTES) // 按表配置过期时间
-                    .build();
-            tableCaches.put(table, cache);
+            if (getCacheMaxSize(table)!=0){
+                Cache<byte[], byte[]> cache = Caffeine.newBuilder()
+                        .maximumSize(getCacheMaxSize(table)) // 按表配置大小
+                        .expireAfterWrite(getCacheTtl(table), TimeUnit.MINUTES) // 按表配置过期时间
+                        .build();
+                tableCaches.put(table, cache);
+            }
         }
 
         try {
@@ -206,6 +206,20 @@ public class RocksDb implements DataBase {
         } finally {
             rwLock.readLock().unlock();
         }
+    }
+
+    @Override
+    public byte[] get(TableEnum table, int key) {
+        //int转字节
+        byte[] bytes = ByteBuffer.allocate(4).putInt(key).array();
+        return get(table, bytes);
+    }
+
+    @Override
+    public byte[] get(TableEnum table, long key) {
+        //long转字节
+        byte[] bytes = ByteBuffer.allocate(8).putLong(key).array();
+        return get(table, bytes);
     }
 
     @Override
@@ -422,6 +436,417 @@ public class RocksDb implements DataBase {
         }
     }
 
+    @Override
+    public <T> PageResult<T> pageKey(TableEnum table, int pageSize, byte[] lastKey) {
+        // 校验参数
+        if (pageSize <= 0 || pageSize > 1000) {
+            throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
+        }
+        if (table == null) {
+            throw new IllegalArgumentException("表名不能为空");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                // 返回空结果（泛型为 T，这里用 Collections.emptyList() 兼容）
+                return new PageResult<>(Collections.emptyList(), null, true);
+            }
+
+            iterator = db.newIterator(cfHandle);
+            List<T> dataList = new ArrayList<>(pageSize);
+            byte[] currentLastKey = null;
+
+            // 定位迭代器起始位置
+            if (lastKey != null && lastKey.length > 0) {
+                iterator.seek(lastKey);
+                if (iterator.isValid() && Arrays.equals(iterator.key(), lastKey)) {
+                    iterator.next(); // 跳过上一页最后一个键
+                }
+            } else {
+                iterator.seekToFirst(); // 第一页从开头开始
+            }
+
+            // 读取 pageSize 条数据
+            int count = 0;
+            while (iterator.isValid() && count < pageSize) {
+                byte[] key = iterator.key();
+                dataList.add((T) key);
+                currentLastKey = key.clone(); // 保存当前页最后一个键
+                iterator.next();
+                count++;
+            }
+
+            // 判断是否为最后一页
+            boolean isLastPage = !iterator.isValid();
+            return new PageResult<>(dataList, currentLastKey, isLastPage);
+        } finally {
+            if (iterator != null) {
+                iterator.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 按前缀分页查询（返回包含值的键值对）
+     * @param table 表枚举
+     * @param prefix 键的前缀（byte[] 格式）
+     * @param pageSize 每页条数（1-1000）
+     * @param lastKey 上一页最后一个键（用于分页续查，第一页传null）
+     * @return 分页结果（包含数据列表、当前页最后一个键、是否最后一页）
+     */
+    @Override
+    public <T> PageResult<T> pageByPrefix(TableEnum table, byte[] prefix, int pageSize, byte[] lastKey) {
+        // 1. 参数校验
+        if (pageSize <= 0 || pageSize > 1000) {
+            throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
+        }
+        if (table == null || prefix == null || prefix.length == 0) {
+            throw new IllegalArgumentException("表名和前缀不能为空");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        ReadOptions readOptions = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                return new PageResult<>(Collections.emptyList(), null, true);
+            }
+
+            // 2. 配置前缀扫描选项，提升查询效率
+            readOptions = new ReadOptions().setPrefixSameAsStart(true);
+            iterator = db.newIterator(cfHandle, readOptions);
+
+            List<T> dataList = new ArrayList<>(pageSize);
+            byte[] currentLastKey = null;
+
+            // 3. 定位迭代器起始位置
+            if (lastKey != null && lastKey.length > 0) {
+                // 从上一页最后一个键的下一个位置开始
+                iterator.seek(lastKey);
+                if (iterator.isValid() && Arrays.equals(iterator.key(), lastKey)) {
+                    iterator.next(); // 跳过上一页最后一个键
+                }
+            } else {
+                // 第一页从前缀起始位置开始
+                iterator.seek(prefix);
+            }
+
+            // 4. 读取分页数据
+            int count = 0;
+            while (iterator.isValid() && count < pageSize) {
+                byte[] currentKey = iterator.key();
+
+                // 校验当前键是否匹配前缀，不匹配则终止遍历
+                if (!startsWith(currentKey, prefix)) {
+                    break;
+                }
+
+                // 封装数据（value需根据泛型T反序列化，这里保持与原有page方法一致的强转逻辑）
+                T data = (T) iterator.value();
+                dataList.add(data);
+
+                // 记录当前页最后一个键
+                currentLastKey = currentKey.clone();
+
+                iterator.next();
+                count++;
+            }
+
+            // 5. 判断是否为最后一页（检查下一个键是否还匹配前缀）
+            boolean isLastPage = true;
+            if (iterator.isValid()) {
+                byte[] nextKey = iterator.key();
+                if (startsWith(nextKey, prefix)) {
+                    isLastPage = false;
+                }
+            }
+
+            return new PageResult<>(dataList, currentLastKey, isLastPage);
+        } finally {
+            // 6. 释放资源
+            if (iterator != null) {
+                iterator.close();
+            }
+            if (readOptions != null) {
+                readOptions.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 按前缀分页查询（仅返回键）
+     * @param table 表枚举
+     * @param prefix 键的前缀（byte[] 格式）
+     * @param pageSize 每页条数（1-1000）
+     * @param lastKey 上一页最后一个键（用于分页续查，第一页传null）
+     * @return 分页结果（包含键列表、当前页最后一个键、是否最后一页）
+     */
+    @Override
+    public <T> PageResult<T> pageKeyByPrefix(TableEnum table, byte[] prefix, int pageSize, byte[] lastKey) {
+        // 1. 参数校验
+        if (pageSize <= 0 || pageSize > 1000) {
+            throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
+        }
+        if (table == null || prefix == null || prefix.length == 0) {
+            throw new IllegalArgumentException("表名和前缀不能为空");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        ReadOptions readOptions = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                return new PageResult<>(Collections.emptyList(), null, true);
+            }
+
+            // 2. 配置前缀扫描选项
+            readOptions = new ReadOptions().setPrefixSameAsStart(true);
+            iterator = db.newIterator(cfHandle, readOptions);
+
+            List<T> keyList = new ArrayList<>(pageSize);
+            byte[] currentLastKey = null;
+
+            // 3. 定位迭代器起始位置
+            if (lastKey != null && lastKey.length > 0) {
+                iterator.seek(lastKey);
+                if (iterator.isValid() && Arrays.equals(iterator.key(), lastKey)) {
+                    iterator.next(); // 跳过上一页最后一个键
+                }
+            } else {
+                iterator.seek(prefix);
+            }
+
+            // 4. 读取分页键数据
+            int count = 0;
+            while (iterator.isValid() && count < pageSize) {
+                byte[] currentKey = iterator.key();
+
+                // 校验前缀匹配
+                if (!startsWith(currentKey, prefix)) {
+                    break;
+                }
+
+                // 仅添加键数据
+                keyList.add((T) currentKey.clone());
+
+                // 记录当前页最后一个键
+                currentLastKey = currentKey.clone();
+
+                iterator.next();
+                count++;
+            }
+
+            // 5. 判断是否为最后一页
+            boolean isLastPage = true;
+            if (iterator.isValid()) {
+                byte[] nextKey = iterator.key();
+                if (startsWith(nextKey, prefix)) {
+                    isLastPage = false;
+                }
+            }
+
+            return new PageResult<>(keyList, currentLastKey, isLastPage);
+        } finally {
+            // 6. 释放资源
+            if (iterator != null) {
+                iterator.close();
+            }
+            if (readOptions != null) {
+                readOptions.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+
+    //NewIterator 创建一个迭代器，需要传入读配置项
+    //Seek 查找一个key
+    //SeekToFirst 迭代器移动到db的第一个key位置，一般用于顺序遍历整个db的所有key
+    //SeekToLast 迭代器移动到db的最后一个key位置， 一般用于反向遍历整个db的所有key
+    //SeekForPrev移动到当前key的上一个位置，一般用于遍历(limit, start]之间的key
+    //Next 迭代器移动到下一个key
+    //Prev迭代器移动到上一个key
+    @Override
+    public <T> PageResult<T> pageKeyByPrefixReverse(TableEnum table, byte[] prefix, int pageSize, byte[] lastKey) {
+        // 1. 参数校验（和原逻辑一致）
+        if (pageSize <= 0 || pageSize > 1000) {
+            throw new IllegalArgumentException("pageSize 必须在 1-1000 之间");
+        }
+        if (table == null || prefix == null || prefix.length == 0) {
+            throw new IllegalArgumentException("表名和前缀不能为空");
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        ReadOptions readOptions = null;
+        try {
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                return new PageResult<>(Collections.emptyList(), null, true);
+            }
+
+            // 2. 配置扫描选项（仅保留prefix配置，无setReverse）
+            readOptions = new ReadOptions().setPrefixSameAsStart(true);
+            iterator = db.newIterator(cfHandle, readOptions);
+
+            List<T> keyList = new ArrayList<>(pageSize);
+            byte[] currentLastKey = null;
+
+            // 3. 定位迭代器起始位置（修正seekForPrev参数）
+            if (lastKey != null && lastKey.length > 0) {
+                // 有上一页的lastKey：定位到该key → prev()跳过（反向遍历）
+                iterator.seek(lastKey);
+                if (iterator.isValid() && Arrays.equals(iterator.key(), lastKey)) {
+                    iterator.prev(); // 跳过上一页最后一个key，准备读取下一批
+                }
+            } else {
+                // 无lastKey（第一页）：定位到前缀的最后一个key
+                byte[] prefixUpper = getPrefixUpperBound(prefix);
+                // 关键修正：seekForPrev必须传入参数（前缀上限key）
+                iterator.seekForPrev(prefixUpper);
+
+                // 边界校验：如果定位后的key不匹配前缀，说明前缀下无数据
+                if (iterator.isValid() && !startsWith(iterator.key(), prefix)) {
+                    iterator = null; // 置空，后续遍历直接终止
+                }
+            }
+
+            // 4. 反向读取分页键数据（核心：用prev()替代next()）
+            int count = 0;
+            // 增加iterator非空校验（避免前缀无数据时的空指针）
+            while (iterator != null && iterator.isValid() && count < pageSize) {
+                byte[] currentKey = iterator.key();
+
+                // 校验前缀匹配：反向遍历超出前缀范围则终止
+                if (!startsWith(currentKey, prefix)) {
+                    break;
+                }
+
+                // 添加当前key（克隆避免引用泄露）
+                keyList.add((T) currentKey.clone());
+
+                // 记录当前页最后一个key（供下一页查询使用）
+                currentLastKey = currentKey.clone();
+
+                iterator.prev(); // 反向遍历：移动到上一个key（替代原next()）
+                count++;
+            }
+
+            // 5. 判断是否为最后一页（反向遍历的最后一页=没有更多更小的key）
+            boolean isLastPage = true;
+            // 检查是否还有更多符合前缀的key
+            if (iterator != null && iterator.isValid()) {
+                byte[] prevKey = iterator.key();
+                if (startsWith(prevKey, prefix)) {
+                    isLastPage = false;
+                }
+            }
+
+            return new PageResult<>(keyList, currentLastKey, isLastPage);
+        } finally {
+            // 6. 释放资源（和原逻辑一致）
+            if (iterator != null) {
+                iterator.close();
+            }
+            if (readOptions != null) {
+                readOptions.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+    @Override
+    public boolean existsByPrefix(TableEnum table, byte[] prefix) {
+        // 1. 参数校验：表名/前缀为空直接返回false
+        if (table == null || prefix == null || prefix.length == 0) {
+            log.warn("existsByPrefix参数非法：表名[{}] 前缀长度[{}]", table, prefix == null ? 0 : prefix.length);
+            return false;
+        }
+
+        rwLock.readLock().lock(); // 复用读写锁，保证线程安全
+        RocksIterator iterator = null;
+        ReadOptions readOptions = null;
+        try {
+            // 2. 获取列族句柄（和pageKeyByPrefixReverse逻辑一致）
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                log.warn("existsByPrefix获取列族句柄失败：表名[{}]", table);
+                return false;
+            }
+
+            // 3. 配置读选项：开启前缀优化，提升查询效率
+            readOptions = new ReadOptions()
+                    .setPrefixSameAsStart(true) // 前缀查询优化
+                    .setTotalOrderSeek(false); // 关闭全序扫描，加速前缀查询
+
+            // 4. 创建迭代器并定位到前缀起始位置
+            iterator = db.newIterator(cfHandle, readOptions);
+            iterator.seek(prefix); // 定位到第一个>=前缀的key
+
+            // 5. 核心判断：迭代器有效 + 当前key以指定前缀开头
+            if (iterator.isValid()) {
+                byte[] currentKey = iterator.key();
+                boolean match = startsWith(currentKey, prefix); // 复用你已有的前缀匹配方法
+                if (match) {
+                    log.debug("existsByPrefix命中：表[{}] 前缀[{}] 匹配key[{}]",
+                            table, bytesToHex(prefix), bytesToHex(currentKey));
+                    return true;
+                }
+            }
+
+            // 6. 无匹配记录
+            log.debug("existsByPrefix未命中：表[{}] 前缀[{}]", table, bytesToHex(prefix));
+            return false;
+
+        } catch (Exception e) {
+            // 7. 异常兜底：捕获所有异常，避免程序崩溃
+            log.error("existsByPrefix执行异常：表[{}] 前缀[{}]", table, bytesToHex(prefix), e);
+            return false;
+        } finally {
+            // 8. 强制释放资源（避免内存泄漏）
+            if (iterator != null) {
+                try {
+                    iterator.close();
+                } catch (Exception e) {
+                    log.warn("关闭RocksIterator失败", e);
+                }
+            }
+            if (readOptions != null) {
+                try {
+                    readOptions.close();
+                } catch (Exception e) {
+                    log.warn("关闭ReadOptions失败", e);
+                }
+            }
+            rwLock.readLock().unlock(); // 必须释放读锁
+        }
+    }
+
+
+    /**
+     * 计算前缀的上限（用于反向迭代时定位最大的匹配key）
+     * 前缀的范围是 [prefix, prefixUpperBound)，例如前缀是 [0x01,0x02]，上限是 [0x01,0x03]
+     * @param prefix 原前缀
+     * @return 前缀的上限字节数组
+     */
+    private byte[] getPrefixUpperBound(byte[] prefix) {
+        byte[] upperBound = Arrays.copyOf(prefix, prefix.length);
+        // 从最后一个字节开始加1，处理进位（类似数字加1）
+        for (int i = upperBound.length - 1; i >= 0; i--) {
+            if (upperBound[i] == (byte) 0xFF) {
+                upperBound[i] = 0x00;
+            } else {
+                upperBound[i] += 1;
+                break;
+            }
+        }
+        return upperBound;
+    }
 
     /**
      * 执行跨列族事务（原子操作）
@@ -701,6 +1126,105 @@ public class RocksDb implements DataBase {
         }
     }
 
+    /**
+     * 按照指定前缀遍历所有匹配的键值对。
+     *
+     * @param table   要操作的表（列族）。
+     * @param prefix  键的前缀（byte[] 格式）。
+     * @param handler 一个回调处理器，用于处理遍历到的每一个键值对。
+     *                如果 handler.handle() 返回 false，则会提前终止遍历。
+     */
+    /**
+     * 安全地遍历具有指定前缀的键值对（修复版）
+     * @param table    要操作的表（列族）
+     * @param prefix   键的前缀（byte[] 格式）
+     * @param handler  回调处理器，处理每一个键值对。返回false则终止遍历
+     */
+    public void iterateByPrefix(TableEnum table, byte[] prefix, KeyValueHandler handler) {
+        // 1. 参数校验
+        if (table == null || prefix == null || prefix.length == 0 || handler == null) {
+            log.warn("按前缀遍历失败：表、前缀或处理器不能为空");
+            return;
+        }
+
+        rwLock.readLock().lock();
+        RocksIterator iterator = null;
+        ReadOptions readOptions = null;
+
+        try {
+            // 2. 获取列族句柄
+            ColumnFamilyHandle cfHandle = getColumnFamilyHandle(table);
+            if (cfHandle == null) {
+                log.warn("按前缀遍历失败：表[{}]不存在", table);
+                return;
+            }
+
+            // 3. 配置ReadOptions启用前缀扫描模式
+            readOptions = new ReadOptions().setPrefixSameAsStart(true);
+            iterator = db.newIterator(cfHandle, readOptions);
+
+            // 4. 定位到第一个大于或等于前缀的键
+            iterator.seek(prefix);
+
+            // 5. 循环遍历
+            while (iterator.isValid()) {
+                byte[] currentKey = iterator.key();
+
+                // 关键修复：在处理前先检查前缀匹配
+                if (!startsWith(currentKey, prefix)) {
+                    log.info("前缀{}",bytesToHex(prefix));
+                    log.info("当前Key{}",bytesToHex(currentKey));
+                    break; // 遇到不匹配前缀的键，立即终止
+                }
+
+                // 调用处理器处理当前键值对
+                if (!handler.handle(currentKey, iterator.value())) {
+                    log.debug("处理器要求终止遍历，前缀: {}", Arrays.toString(prefix));
+                    break;
+                }
+
+                // 移动到下一个键
+                iterator.next();
+            }
+
+            log.debug("按前缀遍历完成，前缀: {}", Arrays.toString(prefix));
+
+        } catch (Exception e) {
+            log.error("按前缀遍历异常，前缀: {}", Arrays.toString(prefix), e);
+        } finally {
+            // 6. 确保资源释放
+            if (iterator != null) {
+                iterator.close();
+            }
+            if (readOptions != null) {
+                readOptions.close();
+            }
+            rwLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 辅助方法：检查一个字节数组是否以另一个字节数组作为前缀。
+     *
+     * @param key    要检查的键。
+     * @param prefix 前缀。
+     * @return 如果 key 以 prefix 开头，则返回 true；否则返回 false。
+     */
+    private boolean startsWith(byte[] key, byte[] prefix) {
+        // 如果键的长度比前缀还短，肯定不匹配
+        if (key.length < prefix.length) {
+            return false;
+        }
+        // 逐字节比较前缀部分
+        for (int i = 0; i < prefix.length; i++) {
+            if (key[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
     @Override
     public void batchDeleteRange(TableEnum table, byte[] startKey, byte[] endKey) {
         if (table == null || startKey == null || endKey == null) {
@@ -812,4 +1336,71 @@ public class RocksDb implements DataBase {
     private long getCacheTtl(TableEnum table) {
         return table.getCacheTL(); // 区块表缓存更多
     }
+
+    // int 转 byte[]（您已提供的代码）
+    public static byte[] intToBytes(int value){
+        return ByteBuffer.allocate(4).putInt(value).array();
+    }
+
+    // long 转 byte[]（您已提供的代码）
+    public static byte[] longToBytes(long value){
+        return ByteBuffer.allocate(8).putLong(value).array();
+    }
+
+    // byte[] 转 int
+    public static int bytesToInt(byte[] bytes) {
+        // 新增null校验和空数组校验
+        if (bytes == null || bytes.length != 4) {
+            log.error("bytesToInt参数无效：array为null或长度不是4字节，array={}", bytes);
+            return -1; // 返回无效高度标记
+        }
+        return ByteBuffer.wrap(bytes).getInt();
+    }
+
+    // byte[] 转 long
+    public static long bytesToLong(byte[] bytes) {
+        return ByteBuffer.wrap(bytes).getLong();
+    }
+
+    // 支持字节序的增强版本
+    public static int bytesToInt(byte[] bytes, ByteOrder byteOrder) {
+        return ByteBuffer.wrap(bytes).order(byteOrder).getInt();
+    }
+
+    public static long bytesToLong(byte[] bytes, ByteOrder byteOrder) {
+        return ByteBuffer.wrap(bytes).order(byteOrder).getLong();
+    }
+
+    // 支持偏移量的版本
+    public static int bytesToInt(byte[] bytes, int offset) {
+        return ByteBuffer.wrap(bytes, offset, 4).getInt();
+    }
+
+    public static long bytesToLong(byte[] bytes, int offset) {
+        return ByteBuffer.wrap(bytes, offset, 8).getInt();
+    }
+
+    // 手动位运算实现（备选方案）
+    public static int bytesToIntManual(byte[] bytes) {
+        if (bytes.length < 4) {
+            throw new IllegalArgumentException("字节数组长度至少为4");
+        }
+        return ((bytes[0] & 0xFF) << 24) |
+                ((bytes[1] & 0xFF) << 16) |
+                ((bytes[2] & 0xFF) << 8) |
+                (bytes[3] & 0xFF);
+    }
+
+    public static long bytesToLongManual(byte[] bytes) {
+        if (bytes.length < 8) {
+            throw new IllegalArgumentException("字节数组长度至少为8");
+        }
+        long value = 0;
+        for (int i = 0; i < 8; i++) {
+            value |= ((long) (bytes[i] & 0xFF)) << (56 - 8 * i);
+        }
+        return value;
+    }
+
+
 }

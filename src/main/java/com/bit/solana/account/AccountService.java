@@ -1,64 +1,18 @@
 package com.bit.solana.account;
 
 import com.bit.solana.result.Result;
-import com.bit.solana.structure.account.Account;
-import com.bit.solana.structure.account.json.AccountDTO;
-import com.bit.solana.structure.dto.CreateAccountByMnemonicAndIndex;
-import com.bit.solana.structure.tx.json.TransferTx;
+import com.bit.solana.structure.dto.CreateLedgerAccountRequest;
+import com.bit.solana.structure.dto.CreateLedgerAccountResponse;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionRequest;
+import com.bit.solana.structure.dto.SubmitLedgerTransactionResponse;
+import com.bit.solana.structure.vo.LedgerAccountVO;
 
 public interface AccountService {
+    Result<CreateLedgerAccountResponse> createAccount(CreateLedgerAccountRequest request);
 
+    Result<LedgerAccountVO> getAccount(String accountId);
 
-    /**
-     * 创建账户
-     */
-    Result createAccountByPk();
+    Result<Long> getBalance(String accountId);
 
-
-
-    /**
-     * 该账户下的交易 分页查询
-     */
-
-    /**
-     * 账户是否豁免租金
-     */
-    boolean isExemption(byte[] pk);
-
-
-    /**
-     * 账户到期时间  如果金额充足就不到期
-     */
-    long expirationDate(byte[] pk);
-
-    /**
-     * 账户是否存在
-     */
-    boolean isExist(byte[] pk);
-
-
-
-    /**
-     * 根据公钥创建账户
-     */
-    Result createAccountByPk(byte[] pk);
-
-
-
-
-
-
-    Account getAccountByHash(byte[] hash);
-
-    Result createMnemonic();
-
-    Result createAccount(CreateAccountByMnemonicAndIndex createAccountByMnemonicAndIndex);
-
-    Result<Long> getBalance(String publicKey);
-
-    Result<String> transfer(String fromPublicKey, String toPublicKey, long lamports, String privateKey);
-
-    Result<AccountDTO> getAccountDetail(String publicKey);
-
-    Result<String> submitTx(TransferTx transferTx);
+    Result<SubmitLedgerTransactionResponse> transfer(SubmitLedgerTransactionRequest request);
 }

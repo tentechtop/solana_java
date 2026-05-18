@@ -194,6 +194,37 @@
                     <source>21</source>
                     <target>21</target>
                     <encoding>UTF-8</encoding>
+                    <includes>
+                        <include>com/bit/solana/SolanaApplication.java</include>
+                        <include>com/bit/solana/api/AccountApi.java</include>
+                        <include>com/bit/solana/api/BlockApi.java</include>
+                        <include>com/bit/solana/api/PohApi.java</include>
+                        <include>com/bit/solana/api/TxApi.java</include>
+                        <include>com/bit/solana/api/VersionApi.java</include>
+                        <include>com/bit/solana/account/AccountService.java</include>
+                        <include>com/bit/solana/account/impl/AccountServiceImpl.java</include>
+                        <include>com/bit/solana/blockchain/BlockChain.java</include>
+                        <include>com/bit/solana/blockchain/impl/BlockChainImpl.java</include>
+                        <include>com/bit/solana/blockchain/impl/LedgerCoordinator.java</include>
+                        <include>com/bit/solana/config/NodeProperties.java</include>
+                        <include>com/bit/solana/database/rocksDb/LedgerRocksStore.java</include>
+                        <include>com/bit/solana/poh/POHEngine.java</include>
+                        <include>com/bit/solana/poh/POHService.java</include>
+                        <include>com/bit/solana/poh/impl/LeaderSchedule.java</include>
+                        <include>com/bit/solana/poh/impl/POHEngineImpl.java</include>
+                        <include>com/bit/solana/poh/impl/POHServiceImpl.java</include>
+                        <include>com/bit/solana/poh/impl/RecentBlockhashQueue.java</include>
+                        <include>com/bit/solana/result/Result.java</include>
+                        <include>com/bit/solana/structure/dto/CreateLedgerAccountRequest.java</include>
+                        <include>com/bit/solana/structure/dto/CreateLedgerAccountResponse.java</include>
+                        <include>com/bit/solana/structure/dto/SubmitLedgerTransactionRequest.java</include>
+                        <include>com/bit/solana/structure/dto/SubmitLedgerTransactionResponse.java</include>
+                        <include>com/bit/solana/structure/vo/**/*.java</include>
+                        <include>com/bit/solana/tx/TxService.java</include>
+                        <include>com/bit/solana/tx/impl/TxServiceImpl.java</include>
+                        <include>com/bit/solana/util/LedgerHashSupport.java</include>
+                        <include>com/bit/solana/util/LedgerCryptoSupport.java</include>
+                    </includes>
                 </configuration>
             </plugin>
 

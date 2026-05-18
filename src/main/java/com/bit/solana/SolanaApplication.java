@@ -1,30 +1,43 @@
 package com.bit.solana;
 
-import com.bit.solana.util.Secp256k1Signer;
-import lombok.extern.slf4j.Slf4j;
+import com.bit.solana.account.impl.AccountServiceImpl;
+import com.bit.solana.api.AccountApi;
+import com.bit.solana.api.BlockApi;
+import com.bit.solana.api.PohApi;
+import com.bit.solana.api.TxApi;
+import com.bit.solana.api.VersionApi;
+import com.bit.solana.blockchain.impl.BlockChainImpl;
+import com.bit.solana.blockchain.impl.LedgerCoordinator;
+import com.bit.solana.config.NodeProperties;
+import com.bit.solana.database.rocksDb.LedgerRocksStore;
+import com.bit.solana.poh.impl.POHEngineImpl;
+import com.bit.solana.poh.impl.POHServiceImpl;
+import com.bit.solana.tx.impl.TxServiceImpl;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
 
-import java.util.List;
-
-import static com.bit.solana.util.ECCWithAESGCM.generateCurve25519KeyPair;
-import static com.bit.solana.util.Ed25519HDWallet.generateMnemonic;
-import static com.bit.solana.util.Ed25519HDWallet.getSolanaKeyPair;
-
-@Slf4j
-@SpringBootApplication(scanBasePackages = "com.bit.solana")
+@SpringBootConfiguration
+@EnableAutoConfiguration
+@EnableConfigurationProperties(NodeProperties.class)
+@Import({
+        AccountApi.class,
+        BlockApi.class,
+        PohApi.class,
+        TxApi.class,
+        VersionApi.class,
+        AccountServiceImpl.class,
+        TxServiceImpl.class,
+        BlockChainImpl.class,
+        LedgerCoordinator.class,
+        LedgerRocksStore.class,
+        POHEngineImpl.class,
+        POHServiceImpl.class
+})
 public class SolanaApplication {
     public static void main(String[] args) {
-        System.setProperty("io.netty.leakDetection.level", "PARANOID");
         SpringApplication.run(SolanaApplication.class, args);
-
-        long start = System.currentTimeMillis();
-        generateCurve25519KeyPair();
-        Secp256k1Signer.generateKeyPair();
-        List<String> mnemonic = generateMnemonic();
-        getSolanaKeyPair(mnemonic, 0, 0);
-        log.info("预热耗时{}ms",System.currentTimeMillis()-start);
     }
-    //二进制统一大端
-    //零值表示成功，非零值表示失败
 }

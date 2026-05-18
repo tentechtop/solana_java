@@ -3,7 +3,7 @@ spring:
     name: Solana
     version: 1.0.0
   profiles:
-    active: prod
+    active: local
 
 
 protocol:

@@ -67,6 +67,23 @@ public interface DataBase {
     byte[] get(TableEnum table,byte[] key);
 
     /**
+     * 获取一条数据
+     * @param table
+     * @param key
+     * @return
+     */
+    byte[] get(TableEnum table,int key);
+
+    /**
+     * 获取一条数据
+     * @param table
+     * @param key
+     * @return
+     */
+    byte[] get(TableEnum table,long key);
+
+
+    /**
      * 数据数量
      * @param table
      * @return
@@ -90,8 +107,12 @@ public interface DataBase {
      * @return 分页结果（包含当前页数据、最后一个键、是否为最后一页）
      */
     <T> PageResult<T> page(TableEnum table, int pageSize, byte[] lastKey);
+    <T> PageResult<T> pageByPrefix(TableEnum table,byte[] prefix, int pageSize, byte[] lastKey);
 
-
+    <T> PageResult<T> pageKey(TableEnum table, int pageSize, byte[] lastKey);
+    <T> PageResult<T> pageKeyByPrefix(TableEnum table,byte[] prefix, int pageSize, byte[] lastKey);
+    <T> PageResult<T> pageKeyByPrefixReverse(TableEnum table, byte[] prefix, int pageSize, byte[] lastKey);
+    boolean existsByPrefix(TableEnum table, byte[] prefix);
     /**
      * 事务完成
      */
@@ -199,6 +220,8 @@ public interface DataBase {
      * @param handler 迭代器处理器（处理每条键值对）
      */
     void iterate(TableEnum table, KeyValueHandler handler);
+
+    void iterateByPrefix(TableEnum table, byte[] prefix, KeyValueHandler handler);
 
 
     /**
